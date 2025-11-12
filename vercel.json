@@ -1,15 +1,12 @@
 {
   "version": 2,
-  "framework": "nextjs",
-  "buildCommand": "next build",
-  "outputDirectory": ".next",
-  "cleanUrls": true,
-  "trailingSlash": false,
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
-    }
+  "builds": [
+    { "src": "pages/api/**/*.ts", "use": "@vercel/node" },
+    { "src": "public/**", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "^/api/(.*)$", "dest": "pages/api/$1" },
+    { "src": "/(.*)", "dest": "public/$1" }
   ],
   "headers": [
     {
