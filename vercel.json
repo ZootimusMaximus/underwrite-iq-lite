@@ -1,8 +1,5 @@
 {
   "version": 2,
-  "buildCommand": "echo 'Skipping Next.js build step'",
-  "builds": [
-    { "src": "api/**/*.js", "use": "@vercel/node" },
-    { "src": "public/**", "use": "@vercel/static" }
-  ]
+  "buildCommand": "echo 'skip next build'",
+  "builds": [{ "src": "api/**/*.js", "use": "@vercel/node" }]
 }
