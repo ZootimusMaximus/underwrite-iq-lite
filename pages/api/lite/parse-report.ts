@@ -1,437 +1,504 @@
-// /pages/api/lite/parse-report.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import formidable, { File as FormidableFile } from "formidable";
 import pdfParse from "pdf-parse";
 import fs from "fs";
 
-// Next.js API must disable body parsing for formidable
-export const config = { api: { bodyParser: false } };
+/**
+ * Underwrite IQ — LITE (no Airtable)
+ * Upload 1–3 PDF credit reports -> parse -> trimeric composite -> grades -> ranges -> comparable-credit -> business add-on
+ *
+ * TEST THROUGH YOUR SITE (upload form). The response structure is stable for your UI.
+ */
 
-// -----------------------------
-// Regex helpers (robust to messy text)
-// -----------------------------
+export const config = {
+  api: { bodyParser: false, sizeLimit: "25mb" },
+};
+
+// ---------- Tunables / Policy ----------
+type Grade = "A" | "B" | "C" | "D";
+const CONFIG = {
+  // bureau weights (normalized automatically for 1–2 bureau uploads)
+  weights: { EX: 1.5, TU: 1.2, EQ: 1.0 },
+
+  // score/util outlier clipping (Winsorize vs mean if delta > threshold)
+  outlierScoreDelta: 100,
+  outlierUtilDelta: 25,
+
+  // "seasoned" = at least this many months old
+  seasoningMonths: 24,
+
+  // comparable-credit multipliers (caps) by grade
+  cardMultipliers: { A: 8, B: 6, C: 3, D: 1 },       // ≈ 5–8× seasoned highest card limit
+  loanMultipliers: { A: 6, B: 5, C: 2, D: 1 },       // ≈ 5–6× seasoned largest unsecured loan
+
+  // business funding, conservative default = duplicate of personal total (1.0x)
+  businessMultiplierDefault: 1.0,
+
+  // base ranges by grade (before comparable-credit realism)
+  baseCardRanges: {
+    A: { min: 15000, max: 30000 },
+    B: { min: 8000,  max: 20000 },
+    C: { min: 2000,  max: 10000 },
+    D: { min: 0,     max: 2000  },
+  },
+  baseLoanRanges: {
+    A: { min: 20000, max: 40000 },
+    B: { min: 10000, max: 25000 },
+    C: { min: 5000,  max: 15000 },
+    D: { min: 0,     max: 5000  },
+  },
+
+  // MVP fundable gate (boolean)
+  gate: {
+    minScore: 700,
+    maxUtil: 30,
+    maxInquiriesTotal: 6,
+    maxNegatives: 0,
+  },
+};
+
+// ---------- Regex helpers (robust-ish; OK for MVP PDFs) ----------
 const SCORE_RE = /(fico|score)\D{0,6}(\d{3})/i;
 const UTIL_RE = /(utilization|utilisation|util)\D{0,10}(\d{1,3})\s?%/i;
-const INQ_RE = /(inquiries|inq)[^a-zA-Z0-9]+ex\D*(\d+)\D+tu\D*(\d+)\D+eq\D*(\d+)/i;
-const NEG_LINE_RE = /(collection|charge[-\s]?off|late payment|30[-\s]?day|60[-\s]?day|90[-\s]?day|delinquent|public\s+record|bankruptcy)[^.]{0,120}/gi;
+const INQ_RE  = /(inquiries|inq)[^a-zA-Z0-9]+ex\D*(\d+)\D+tu\D*(\d+)\D+eq\D*(\d+)/i;
+
+const NEG_LINE_RE = /(collection|charge[-\s]?off|late payment|30[-\s]?day|60[-\s]?day|90[-\s]?day|delinquent|public\s+record|bankruptcy)/gi;
+
 const AVG_AGE_RE = /(average\s+age\s+of\s+accounts|average\s+account\s+age|aaoa)\D{0,20}(\d{1,2})\D{0,8}(year|yr|years)?\D{0,8}(\d{1,2})?\D{0,8}(month|mo|months)?/i;
-const HIGHEST_CARD_LIMIT_RE = /(highest\s+credit\s+limit|high\s+credit|credit\s+limit)\D{0,10}\$?\s?([\d,]{2,9})/gi;
-const LARGEST_INSTALLMENT_RE = /(largest\s+(original\s+)?loan|original\s+loan\s+amount|loan\s+amount)\D{0,10}\$?\s?([\d,]{2,9})/gi;
+
+const LIMIT_RE = /(credit\s+limit|high\s+credit|highest\s+credit\s+limit)\D{0,12}\$?\s?([\d,]{2,9})/gi;
+const LOAN_AMT_RE = /(original\s+loan\s+amount|loan\s+amount|largest\s+(original\s+)?loan)\D{0,12}\$?\s?([\d,]{2,9})/gi;
+
 const OPENED_DATE_RE = /(opened|open\s+date|date\s+opened)\D{0,12}((\d{1,2}[-\/]\d{2,4})|([A-Za-z]{3,9}\s+\d{4}))?/gi;
 const OPEN_STATUS_RE = /(status|account\s+status)\D{0,12}(open|opened)/gi;
 
-type BureauKey = "experian" | "transunion" | "equifax";
-type Grade = "A" | "B" | "C" | "D";
+const SECURED_HINT_RE = /(auto|vehicle|mortgage|heloc|home\s+equity|student)/i;
 
-// Utility
+// ---------- utils ----------
 const asInt = (s: any) => {
   const n = typeof s === "string" ? s.replace(/[^\d]/g, "") : s;
   const v = Number(n);
   return Number.isFinite(v) ? v : null;
 };
-const pickInt = (m: RegExpMatchArray | null, idx: number) => (m && m[idx] ? asInt(m[idx]) : null);
 const moneyToInt = (s: string) => asInt(s);
-
 const monthsSince = (d: Date) => {
   const now = new Date();
   return (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
 };
 const parseOpenedDate = (s: string): Date | null => {
-  // supports MM/YYYY, M/YYYY, or "Month YYYY"
   const mmYYYY = s.match(/(\d{1,2})[-\/](\d{4})/);
-  if (mmYYYY) {
-    const m = asInt(mmYYYY[1])! - 1;
-    const y = asInt(mmYYYY[2])!;
-    return new Date(y, m, 1);
-  }
+  if (mmYYYY) return new Date(Number(mmYYYY[2]), Number(mmYYYY[1]) - 1, 1);
   const monthYYYY = s.match(/([A-Za-z]{3,9})\s+(\d{4})/);
   if (monthYYYY) {
-    const y = asInt(monthYYYY[2])!;
-    const m = new Date(`${monthYYYY[1]} 1, ${y}`).getMonth();
-    if (!Number.isNaN(m)) return new Date(y, m, 1);
+    const m = new Date(`${monthYYYY[1]} 1, ${monthYYYY[2]}`).getMonth();
+    if (!Number.isNaN(m)) return new Date(Number(monthYYYY[2]), m, 1);
   }
   return null;
 };
 
-// -----------------------------
-// Core handler
-// -----------------------------
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") return res.status(405).json({ ok: false, msg: "Method not allowed" });
+// ---------- core parse of a single bureau text ----------
+function extractFrom(text: string) {
+  const score = (() => {
+    const m = text.match(SCORE_RE);
+    return m ? asInt(m[2]) : null;
+  })();
+
+  const util = (() => {
+    const m = text.match(UTIL_RE);
+    return m ? asInt(m[2]) : null;
+  })();
+
+  // per-bureau inq slice (if present as EX/TU/EQ triple)
+  let ex = 0, tu = 0, eq = 0;
+  const inq = text.match(INQ_RE);
+  if (inq) { ex = asInt(inq[2]) ?? 0; tu = asInt(inq[3]) ?? 0; eq = asInt(inq[4]) ?? 0; }
+
+  const negLines = (text.match(NEG_LINE_RE) || []).slice(0, 64).map(s => s.toLowerCase());
+  const negatives_count = negLines.length;
+
+  // AAoA (years+months)
+  let avgAgeYears: number | null = null;
+  const aaoa = text.match(AVG_AGE_RE);
+  if (aaoa) {
+    const years = asInt(aaoa[2]) ?? 0;
+    const months = asInt(aaoa[4]) ?? 0;
+    avgAgeYears = +(years + months / 12).toFixed(2);
+  }
+
+  // highest card limit + "seasoned" version (within 250 chars of an opened date >= 24 mo)
+  let highestCardLimit = 0;
+  let seasonedHighestCardLimit = 0;
+
+  let limMatch: RegExpExecArray | null;
+  while ((limMatch = LIMIT_RE.exec(text)) !== null) {
+    const val = moneyToInt(limMatch[2] || "");
+    if (!val) continue;
+    highestCardLimit = Math.max(highestCardLimit, val);
+
+    // try to find nearby opened date to judge seasoning
+    const start = Math.max(0, limMatch.index - 250);
+    const end = Math.min(text.length, limMatch.index + (limMatch[0]?.length || 0) + 250);
+    const nearby = text.slice(start, end);
+    const od = [...nearby.matchAll(OPENED_DATE_RE)].map(m => m[2]).find(Boolean);
+    const d = od ? parseOpenedDate(od) : null;
+    const seasoned = d ? monthsSince(d) >= CONFIG.seasoningMonths : false;
+    if (seasoned) seasonedHighestCardLimit = Math.max(seasonedHighestCardLimit, val);
+  }
+
+  // largest unsecured installment + seasoned
+  let largestInstallment = 0;
+  let largestUnsecuredInstallment = 0;
+  let seasonedLargestUnsecuredInstallment = 0;
+
+  let loanMatch: RegExpExecArray | null;
+  while ((loanMatch = LOAN_AMT_RE.exec(text)) !== null) {
+    const val = moneyToInt(loanMatch[2] || "");
+    if (!val) continue;
+    largestInstallment = Math.max(largestInstallment, val);
+
+    // local context to filter secured loans
+    const start = Math.max(0, loanMatch.index - 200);
+    const end = Math.min(text.length, loanMatch.index + (loanMatch[0]?.length || 0) + 200);
+    const ctx = text.slice(start, end);
+    const looksSecured = SECURED_HINT_RE.test(ctx);
+
+    if (!looksSecured) {
+      largestUnsecuredInstallment = Math.max(largestUnsecuredInstallment, val);
+      const od = [...ctx.matchAll(OPENED_DATE_RE)].map(m => m[2]).find(Boolean);
+      const d = od ? parseOpenedDate(od) : null;
+      const seasoned = d ? monthsSince(d) >= CONFIG.seasoningMonths : false;
+      if (seasoned) {
+        seasonedLargestUnsecuredInstallment = Math.max(seasonedLargestUnsecuredInstallment, val);
+      }
+    }
+  }
+
+  // new accounts / open accounts (heuristic)
+  let newAccounts12mo = 0;
+  for (const o of text.matchAll(OPENED_DATE_RE)) {
+    const dtStr = o[2] || "";
+    const d = parseOpenedDate(dtStr);
+    if (d && monthsSince(d) <= 12) newAccounts12mo++;
+  }
+  const openAccounts = (text.match(OPEN_STATUS_RE) || []).length;
+
+  return {
+    score, util, inq: { ex, tu, eq }, negatives_count, negLines,
+    avgAgeYears,
+    highestCardLimit,
+    seasonedHighestCardLimit,
+    largestInstallment,
+    largestUnsecuredInstallment,
+    seasonedLargestUnsecuredInstallment,
+    newAccounts12mo,
+    openAccounts,
+  };
+}
+
+// ---------- light math helpers ----------
+const normalizeWeights = (w: number[]) => {
+  const s = w.reduce((a, b) => a + (b > 0 ? b : 0), 0) || 1;
+  return w.map(x => (x > 0 ? x / s : 0));
+};
+function dampenOutliers(values: (number | null)[], maxDelta: number) {
+  const arr = values.filter(v => v != null) as number[];
+  if (arr.length < 3) return values; // not enough to establish a mean reliably
+  const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+  return values.map(v => (v == null ? null : Math.abs(v - mean) > maxDelta ? mean : v));
+}
+function weightedAverageSafe(values: (number | null)[], weights: number[]) {
+  const pairs = values.map((v, i) => (v != null && weights[i] > 0 ? { v, w: weights[i] } : null)).filter(Boolean) as { v: number, w: number }[];
+  if (!pairs.length) return null;
+  const W = pairs.reduce((a, b) => a + b.w, 0);
+  return Math.round(pairs.reduce((a, b) => a + b.v * b.w, 0) / W);
+}
+
+// ---------- grading & funding ----------
+function gradeFromPoints(n: number): Grade {
+  if (n >= 11) return "A";
+  if (n >= 9)  return "B";
+  if (n >= 7)  return "C";
+  return "D";
+}
+const order: Grade[] = ["A", "B", "C", "D"];
+const maxGrade = (g1: Grade, cap: Grade) => {
+  // enforce "no better than cap"
+  return order.indexOf(g1) <= order.indexOf(cap) ? cap : g1; // not used; we’ll clamp with indices explicitly where needed
+};
+const downgrade = (g: Grade) => order[Math.min(order.indexOf(g) + 1, order.length - 1)];
+
+// ---------- API handler ----------
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== "POST") return res.status(405).json({ ok: false, code: "method_not_allowed", msg: "Method not allowed" });
 
   const form = formidable({ multiples: true, keepExtensions: true });
 
   form.parse(req, async (err, fields, files) => {
     try {
+      if (err) return res.status(400).json({ ok: false, code: "parse_error", msg: "Upload parsing failed" });
+
       const uploaded = files.file;
-      const fileArr: FormidableFile[] = Array.isArray(uploaded)
-        ? uploaded as FormidableFile[]
-        : uploaded ? [uploaded as FormidableFile] : [];
+      const fileArr: FormidableFile[] = Array.isArray(uploaded) ? uploaded as FormidableFile[] : uploaded ? [uploaded as FormidableFile] : [];
+      if (!fileArr.length) return res.status(400).json({ ok: false, code: "no_files", msg: "Please upload 1–3 bureau PDF reports." });
 
-      if (!fileArr.length) return res.status(400).json({ ok: false, msg: "No file(s) uploaded" });
+      // Optional business inputs (from your UI)
+      const businessName = (fields.businessName as string) || "";
+      const businessAgeMonths = asInt(fields.businessAgeMonths as string) ?? null;
+      const hasBusiness = !!businessName && businessName.trim().length > 1;
 
-      // Parse all PDFs → text
-      const bureaus: Partial<Record<BureauKey, string>> = {};
+      // Read all PDFs -> text
       const texts: string[] = [];
-
       for (const f of fileArr) {
         const name = (f.originalFilename || "").toLowerCase();
         if (!/\.pdf$/.test(name)) {
-          return res.status(400).json({ ok: false, msg: "Please upload PDF reports (images/OCR coming in ULTRA)" });
+          return res.status(400).json({ ok: false, code: "bad_type", msg: "Only PDF credit reports are supported right now." });
         }
         const buf = await fs.promises.readFile(f.filepath);
         const parsed = await pdfParse(buf);
-        const text = (parsed.text || "").replace(/\s+/g, " ").trim();
-        texts.push(text);
-
-        // crude bureau detection; tolerate combined reports
-        const lower = text.toLowerCase();
-        if (lower.includes("experian")) bureaus.experian = text;
-        if (lower.includes("transunion")) bureaus.transunion = text;
-        if (lower.includes("equifax")) bureaus.equifax = text;
-        // for combined 3‑bureau PDFs, we keep the whole text in each that is detected
+        texts.push((parsed.text || "").replace(/\s+/g, " ").trim());
       }
 
-      // If we didn't detect any bureau names (odd formats), still analyze merged text
+      // Bureau detection (very tolerant; for mixed/combined PDFs we just run 3 extracts & merge)
       const mergedText = texts.join(" \n ");
+      const textLower = mergedText.toLowerCase();
+      const hasEX = textLower.includes("experian");
+      const hasTU = textLower.includes("transunion");
+      const hasEQ = textLower.includes("equifax");
 
-      // -----------------------------
-      // per-bureau extraction
-      // -----------------------------
-      function extractFrom(text: string) {
-        const score = pickInt(text.match(SCORE_RE), 2);
-        const util = pickInt(text.match(UTIL_RE), 2);
-
-        let ex = 0, tu = 0, eq = 0;
-        const inq = text.match(INQ_RE);
-        if (inq) { ex = asInt(inq[2]) ?? 0; tu = asInt(inq[3]) ?? 0; eq = asInt(inq[4]) ?? 0; }
-
-        const negLines = (text.match(NEG_LINE_RE) || []).slice(0, 32).map(s => s.toLowerCase());
-        const negatives_count = negLines.length;
-
-        // average age of accounts (years + months)
-        let avgAgeYears: number | null = null;
-        const aaoa = text.match(AVG_AGE_RE);
-        if (aaoa) {
-          const years = asInt(aaoa[2]) ?? 0;
-          const months = asInt(aaoa[4]) ?? 0;
-          avgAgeYears = +(years + months / 12).toFixed(2);
-        }
-
-        // comparable-credit anchors
-        let highestCardLimit = 0;
-        let m: RegExpExecArray | null;
-        while ((m = HIGHEST_CARD_LIMIT_RE.exec(text)) !== null) {
-          const val = moneyToInt(m[2]);
-          if (val && val > highestCardLimit) highestCardLimit = val;
-        }
-
-        let largestInstallment = 0;
-        while ((m = LARGEST_INSTALLMENT_RE.exec(text)) !== null) {
-          const val = moneyToInt(m[2]);
-          if (val && val > largestInstallment) largestInstallment = val;
-        }
-
-        // new accounts last 12 mo (heuristic)
-        let newAccounts12mo = 0;
-        const opened = text.matchAll(OPENED_DATE_RE);
-        for (const o of opened) {
-          const dtStr = o[2] || "";
-          const d = parseOpenedDate(dtStr);
-          if (d && monthsSince(d) <= 12) newAccounts12mo++;
-        }
-
-        // open accounts count (heuristic)
-        const openAccounts = (text.match(OPEN_STATUS_RE) || []).length;
-
-        return {
-          score, util, inq: { ex, tu, eq }, negatives_count, negLines,
-          avgAgeYears,
-          highestCardLimit,
-          largestInstallment,
-          newAccounts12mo,
-          openAccounts
-        };
-      }
-
-      const exData = bureaus.experian ? extractFrom(bureaus.experian) : null;
-      const tuData = bureaus.transunion ? extractFrom(bureaus.transunion) : null;
-      const eqData = bureaus.equifax ? extractFrom(bureaus.equifax) : null;
-
-      // Fallback: if nothing detected, extract from merged
+      // Run extract on each (fallback to merged if not distinctly present)
+      const exData = hasEX ? extractFrom(mergedText) : null;
+      const tuData = hasTU ? extractFrom(mergedText) : null;
+      const eqData = hasEQ ? extractFrom(mergedText) : null;
       const fbData = (!exData && !tuData && !eqData) ? extractFrom(mergedText) : null;
 
-      // -----------------------------
-      // Aggregate metrics
-      // -----------------------------
-      const scores = [exData?.score, tuData?.score, eqData?.score, fbData?.score].filter(v => v != null) as number[];
-      const utils = [exData?.util, tuData?.util, eqData?.util, fbData?.util].filter(v => v != null) as number[];
-      const negCounts = [exData?.negatives_count ?? 0, tuData?.negatives_count ?? 0, eqData?.negatives_count ?? 0, fbData?.negatives_count ?? 0];
+      // Collect raw series
+      const scoreVals = [exData?.score, tuData?.score, eqData?.score] as (number|null)[];
+      const utilVals  = [exData?.util,  tuData?.util,  eqData?.util]  as (number|null)[];
 
-      const score = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-      const util = utils.length ? Math.round(utils.reduce((a, b) => a + b, 0) / utils.length) : null;
+      // dampen outliers (3-bureau only)
+      const scoreClean = dampenOutliers(scoreVals, CONFIG.outlierScoreDelta);
+      const utilClean  = dampenOutliers(utilVals,  CONFIG.outlierUtilDelta);
 
-      const ex = (exData?.inq.ex ?? 0) + (fbData ? 0 : 0);
-      const tu = (tuData?.inq.tu ?? 0) + (fbData ? 0 : 0);
-      const eq = (eqData?.inq.eq ?? 0) + (fbData ? 0 : 0);
-      const negatives_count = Math.max(...negCounts);
+      // weights (normalize for whatever set is present)
+      let wEX = exData ? CONFIG.weights.EX : 0;
+      let wTU = tuData ? CONFIG.weights.TU : 0;
+      let wEQ = eqData ? CONFIG.weights.EQ : 0;
+      if (!exData && !tuData && !eqData && fbData) { wEX = 1; } // single composite
+      [wEX, wTU, wEQ] = normalizeWeights([wEX, wTU, wEQ]);
 
-      const avgAgeYears = [exData?.avgAgeYears, tuData?.avgAgeYears, eqData?.avgAgeYears, fbData?.avgAgeYears]
-        .filter(v => v != null) as number[];
-      const avgAge = avgAgeYears.length ? +(avgAgeYears.reduce((a, b) => a + b, 0) / avgAgeYears.length).toFixed(2) : null;
+      const score = weightedAverageSafe(
+        exData || tuData || eqData ? scoreClean : [fbData?.score ?? null],
+        exData || tuData || eqData ? [wEX, wTU, wEQ] : [1]
+      );
+      const util = weightedAverageSafe(
+        exData || tuData || eqData ? utilClean : [fbData?.util ?? null],
+        exData || tuData || eqData ? [wEX, wTU, wEQ] : [1]
+      );
 
-      const highestCardLimit = Math.max(exData?.highestCardLimit ?? 0, tuData?.highestCardLimit ?? 0, eqData?.highestCardLimit ?? 0, fbData?.highestCardLimit ?? 0);
-      const largestInstallment = Math.max(exData?.largestInstallment ?? 0, tuData?.largestInstallment ?? 0, eqData?.largestInstallment ?? 0, fbData?.largestInstallment ?? 0);
-      const newAccounts12mo = Math.max(exData?.newAccounts12mo ?? 0, tuData?.newAccounts12mo ?? 0, eqData?.newAccounts12mo ?? 0, fbData?.newAccounts12mo ?? 0);
-      const openAccounts = Math.max(exData?.openAccounts ?? 0, tuData?.openAccounts ?? 0, eqData?.openAccounts ?? 0, fbData?.openAccounts ?? 0);
+      // Inquiries & negatives
+      const exInq = exData?.inq.ex ?? 0;
+      const tuInq = tuData?.inq.tu ?? 0;
+      const eqInq = eqData?.inq.eq ?? 0;
+      const inquiries = { ex: exInq, tu: tuInq, eq: eqInq };
+      const totalInquiries = exInq + tuInq + eqInq;
 
+      const negatives_count = Math.max(
+        exData?.negatives_count ?? 0,
+        tuData?.negatives_count ?? 0,
+        eqData?.negatives_count ?? 0,
+        fbData?.negatives_count ?? 0
+      );
       const negLines = [
         ...(exData?.negLines || []),
         ...(tuData?.negLines || []),
         ...(eqData?.negLines || []),
         ...(fbData?.negLines || []),
-      ].slice(0, 32);
+      ].slice(0, 48);
 
-      // -----------------------------
-      // Fundable (your MVP boolean gate)
-      // -----------------------------
-      function isFundable(
-        score: number | null,
-        util: number | null,
-        negs: number,
-        inquiries: { ex: number; tu: number; eq: number }
-      ) {
-        const MIN_SCORE = 700;
-        const MAX_UTILIZATION = 30;
-        const MAX_INQUIRIES = 6; // across EX+TU+EQ last 12 mo
-        const MAX_NEGATIVES = 0;
+      // Other signals (use “best available”)
+      const avgAgeYears = (() => {
+        const arr = [exData?.avgAgeYears, tuData?.avgAgeYears, eqData?.avgAgeYears, fbData?.avgAgeYears].filter(v => v != null) as number[];
+        return arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2) : null;
+      })();
+      const highestCardLimit = Math.max(exData?.highestCardLimit ?? 0, tuData?.highestCardLimit ?? 0, eqData?.highestCardLimit ?? 0, fbData?.highestCardLimit ?? 0);
+      const seasonedHighestCardLimit = Math.max(exData?.seasonedHighestCardLimit ?? 0, tuData?.seasonedHighestCardLimit ?? 0, eqData?.seasonedHighestCardLimit ?? 0);
+      const largestInstallment = Math.max(exData?.largestInstallment ?? 0, tuData?.largestInstallment ?? 0, eqData?.largestInstallment ?? 0, fbData?.largestInstallment ?? 0);
+      const largestUnsecuredInstallment = Math.max(exData?.largestUnsecuredInstallment ?? 0, tuData?.largestUnsecuredInstallment ?? 0, eqData?.largestUnsecuredInstallment ?? 0);
+      const seasonedLargestUnsecuredInstallment = Math.max(exData?.seasonedLargestUnsecuredInstallment ?? 0, tuData?.seasonedLargestUnsecuredInstallment ?? 0, eqData?.seasonedLargestUnsecuredInstallment ?? 0);
 
-        if (score === null) return false;
-        if (score < MIN_SCORE) return false;
-        if (util !== null && util > MAX_UTILIZATION) return false;
-        if (negs > MAX_NEGATIVES) return false;
+      const newAccounts12mo = Math.max(exData?.newAccounts12mo ?? 0, tuData?.newAccounts12mo ?? 0, eqData?.newAccounts12mo ?? 0, fbData?.newAccounts12mo ?? 0);
+      const openAccounts     = Math.max(exData?.openAccounts ?? 0, tuData?.openAccounts ?? 0, eqData?.openAccounts ?? 0, fbData?.openAccounts ?? 0);
 
-        const totalInq = (inquiries.ex || 0) + (inquiries.tu || 0) + (inquiries.eq || 0);
-        if (totalInq > MAX_INQUIRIES) return false;
+      // ---------------- Fundable gate (MVP) ----------------
+      const gate = CONFIG.gate;
+      const fundable =
+        (score != null && score >= gate.minScore) &&
+        (util == null || util <= gate.maxUtil) &&
+        negatives_count <= gate.maxNegatives &&
+        totalInquiries <= gate.maxInquiriesTotal;
 
-        return true;
-      }
-
-      const fundable = isFundable(score, util, negatives_count, { ex, tu, eq }); // :contentReference[oaicite:0]{index=0}
-
-      // -----------------------------
-      // Underwrite IQ LITE – Pillars → Grade
-      // -----------------------------
-      type Pillar = 1 | 2 | 3; // Weak=1, Adequate=2, Strong=3
-
-      // Hard pre-checks
+      // ---------------- Pillars ----------------
       const hasBK = negLines.some(l => l.includes("bankruptcy") || l.includes("public record"));
       const has90Late = negLines.some(l => l.includes("90") && l.includes("late"));
-      let dataQualityConstrained = false;
 
-      // Pillar scoring (plain thresholds from your spec)
-      const scorePaymentHistory = (): Pillar => {
+      let dataQualityConstrained = false;
+      const PH = (() => {            // Payment history
         if (negatives_count === 0) return 3;
         if (hasBK) return 1;
-        // single minor late: treat as adequate if no collection/charge-off
         const anyCollection = negLines.some(l => l.includes("collection") || l.includes("charge-off"));
         const count30 = negLines.filter(l => l.includes("30") && l.includes("late")).length;
-        if (!anyCollection && count30 <= 1) return 2;
-        return 1;
-      };
-
-      const scoreUtilization = (): Pillar => {
+        return (!anyCollection && count30 <= 1) ? 2 : 1;
+      })();
+      const UT = (() => {            // Utilization
         if (util == null) { dataQualityConstrained = true; return 2; }
         if (util < 10) return 3;
         if (util <= 30) return 2;
-        if (util > 50) return 1;
-        return 2; // 31–50 = adequate
-      };
-
-      const scoreDepthAge = (): Pillar => {
-        if (avgAge == null) { dataQualityConstrained = true; return (openAccounts > 3 ? 2 : 1); }
-        if (avgAge >= 5 && openAccounts >= 5) return 3;
-        if (avgAge >= 3) return 2;
+        return util > 50 ? 1 : 2; // 31–50 adequate
+      })();
+      const DA = (() => {            // Depth & Age
+        if (avgAgeYears == null) { dataQualityConstrained = true; return (openAccounts > 3 ? 2 : 1); }
+        if (avgAgeYears >= 5 && openAccounts >= 5) return 3;
+        if (avgAgeYears >= 3) return 2;
         return 1;
-      };
-
-      const scoreRecency = (): Pillar => {
+      })();
+      const NR = (() => {            // New credit behavior
         if (newAccounts12mo == null) { dataQualityConstrained = true; return 2; }
         if (newAccounts12mo === 0) return 3;
         if (newAccounts12mo <= 2) return 2;
         return 1;
-      };
+      })();
 
-      const PH = scorePaymentHistory();         // payment history pillar
-      const UT = scoreUtilization();            // utilization pillar
-      const DA = scoreDepthAge();               // depth & age pillar
-      const NR = scoreRecency();                // new credit behavior pillar
-
-      // Overall (unweighted) points out of 12 → A/B/C/D
       const total12 = PH + UT + DA + NR;
 
-      function gradeFrom12(n: number): Grade {
-        if (n >= 11) return "A";
-        if (n >= 9) return "B";
-        if (n >= 7) return "C";
-        return "D";
-      }
-
-      // Pre-check caps
-      let preCap: Grade | null = null;
-      if (hasBK) preCap = "D";
-      else if (has90Late) preCap = "C";
-
-      // Product‑specific weighting (cards: PH×2 + UT×2 + DA + NR; loans: PH×2 + DA×2 + UT + NR)
-      function weightedToGrade(cards: boolean): Grade {
-        const weighted = cards ? (PH * 2 + UT * 2 + DA + NR) : (PH * 2 + DA * 2 + UT + NR);
-        const scaledTo12 = Math.round((weighted / 18) * 12); // scale 6..18 → 0..12
-        let g = gradeFrom12(scaledTo12);
-        if (preCap && (preCap > g)) g = preCap; // "D" > "C" > "B" > "A" lexicographically, but we’ll enforce manually
-        if (preCap) {
-          const order: Grade[] = ["A", "B", "C", "D"];
-          const maxIdx = order.indexOf(preCap);
-          const curIdx = order.indexOf(g);
-          if (curIdx < maxIdx) g = preCap;
+      // product-specific weighting
+      const toGrade = (forCards: boolean): Grade => {
+        const weighted = forCards ? (PH * 2 + UT * 2 + DA + NR) : (PH * 2 + DA * 2 + UT + NR);
+        const scaled = Math.round((weighted / 18) * 12);
+        let g = gradeFromPoints(scaled);
+        // pre-caps
+        const hardCap: Grade | null = hasBK ? "D" : (has90Late ? "C" : null);
+        if (hardCap) {
+          const cIdx = order.indexOf(hardCap);
+          const gIdx = order.indexOf(g);
+          if (gIdx < cIdx) g = hardCap;
         }
-        if (dataQualityConstrained) {
-          // reduce 1 tier when critical fields missing
-          const order: Grade[] = ["A", "B", "C", "D"];
-          const idx = Math.min(order.indexOf(g) + 1, order.length - 1);
-          g = order[idx];
-        }
+        if (dataQualityConstrained) g = downgrade(g);
         return g;
+      };
+
+      let gradeCard = toGrade(true);
+      let gradeLoan = toGrade(false);
+
+      // Guardrails
+      const guardrail = ((util ?? 0) > 70 && newAccounts12mo >= 3) || ((avgAgeYears ?? 99) < 2 && openAccounts <= 3);
+      if (guardrail) {
+        gradeCard = downgrade(gradeCard);
+        gradeLoan = downgrade(gradeLoan);
       }
 
-      let gradeCard = weightedToGrade(true);
-      let gradeLoan = weightedToGrade(false);
+      // Base ranges from grade
+      const baseCard = CONFIG.baseCardRanges[gradeCard];
+      const baseLoan = CONFIG.baseLoanRanges[gradeLoan];
 
-      // Guardrails – downgrade if utilization very high & many new accounts; thin and young
-      const guardrailDowngrade =
-        ((util != null && util > 70) && newAccounts12mo >= 3) ||
-        ((avgAge != null && avgAge < 2) && openAccounts <= 3);
+      // Comparable-credit realism caps
+      const seasonedCard = seasonedHighestCardLimit || highestCardLimit || 0;
+      const seasonedUnsec = seasonedLargestUnsecuredInstallment || largestUnsecuredInstallment || 0;
 
-      if (guardrailDowngrade) {
-        const order: Grade[] = ["A", "B", "C", "D"];
-        const dcard = Math.min(order.indexOf(gradeCard) + 1, order.length - 1);
-        const dloan = Math.min(order.indexOf(gradeLoan) + 1, order.length - 1);
-        gradeCard = order[dcard];
-        gradeLoan = order[dloan];
-      }
+      const cardCap = seasonedCard * CONFIG.cardMultipliers[gradeCard];
+      const loanCap = seasonedUnsec > 0
+        ? seasonedUnsec * CONFIG.loanMultipliers[gradeLoan]
+        : Math.min(CONFIG.baseLoanRanges[gradeLoan].max, 10000); // no unsecured history → conservative cap
 
-      // Map grade → base ranges (USD)
-      function baseRangeFor(grade: Grade, product: "card" | "loan") {
-        if (product === "card") {
-          if (grade === "A") return { min: 15000, max: 30000 };
-          if (grade === "B") return { min: 8000, max: 20000 };
-          if (grade === "C") return { min: 2000, max: 10000 };
-          return { min: 0, max: 2000 };
-        } else {
-          if (grade === "A") return { min: 20000, max: 40000 };
-          if (grade === "B") return { min: 10000, max: 25000 };
-          if (grade === "C") return { min: 5000, max: 15000 };
-          return { min: 0, max: 5000 };
-        }
-      }
+      // Apply caps to base ranges (cap the max; ensure min <= max)
+      const cardRangeMax = Math.max(0, Math.min(baseCard.max, Math.round(cardCap / 1000) * 1000 || baseCard.max));
+      const loanRangeMax = Math.max(0, Math.min(baseLoan.max, Math.round(loanCap / 1000) * 1000 || baseLoan.max));
 
-      let cardRange = baseRangeFor(gradeCard, "card");
-      let loanRange = baseRangeFor(gradeLoan, "loan");
+      const cardRangeMin = Math.min(baseCard.min, cardRangeMax);
+      const loanRangeMin = Math.min(baseLoan.min, loanRangeMax);
 
-      // Comparable‑credit realism caps
-      // Cards: cap upper to ~1.5× highest existing limit if base implies a big leap
-      if (highestCardLimit > 0) {
-        const cap = Math.round((highestCardLimit * 1.5) / 1000) * 1000;
-        if (cap < cardRange.max && cap < Math.max(cardRange.max, cardRange.min * 2)) {
-          // Only compress when base clearly leaps far beyond proven limit
-          cardRange.max = Math.max(cardRange.min, cap);
-        }
-        // Small boost if already at high limits and very low util
-        if (util != null && util <= 10 && highestCardLimit >= cardRange.max) {
-          cardRange.max = Math.round(cardRange.max * 1.1 / 1000) * 1000;
-        }
-      }
+      const likelihood = (g: Grade) => (g === "A" ? "High" : g === "B" ? "Moderate" : g === "C" ? "Low" : "Unlikely");
 
-      // Loans: if no prior installment, cap <= $10k; else cap ≈ 1.5× largest prior
-      if (largestInstallment > 0) {
-        const cap = Math.round((largestInstallment * 1.5) / 1000) * 1000;
-        if (cap < loanRange.max) loanRange.max = Math.max(loanRange.min, cap);
-      } else {
-        loanRange.max = Math.min(loanRange.max, 10000);
-      }
+      // PERSONAL subtotals & banner for personal
+      const personal_card = { grade: gradeCard, likelihood: likelihood(gradeCard), range_min: cardRangeMin, range_max: cardRangeMax };
+      const personal_loan = { grade: gradeLoan, likelihood: likelihood(gradeLoan), range_min: loanRangeMin, range_max: loanRangeMax };
+      const personal_total_max = cardRangeMax + loanRangeMax;
 
-      // Likelihood labels
-      const likelihoodFrom = (g: Grade) => (g === "A" ? "High" : g === "B" ? "Moderate" : g === "C" ? "Low" : "Unlikely");
+      // BUSINESS (optional): conservative default = duplicate personal total
+      const business_multiplier = hasBusiness ? CONFIG.businessMultiplierDefault : 0;
+      const business_total_max = Math.round(personal_total_max * business_multiplier / 1000) * 1000;
 
-      // Key reasons (top 3–5)
+      // Banner estimate = personal + business
+      const banner_estimate = personal_total_max + business_total_max;
+
+      // Debug/Explain
       const reasons: string[] = [];
-      if (PH === 3) reasons.push("Clean 24‑month payment history");
+      if (PH === 3) reasons.push("Clean recent payment history");
       if (PH === 1) reasons.push("Delinquencies/derogatories present");
       if (UT === 3) reasons.push("Very low revolving utilization");
       if (UT === 1) reasons.push("High revolving utilization");
-      if (DA === 3) reasons.push("Seasoned credit depth & mix");
-      if (DA === 1) reasons.push("Thin/young credit file");
-      if (NR === 3) reasons.push("No new accounts in last 12 months");
+      if (DA === 3) reasons.push("Seasoned depth and mix");
+      if (DA === 1) reasons.push("Thin or young credit file");
+      if (NR === 3) reasons.push("No new accounts in the last 12 months");
       if (NR === 1) reasons.push("Multiple recent new accounts");
-      if (highestCardLimit > 0) reasons.push(`Highest card limit $${highestCardLimit.toLocaleString()}`);
-      if (largestInstallment > 0) reasons.push(`Largest prior installment $${largestInstallment.toLocaleString()}`);
-      if (guardrailDowngrade) reasons.push("Guardrail applied (utilization/recency or thin‑file)");
+      if (seasonedCard) reasons.push(`Seasoned highest card limit $${seasonedCard.toLocaleString()}`);
+      if (seasonedUnsec) reasons.push(`Seasoned largest unsecured loan $${seasonedUnsec.toLocaleString()}`);
+      if (guardrail) reasons.push("Guardrail applied (utilization/recency or thin file)");
 
       const flags: string[] = [];
-      if (hasBK) flags.push("Recent/Active bankruptcy or public record");
+      if (hasBK) flags.push("Bankruptcy or public record");
       if (has90Late) flags.push("Recent severe delinquency (90‑day late)");
-      if (dataQualityConstrained) flags.push("Data Quality Constraint");
-      if ((util ?? 0) > 70 && newAccounts12mo >= 3) flags.push("High util + many new accounts");
-      if ((avgAge ?? 99) < 2 && openAccounts <= 3) flags.push("Very young & sparse file");
+      if (dataQualityConstrained) flags.push("Data quality constrained");
+      if ((util ?? 0) > 70 && newAccounts12mo >= 3) flags.push("High utilization with many new accounts");
+      if ((avgAgeYears ?? 99) < 2 && openAccounts <= 3) flags.push("Very young & sparse file");
 
-      // Analysis summary
-      const analysis = [
-        score != null ? `Estimated score ${score}.` : "",
-        util != null ? `Utilization ${util}%.` : "",
-        `Inquiries EX ${ex} • TU ${tu} • EQ ${eq}.`,
-        negatives_count ? `${negatives_count} negative item(s) detected.` : "No negatives detected.",
-        avgAge != null ? `Avg age ${avgAge} yrs.` : "",
-      ].filter(Boolean).join(" ");
-
-      // Final output payload
-      const payload = {
+      // final response
+      return res.status(200).json({
         ok: true,
+        inputs: {
+          business: hasBusiness ? { name: businessName, age_months: businessAgeMonths } : null,
+          composite: {
+            score, util, inquiries, negatives_count,
+            active_weights: { EX: wEX, TU: wTU, EQ: wEQ },
+          },
+        },
         outputs: {
           fundable,
-          score_estimate: score,
-          utilization_pct: util,
-          inquiries: { ex, tu, eq },
-          negatives_count,
+          banner_estimate,                 // what you show big in the UI
+          personal_total_max,              // personal-only max (cards + loan)
+          business_total_max,              // if business included
+          personal_card,
+          personal_loan,
           meta: {
-            avg_age_years: avgAge,
+            score_estimate: score,
+            utilization_pct: util,
+            inquiries,
+            negatives_count,
+            avg_age_years: avgAgeYears,
             highest_card_limit: highestCardLimit || null,
+            seasoned_highest_card_limit: seasonedHighestCardLimit || null,
             largest_installment: largestInstallment || null,
+            largest_unsecured_installment: largestUnsecuredInstallment || null,
+            seasoned_largest_unsecured_installment: seasonedLargestUnsecuredInstallment || null,
             new_accounts_12mo: newAccounts12mo || 0,
             open_accounts: openAccounts || 0,
-            flags
+            flags,
+            reasons: reasons.slice(0, 6),
           },
-          personal_card: {
-            grade: gradeCard,
-            likelihood: likelihoodFrom(gradeCard),
-            range_min: cardRange.min,
-            range_max: cardRange.max,
-            key_reasons: reasons.slice(0, 5),
-          },
-          personal_loan: {
-            grade: gradeLoan,
-            likelihood: likelihoodFrom(gradeLoan),
-            range_min: loanRange.min,
-            range_max: loanRange.max,
-            key_reasons: reasons.slice(0, 5),
-          },
-          analysis
-        }
-      };
-
-      return res.status(200).json(payload);
-
+        },
+      });
     } catch (e: any) {
       console.error(e);
-      return res.status(500).json({ ok: false, msg: "Parser error", error: e?.message || "unknown" });
+      return res.status(500).json({
+        ok: false,
+        code: "parser_error",
+        msg: "We couldn’t read your PDF(s). Please upload clear Experian/TransUnion/Equifax reports.",
+        detail: e?.message || "unknown",
+        tips: [
+          "Export a fresh PDF (not a photo).",
+          "Upload up to 3 PDFs — one per bureau is fine.",
+          "If it still fails, try uploading just Experian first.",
+        ],
+      });
     }
   });
 }
