@@ -1,5 +1,11 @@
 {
   "version": 2,
-  "buildCommand": "echo 'skip next build'",
-  "builds": [{ "src": "**/*.js", "use": "@vercel/node" }]
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1.js" }
+  ]
 }
