@@ -2,13 +2,11 @@
   "name": "underwrite-iq",
   "version": "1.0.0",
   "description": "Underwrite IQ - Lite API + Analyzer frontend",
-  "main": "api/lite/parse-report.ts",
+  "main": "api/lite/parse-report.js",
   "license": "MIT",
-  "type": "module",
   "scripts": {
     "dev": "vercel dev",
-    "build": "tsc",
-    "start": "node api/lite/parse-report.ts"
+    "start": "node api/lite/parse-report.js"
   },
   "dependencies": {
     "formidable": "^3.5.1",
