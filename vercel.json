@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "buildCommand": "echo 'Skipping Next.js build step'",
   "builds": [
     { "src": "api/**/*.ts", "use": "@vercel/node" },
     { "src": "public/**", "use": "@vercel/static" }
