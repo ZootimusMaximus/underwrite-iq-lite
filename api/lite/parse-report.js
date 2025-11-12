@@ -1,12 +1,14 @@
 // api/lite/parse-report.js
-// CommonJS serverless function (works with @vercel/node). No Next, no TS.
+// CommonJS serverless function (works with @vercel/node).
 
 const { formidable } = require("formidable");
-const pdfParse   = require("pdf-parse");
-const fs         = require("fs");
+const pdfParse       = require("pdf-parse");
+const fs             = require("fs");
 
-// If this ever runs under pages/api, this turns off Next's bodyParser:
-module.exports.config = { api: { bodyParser: false, sizeLimit: "25mb" } };
+// Vercel / Next API config if ever used via pages/api
+module.exports.config = {
+  api: { bodyParser: false, sizeLimit: "25mb" }
+};
 
 /** ======= POLICY / TUNABLES ======= **/
 const CONFIG = {
@@ -21,8 +23,8 @@ const CONFIG = {
   seasoningMonths: 24,
 
   // comparable-credit multipliers (caps) by grade
-  cardMultipliers: { A: 8, B: 6, C: 3, D: 1 },       // ≈ 5–8× seasoned highest card limit
-  loanMultipliers: { A: 6, B: 5, C: 2, D: 1 },       // ≈ 5–6× seasoned largest unsecured loan
+  cardMultipliers: { A: 8, B: 6, C: 3, D: 1 },
+  loanMultipliers: { A: 6, B: 5, C: 2, D: 1 },
 
   // business funding, conservative default = duplicate of personal total (1.0x)
   businessMultiplierDefault: 1.0,
@@ -101,7 +103,8 @@ const weightedAverageSafe = (values, weights) => {
 const gradeFromPoints = (n) =>
   n >= 11 ? "A" : n >= 9 ? "B" : n >= 7 ? "C" : "D";
 
-const downgrade = (g) => (["A","B","C","D"])[Math.min(["A","B","C","D"].indexOf(g) + 1, 3)];
+const downgrade = (g) =>
+  (["A","B","C","D"])[Math.min(["A","B","C","D"].indexOf(g) + 1, 3)];
 
 /** ======= PER-BUREAU EXTRACTION ======= **/
 function extractFrom(text) {
@@ -114,10 +117,11 @@ function extractFrom(text) {
 
   const mS = text.match(SCORE_RE);
   const score = mS ? asInt(mS[2]) : null;
+
   const mU = text.match(UTIL_RE);
   const util = mU ? asInt(mU[2]) : null;
 
-  let ex=0, tu=0, eq=0;
+  let ex = 0, tu = 0, eq = 0;
   const mI = text.match(INQ_RE);
   if (mI) {
     ex = asInt(mI[2]) ?? 0;
@@ -143,7 +147,9 @@ function extractFrom(text) {
   const LIMIT_RE = /(credit\s+limit|high\s+credit|highest\s+credit\s+limit)\D{0,12}\$?\s?([\d,]{2,9})/gi;
   const LOAN_RE  = /(original\s+loan\s+amount|loan\s+amount|largest\s+(original\s+)?loan)\D{0,12}\$?\s?([\d,]{2,9})/gi;
 
-  let highestCardLimit = 0, seasonedHighestCardLimit = 0, m;
+  let highestCardLimit = 0,
+      seasonedHighestCardLimit = 0,
+      m;
 
   while ((m = LIMIT_RE.exec(text)) !== null) {
     const val = Number(String(m[2]).replace(/[^\d]/g, ""));
@@ -153,7 +159,9 @@ function extractFrom(text) {
     const opened = [...near.matchAll(OPENED)].map(x => x[2]).find(Boolean);
     const d = opened ? parseOpenedDate(opened) : null;
     const seasoned = d ? monthsSince(d) >= CONFIG.seasoningMonths : false;
-    if (seasoned && val > seasonedHighestCardLimit) seasonedHighestCardLimit = val;
+    if (seasoned && val > seasonedHighestCardLimit) {
+      seasonedHighestCardLimit = val;
+    }
   }
 
   let largestUnsecuredInstallment = 0,
@@ -185,10 +193,18 @@ function extractFrom(text) {
   const openAccounts = (text.match(STATUS) || []).length;
 
   return {
-    score, util, inq: { ex, tu, eq }, negatives_count, negLines, avgAgeYears,
-    highestCardLimit, seasonedHighestCardLimit,
-    largestUnsecuredInstallment, seasonedLargestUnsecuredInstallment,
-    newAccounts12mo, openAccounts
+    score,
+    util,
+    inq: { ex, tu, eq },
+    negatives_count,
+    negLines,
+    avgAgeYears,
+    highestCardLimit,
+    seasonedHighestCardLimit,
+    largestUnsecuredInstallment,
+    seasonedLargestUnsecuredInstallment,
+    newAccounts12mo,
+    openAccounts
   };
 }
 
@@ -212,7 +228,7 @@ module.exports = async function handler(req, res) {
     multiples: true,
     keepExtensions: true,
     maxFileSize: CONFIG.maxFileSizeBytes,
-    uploadDir: "/tmp"            // <--- Vercel's only writable directory
+    uploadDir: "/tmp" // Vercel's only writable directory
   });
 
   try {
@@ -237,6 +253,7 @@ module.exports = async function handler(req, res) {
           });
         }
 
+        // Optional business fields
         const businessNameRaw = fields && fields.businessName;
         const businessAgeRaw  = fields && fields.businessAgeMonths;
         const businessName = Array.isArray(businessNameRaw)
@@ -261,17 +278,29 @@ module.exports = async function handler(req, res) {
           }
           const buf = await fs.promises.readFile(p);
           const parsed = await pdfParse(buf);
-          const t = (parsed.text || "").replace(/\s+/g, " ").trim();
+
+          // 🔥 SANITIZE UNICODE / WEIRD CHARS BEFORE PARSING
+          let t = (parsed.text || "")
+            .replace(/[\u2010-\u2015]/g, "-")   // all dash types → ASCII dash
+            .replace(/\u2212/g, "-")           // minus sign → dash
+            .replace(/\u00AD/g, "")            // soft hyphen
+            .replace(/\u2028|\u2029/g, " ")    // line separators
+            .replace(/[^\x00-\x7F]/g, " ")     // drop other non-ASCII
+            .replace(/\s+/g, " ")
+            .trim();
+
           if (t.length < 20) {
             return res.status(400).json({
               ok: false,
               code: "empty_pdf",
-              msg: "Unable to read text from PDF. Please upload a clear bureau PDF (no photos)."
+              msg: "We couldn’t read your PDF. Please upload a clear bureau report PDF (no photos or scans)."
             });
           }
+
           texts.push(t);
         }
 
+        // ---------- Merge + bureau detection ----------
         const merged = texts.join(" ");
         const low = merged.toLowerCase();
         const hasEX = low.includes("experian");
@@ -374,9 +403,10 @@ module.exports = async function handler(req, res) {
           negatives_count <= gate.maxNegatives &&
           totalInquiries <= gate.maxInquiriesTotal;
 
-        // ---------- Pillars ----------
+        // ---------- Pillars (PH, UT, DA, NR) ----------
         const allNegLines = []
           .concat(exData?.negLines || [], tuData?.negLines || [], eqData?.negLines || [], fbData?.negLines || []);
+
         const hasBK = allNegLines.some(s => s.includes("bankruptcy") || s.includes("public record"));
         const has90Late = allNegLines.some(s => s.includes("90") && s.includes("late"));
 
