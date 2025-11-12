@@ -3,7 +3,7 @@ const formidable = require("formidable");
 
 module.exports.config = { api: { bodyParser: false, sizeLimit: "25mb" } };
 
-module.exports = async function handler(req, res) {
+module.exports = function handler(req, res) {
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -18,9 +18,8 @@ module.exports = async function handler(req, res) {
 
   const form = formidable({ multiples: true, keepExtensions: true, maxFileSize: 25 * 1024 * 1024 });
   form.parse(req, (err, fields, files) => {
-    if (err) {
-      return res.status(400).json({ ok: false, msg: "Upload parsing failed", detail: String(err) });
-    }
+    if (err) return res.status(400).json({ ok: false, msg: "Upload parsing failed", detail: String(err) });
+
     const up = files && (files.file ?? files["file"]);
     const arr = Array.isArray(up) ? up : (up ? [up] : []);
     if (!arr.length) return res.status(400).json({ ok: false, msg: "Attach at least one PDF." });
