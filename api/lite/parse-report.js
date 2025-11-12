@@ -108,10 +108,13 @@ const downgrade = (g) =>
 
 /** ======= PER-BUREAU EXTRACTION ======= **/
 function extractFrom(text) {
-  const SCORE_RE = /(fico|score)\D{0,6}(\d{3})/i;
-  const UTIL_RE  = /(utilization|utilisation|util)\D{0,10}(\d{1,3})\s?%/i;
+  const SCORE_RE = /(fico|score)\D{0,20}(\d{3})/i;
+  const UTIL_RE  = /(utilization|utilisation|util)\D{0,20}(\d{1,3})\s?%/i;
   const INQ_RE   = /(inquiries|inq)[^a-zA-Z0-9]+ex\D*(\d+)\D+tu\D*(\d+)\D+eq\D*(\d+)/i;
-  const NEG_RE   = /(collection|charge[-\s]?off|late payment|30[-\s]?day|60[-\s]?day|90[-\s]?day|delinquent|public\s+record|bankruptcy)/gi;
+
+  // tighten negatives to serious derog only
+  const NEG_RE   = /(collection|charge[-\s]?off|repossession|foreclosure|public\s+record|bankruptcy)/gi;
+
   const OPENED   = /(opened|open\s+date|date\s+opened)\D{0,12}((\d{1,2}[-\/]\d{2,4})|([A-Za-z]{3,9}\s+\d{4}))?/gi;
   const STATUS   = /(status|account\s+status)\D{0,12}(open|opened)/gi;
 
@@ -223,12 +226,12 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ ok: false, msg: "Method not allowed" });
   }
 
-  // ✅ Formidable v3+ init + Vercel temp dir
+  // Formidable v3+ init + Vercel temp dir
   const form = formidable({
     multiples: true,
     keepExtensions: true,
     maxFileSize: CONFIG.maxFileSizeBytes,
-    uploadDir: "/tmp" // Vercel's only writable directory
+    uploadDir: "/tmp"
   });
 
   try {
@@ -265,7 +268,7 @@ module.exports = async function handler(req, res) {
 
         const hasBusiness = !!(businessName && String(businessName).trim().length > 1);
 
-        // ---------- Read PDFs ----------
+        // ---------- Read & sanitize PDFs ----------
         const texts = [];
         for (const f of fileArr) {
           const p = f && (f.filepath || f.path);
@@ -279,13 +282,12 @@ module.exports = async function handler(req, res) {
           const buf = await fs.promises.readFile(p);
           const parsed = await pdfParse(buf);
 
-          // 🔥 SANITIZE UNICODE / WEIRD CHARS BEFORE PARSING
           let t = (parsed.text || "")
-            .replace(/[\u2010-\u2015]/g, "-")   // all dash types → ASCII dash
-            .replace(/\u2212/g, "-")           // minus sign → dash
+            .replace(/[\u2010-\u2015]/g, "-")   // all unicode dashes → "-"
+            .replace(/\u2212/g, "-")           // minus sign → "-"
             .replace(/\u00AD/g, "")            // soft hyphen
             .replace(/\u2028|\u2029/g, " ")    // line separators
-            .replace(/[^\x00-\x7F]/g, " ")     // drop other non-ASCII
+            .replace(/[^\x00-\x7F]/g, " ")     // strip other weird unicode
             .replace(/\s+/g, " ")
             .trim();
 
@@ -310,7 +312,9 @@ module.exports = async function handler(req, res) {
         const exData = hasEX ? extractFrom(merged) : null;
         const tuData = hasTU ? extractFrom(merged) : null;
         const eqData = hasEQ ? extractFrom(merged) : null;
-        const fbData = (!exData && !tuData && !eqData) ? extractFrom(merged) : null;
+        const fbData = (!exData && !tuData && !eqData)
+          ? extractFrom(merged)
+          : null;
 
         // ---------- Composite metrics ----------
         const scoreVals = [exData?.score,  tuData?.score,  eqData?.score];
@@ -321,16 +325,18 @@ module.exports = async function handler(req, res) {
         let wEX = exData ? CONFIG.weights.EX : 0;
         let wTU = tuData ? CONFIG.weights.TU : 0;
         let wEQ = eqData ? CONFIG.weights.EQ : 0;
+
         if (!exData && !tuData && !eqData && fbData) wEX = 1;
         [wEX, wTU, wEQ] = normalizeWeights([wEX, wTU, wEQ]);
 
         const score = weightedAverageSafe(
           (exData || tuData || eqData) ? scoreClean : [fbData?.score ?? null],
-          (exData || tuData || eqData) ? [wEX,wTU,wEQ] : [1]
+          (exData || tuData || eqData) ? [wEX, wTU, wEQ] : [1]
         );
+
         const util  = weightedAverageSafe(
           (exData || tuData || eqData) ? utilClean  : [fbData?.util ?? null],
-          (exData || tuData || eqData) ? [wEX,wTU,wEQ] : [1]
+          (exData || tuData || eqData) ? [wEX, wTU, wEQ] : [1]
         );
 
         const inquiries = {
@@ -403,7 +409,7 @@ module.exports = async function handler(req, res) {
           negatives_count <= gate.maxNegatives &&
           totalInquiries <= gate.maxInquiriesTotal;
 
-        // ---------- Pillars (PH, UT, DA, NR) ----------
+        // ---------- Pillars ----------
         const allNegLines = []
           .concat(exData?.negLines || [], tuData?.negLines || [], eqData?.negLines || [], fbData?.negLines || []);
 
