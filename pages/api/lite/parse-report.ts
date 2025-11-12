@@ -5,39 +5,46 @@ import fs from "fs";
 
 export const config = { api: { bodyParser: false } };
 
+// Regex helpers
 const SCORE_RE = /(fico|score)\D{0,5}(\d{3})/i;
 const UTIL_RE  = /(utilization|utilisation|util)\D{0,10}(\d{1,3})\s?%/i;
 const INQ_RE   = /(inquiries|inq)\D+ex\D*(\d+)\D+tu\D*(\d+)\D+eq\D*(\d+)/i;
 const NEG_RE   = /(collection|charge[-\s]?off|late payment|delinquent|public record|bankruptcy)[^\.]{0,120}/gi;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") return res.status(405).json({ ok: false, msg: "Method not allowed" });
+  if (req.method !== "POST")
+    return res.status(405).json({ ok: false, msg: "Method not allowed" });
 
   const form = formidable({ multiples: false, keepExtensions: true });
-  form.parse(req, async (err, fields, files) => {
+  form.parse(req, async (err, _fields, files) => {
     try {
-      if (err || !files.file) return res.status(400).json({ ok: false, msg: "No file" });
+      if (err || !files.file)
+        return res.status(400).json({ ok: false, msg: "No file uploaded" });
+
       const f = Array.isArray(files.file) ? files.file[0] : (files.file as any);
       const name = (f.originalFilename || "").toLowerCase();
-      if (!/\.pdf$/.test(name)) return res.status(400).json({ ok: false, msg: "Please upload a PDF for parsing (images soon)." });
+      if (!/\.pdf$/.test(name))
+        return res.status(400).json({ ok: false, msg: "Please upload a PDF for parsing (images supported later)." });
 
       const buf = await fs.promises.readFile(f.filepath);
       const parsed = await pdfParse(buf);
       const text = (parsed.text || "").replace(/\s+/g, " ").trim();
 
+      // --- Extract core values ---
       const score = pickInt(text.match(SCORE_RE), 2);
       const util  = pickInt(text.match(UTIL_RE),  2);
-      let ex=0, tu=0, eq=0;
+
+      let ex = 0, tu = 0, eq = 0;
       const inq = text.match(INQ_RE);
       if (inq) { ex = asInt(inq[2]); tu = asInt(inq[3]); eq = asInt(inq[4]); }
 
-      const negatives_list = (text.match(NEG_RE) || []).slice(0, 12).map(line => line.toLowerCase());
+      const negatives_list = (text.match(NEG_RE) || []).slice(0, 12).map(l => l.toLowerCase());
       const negatives_count = negatives_list.length;
 
-      // ---- LITE fundable logic (MVP) ----
+      // --- Fundable decision ---
       const fundable = isFundable(score, util, negatives_count, { ex, tu, eq });
 
-      // rough range estimate (placeholder; tune later)
+      // --- Simple funding range heuristic (MVP) ---
       const est = estimateRange(score, util, negatives_count);
 
       const analysis =
@@ -61,14 +68,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           analysis
         }
       });
-    } catch {
+    } catch (e) {
+      console.error(e);
       return res.status(500).json({ ok: false, msg: "Parse error" });
     }
   });
 }
 
+// -------- Helpers --------
 function pickInt(m: RegExpMatchArray | null, idx: number){ if(!m) return null; const n = parseInt(m[idx],10); return isNaN(n)?null:n; }
-function asInt(s?: string){ const n = parseInt(s || "0",10); return isNaN(n)?0:n; }
+function asInt(s?: string){ const n = parseInt(s||"0",10); return isNaN(n)?0:n; }
 
 function isFundable(score: number | null, util: number | null, negs: number, inquiries: {ex:number;tu:number;eq:number}) {
   const MIN_SCORE = 700, MAX_UTIL = 30, MAX_INQ = 6, MAX_NEGS = 0;
