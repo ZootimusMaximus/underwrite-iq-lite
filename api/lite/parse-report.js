@@ -1,33 +1,22 @@
 // api/lite/parse-report.js
-// CommonJS Node serverless (works with @vercel/node). No TS/ESM here.
+// CommonJS serverless function (works with @vercel/node). No Next, no TS.
 
 const formidable = require("formidable");
 const pdfParse   = require("pdf-parse");
 const fs         = require("fs");
 
-// If this happens to run under Next pages/api, this disables its body parser.
+// If this ever runs under pages/api, this turns off Next's bodyParser:
 module.exports.config = { api: { bodyParser: false, sizeLimit: "25mb" } };
 
-// ---------- Policy / Tunables ----------
+/** ======= POLICY / TUNABLES ======= **/
 const CONFIG = {
-  // Bureau weights (favor Experian slightly as requested)
-  weights: { EX: 1.5, TU: 1.2, EQ: 1.0 },
-
-  // Outlier handling for tri-merge averaging
+  weights: { EX: 1.5, TU: 1.2, EQ: 1.0 },  // Experian bias
   outlierScoreDelta: 100,
   outlierUtilDelta: 25,
-
-  // "Seasoned" trade lines (months)
   seasoningMonths: 24,
-
-  // Comparable-credit multipliers by grade
   cardMultipliers: { A: 8, B: 6, C: 3, D: 1 },
   loanMultipliers: { A: 6, B: 5, C: 2, D: 1 },
-
-  // Business funding duplication (conservative default: 1.0x personal total)
   businessMultiplierDefault: 1.0,
-
-  // Base approval ranges (pre-cap)
   baseCardRanges: {
     A: { min: 15000, max: 30000 },
     B: { min:  8000, max: 20000 },
@@ -40,19 +29,14 @@ const CONFIG = {
     C: { min:  5000, max: 15000 },
     D: { min:     0, max:  5000 }
   },
-
-  // Simple MVP gate
   gate: { minScore: 700, maxUtil: 30, maxInquiriesTotal: 6, maxNegatives: 0 },
-
-  // Upload limit
   maxFileSizeBytes: 25 * 1024 * 1024
 };
 
-// ---------- Helpers ----------
+/** ======= HELPERS ======= **/
 const asInt = (s) => {
   if (s == null) return null;
-  const cleaned = String(s).replace(/[^\d]/g, "");
-  const v = Number(cleaned);
+  const v = Number(String(s).replace(/[^\d]/g, ""));
   return Number.isFinite(v) ? v : null;
 };
 const monthsSince = (d) =>
@@ -70,35 +54,26 @@ const parseOpenedDate = (s) => {
   }
   return null;
 };
-
 const normalizeWeights = (arr) => {
   const sum = arr.reduce((a, b) => a + (b > 0 ? b : 0), 0) || 1;
   return arr.map((x) => (x > 0 ? x / sum : 0));
 };
-
-const dampenOutliers = (values, maxDelta) => {
+const dampenOutliers = (values, delta) => {
   const nums = values.filter((v) => v != null);
   if (nums.length < 3) return values;
   const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
-  return values.map((v) => (v == null ? null : Math.abs(v - mean) > maxDelta ? mean : v));
+  return values.map((v) => (v == null ? null : Math.abs(v - mean) > delta ? mean : v));
 };
-
 const weightedAverageSafe = (values, weights) => {
-  const pairs = values
-    .map((v, i) => (v != null && weights[i] > 0 ? { v, w: weights[i] } : null))
-    .filter(Boolean);
+  const pairs = values.map((v, i) => (v != null && weights[i] > 0 ? { v, w: weights[i] } : null)).filter(Boolean);
   if (!pairs.length) return null;
   const W = pairs.reduce((a, b) => a + b.w, 0);
   return Math.round(pairs.reduce((a, b) => a + b.v * b.w, 0) / W);
 };
-
 const gradeFromPoints = (n) => (n >= 11 ? "A" : n >= 9 ? "B" : n >= 7 ? "C" : "D");
-const downgrade = (g) => {
-  const order = ["A", "B", "C", "D"];
-  return order[Math.min(order.indexOf(g) + 1, order.length - 1)];
-};
+const downgrade = (g) => (["A","B","C","D"])[Math.min(["A","B","C","D"].indexOf(g) + 1, 3)];
 
-// ---------- Extract signals from 1 bureau text ----------
+/** ======= PER-BUREAU EXTRACTION ======= **/
 function extractFrom(text) {
   const SCORE_RE = /(fico|score)\D{0,6}(\d{3})/i;
   const UTIL_RE  = /(utilization|utilisation|util)\D{0,10}(\d{1,3})\s?%/i;
@@ -107,20 +82,18 @@ function extractFrom(text) {
   const OPENED   = /(opened|open\s+date|date\s+opened)\D{0,12}((\d{1,2}[-\/]\d{2,4})|([A-Za-z]{3,9}\s+\d{4}))?/gi;
   const STATUS   = /(status|account\s+status)\D{0,12}(open|opened)/gi;
 
-  const mScore = text.match(SCORE_RE);
-  const score = mScore ? asInt(mScore[2]) : null;
-
-  const mUtil = text.match(UTIL_RE);
-  const util  = mUtil ? asInt(mUtil[2]) : null;
+  const mS = text.match(SCORE_RE);
+  const score = mS ? asInt(mS[2]) : null;
+  const mU = text.match(UTIL_RE);
+  const util = mU ? asInt(mU[2]) : null;
 
   let ex=0, tu=0, eq=0;
-  const mInq = text.match(INQ_RE);
-  if (mInq) { ex = asInt(mInq[2]) ?? 0; tu = asInt(mInq[3]) ?? 0; eq = asInt(mInq[4]) ?? 0; }
+  const mI = text.match(INQ_RE);
+  if (mI) { ex = asInt(mI[2]) ?? 0; tu = asInt(mI[3]) ?? 0; eq = asInt(mI[4]) ?? 0; }
 
   const negLines = (text.match(NEG_RE) || []).slice(0,64).map(s => s.toLowerCase());
   const negatives_count = negLines.length;
 
-  // AAoA
   const AAOA = /(average\s+age\s+of\s+accounts|average\s+account\s+age|aaoa)\D{0,20}(\d{1,2})\D{0,8}(year|yr|years)?\D{0,8}(\d{1,2})?\D{0,8}(month|mo|months)?/i;
   let avgAgeYears = null;
   const a = text.match(AAOA);
@@ -130,11 +103,11 @@ function extractFrom(text) {
     avgAgeYears = +((y) + (m/12)).toFixed(2);
   }
 
-  // Highest card (seasoned) and largest unsecured loan (seasoned)
   const LIMIT_RE = /(credit\s+limit|high\s+credit|highest\s+credit\s+limit)\D{0,12}\$?\s?([\d,]{2,9})/gi;
   const LOAN_RE  = /(original\s+loan\s+amount|loan\s+amount|largest\s+(original\s+)?loan)\D{0,12}\$?\s?([\d,]{2,9})/gi;
 
   let highestCardLimit = 0, seasonedHighestCardLimit = 0, m;
+
   while ((m = LIMIT_RE.exec(text)) !== null) {
     const val = Number(String(m[2]).replace(/[^\d]/g, ""));
     if (!val) continue;
@@ -147,6 +120,7 @@ function extractFrom(text) {
   }
 
   let largestUnsecuredInstallment = 0, seasonedLargestUnsecuredInstallment = 0;
+
   while ((m = LOAN_RE.exec(text)) !== null) {
     const val = Number(String(m[2]).replace(/[^\d]/g, ""));
     if (!val) continue;
@@ -180,7 +154,7 @@ function extractFrom(text) {
   };
 }
 
-// ---------- API handler ----------
+/** ======= API HANDLER ======= **/
 module.exports = async function handler(req, res) {
   // CORS / preflight
   if (req.method === "OPTIONS") {
@@ -200,25 +174,18 @@ module.exports = async function handler(req, res) {
   try {
     form.parse(req, async (err, fields, files) => {
       try {
-        if (err) {
-          return res.status(400).json({ ok: false, code: "parse_error", msg: "Upload parsing failed", detail: String(err) });
-        }
+        if (err) return res.status(400).json({ ok: false, code: "parse_error", msg: "Upload parsing failed", detail: String(err) });
 
-        // 1–3 PDFs (field name "file")
         const up = files && (files.file ?? files["file"]);
         const fileArr = Array.isArray(up) ? up : (up ? [up] : []);
-        if (!fileArr.length) {
-          return res.status(400).json({ ok: false, code: "no_files", msg: "Please upload 1–3 bureau PDF reports." });
-        }
+        if (!fileArr.length) return res.status(400).json({ ok: false, code: "no_files", msg: "Please upload 1–3 bureau PDF reports." });
 
-        // Business (optional)
         const businessNameRaw = fields && fields.businessName;
         const businessAgeRaw  = fields && fields.businessAgeMonths;
-        const businessName    = Array.isArray(businessNameRaw) ? (businessNameRaw[0] || "") : (businessNameRaw || "");
+        const businessName = Array.isArray(businessNameRaw) ? (businessNameRaw[0] || "") : (businessNameRaw || "");
         const businessAgeMonths = Array.isArray(businessAgeRaw) ? asInt(businessAgeRaw[0]) : asInt(businessAgeRaw);
         const hasBusiness = !!(businessName && String(businessName).trim().length > 1);
 
-        // Read PDFs → text
         const texts = [];
         for (const f of fileArr) {
           const p = f && (f.filepath || f.path);
@@ -243,7 +210,7 @@ module.exports = async function handler(req, res) {
         const eqData = hasEQ ? extractFrom(merged) : null;
         const fbData = (!exData && !tuData && !eqData) ? extractFrom(merged) : null;
 
-        // Composite — tri-merge with outlier dampening + weights
+        // Composite
         const scoreVals = [exData?.score,  tuData?.score,  eqData?.score];
         const utilVals  = [exData?.util,   tuData?.util,   eqData?.util ];
         const scoreClean = dampenOutliers(scoreVals, CONFIG.outlierScoreDelta);
@@ -252,19 +219,12 @@ module.exports = async function handler(req, res) {
         let wEX = exData ? CONFIG.weights.EX : 0;
         let wTU = tuData ? CONFIG.weights.TU : 0;
         let wEQ = eqData ? CONFIG.weights.EQ : 0;
-        if (!exData && !tuData && !eqData && fbData) wEX = 1; // merged single
+        if (!exData && !tuData && !eqData && fbData) wEX = 1;
         [wEX, wTU, wEQ] = normalizeWeights([wEX, wTU, wEQ]);
 
-        const score = weightedAverageSafe(
-          (exData || tuData || eqData) ? scoreClean : [fbData?.score ?? null],
-          (exData || tuData || eqData) ? [wEX, wTU, wEQ] : [1]
-        );
-        const util  = weightedAverageSafe(
-          (exData || tuData || eqData) ? utilClean  : [fbData?.util  ?? null],
-          (exData || tuData || eqData) ? [wEX, wTU, wEQ] : [1]
-        );
+        const score = weightedAverageSafe((exData||tuData||eqData)?scoreClean:[fbData?.score??null], (exData||tuData||eqData)?[wEX,wTU,wEQ]:[1]);
+        const util  = weightedAverageSafe((exData||tuData||eqData)?utilClean :[fbData?.util ??null], (exData||tuData||eqData)?[wEX,wTU,wEQ]:[1]);
 
-        // Inquiries / negatives
         const inquiries = {
           ex: exData?.inq?.ex ?? 0,
           tu: tuData?.inq?.tu ?? 0,
@@ -279,7 +239,6 @@ module.exports = async function handler(req, res) {
           fbData?.negatives_count ?? 0
         );
 
-        // Other signals
         const avgAgeYearsArr = [exData?.avgAgeYears, tuData?.avgAgeYears, eqData?.avgAgeYears, fbData?.avgAgeYears].filter(v => v != null);
         const avgAgeYears = avgAgeYearsArr.length ? +(avgAgeYearsArr.reduce((a,b)=>a+b,0)/avgAgeYearsArr.length).toFixed(2) : null;
 
@@ -311,7 +270,7 @@ module.exports = async function handler(req, res) {
           fbData?.openAccounts ?? 0
         );
 
-        // ---- Fundable gate
+        // Fundable gate
         const gate = CONFIG.gate;
         const fundable =
           (score != null && score >= gate.minScore) &&
@@ -319,7 +278,7 @@ module.exports = async function handler(req, res) {
           negatives_count <= gate.maxNegatives &&
           totalInquiries <= gate.maxInquiriesTotal;
 
-        // ---- Pillars (PH, UT, DA, NR) with caps/guardrails
+        // Pillars
         const allNegLines = []
           .concat(exData?.negLines || [], tuData?.negLines || [], eqData?.negLines || [], fbData?.negLines || []);
         const hasBK = allNegLines.some(s => s.includes("bankruptcy") || s.includes("public record"));
@@ -376,7 +335,6 @@ module.exports = async function handler(req, res) {
                           ((avgAgeYears ?? 99) < 2 && openAccounts <= 3);
         if (guardrail) { gradeCard = downgrade(gradeCard); gradeLoan = downgrade(gradeLoan); }
 
-        // ---- Base ranges & caps (comparable credit realism)
         const baseCard = CONFIG.baseCardRanges[gradeCard];
         const baseLoan = CONFIG.baseLoanRanges[gradeLoan];
 
@@ -384,9 +342,8 @@ module.exports = async function handler(req, res) {
         const seasonedUnsec = seasonedLargestUnsecuredInstallment || largestUnsecuredInstallment || 0;
 
         const cardCap = seasonedCard * CONFIG.cardMultipliers[gradeCard];
-        const loanCap = seasonedUnsec > 0
-          ? seasonedUnsec * CONFIG.loanMultipliers[gradeLoan]
-          : Math.min(CONFIG.baseLoanRanges[gradeLoan].max, 10000);
+        const loanCap = seasonedUnsec > 0 ? seasonedUnsec * CONFIG.loanMultipliers[gradeLoan]
+                                          : Math.min(CONFIG.baseLoanRanges[gradeLoan].max, 10000);
 
         const cardRangeMax = Math.max(0, Math.min(baseCard.max, Math.round((cardCap || baseCard.max)/1000)*1000));
         const loanRangeMax = Math.max(0, Math.min(baseLoan.max, Math.round((loanCap || baseLoan.max)/1000)*1000));
@@ -395,7 +352,6 @@ module.exports = async function handler(req, res) {
 
         const likelihood = (g) => g==="A" ? "High" : g==="B" ? "Moderate" : g==="C" ? "Low" : "Unlikely";
 
-        // ---- Outputs
         const personal_card = { grade: gradeCard, likelihood: likelihood(gradeCard), range_min: cardRangeMin, range_max: cardRangeMax };
         const personal_loan = { grade: gradeLoan, likelihood: likelihood(gradeLoan), range_min: loanRangeMin, range_max: loanRangeMax };
 
