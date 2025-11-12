@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "pages/api/**/*.ts", "use": "@vercel/node" },
+    { "src": "public/**/*", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "^/api/(.*)$", "dest": "/pages/api/$1.ts" },
+    { "src": "/(.*)", "dest": "/public/$1" }
+  ],
+  "env": {
+    "NEXT_PUBLIC_SITE_URL": "https://underwriteiq.vercel.app"
+  }
+}
