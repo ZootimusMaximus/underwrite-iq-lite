@@ -1,7 +1,7 @@
-// api/lite/parse-report.ts
-import formidable, { File as FormidableFile } from "formidable";
-import pdfParse from "pdf-parse";
-import fs from "fs";
+// api/lite/parse-report.js  ← rename to .js (not .ts)
+const formidable = require("formidable");
+const pdfParse = require("pdf-parse");
+const fs = require("fs");
 
 export const config = {
   api: { bodyParser: false, sizeLimit: "25mb" },
