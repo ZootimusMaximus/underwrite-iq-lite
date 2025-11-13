@@ -1,61 +1,27 @@
 // ==================================================================================
-// UnderwriteIQ LITE — LLM-Powered Credit Report Parser
-// Vercel Serverless Function — FINAL VERSION FOR FORMIDABLE 2.1.1
+// UnderwriteIQ LITE — FINAL WORKING VERCEL VERSION
 // ==================================================================================
 
 const fs = require("fs");
-const path = require("path");
 const formidable = require("formidable");
 
-// Disable bodyParser
+// Disable Next.js bodyParser for uploads
 module.exports.config = {
   api: { bodyParser: false, sizeLimit: "30mb" }
 };
 
-// ================================
-// FIXED FILE UPLOAD HANDLER
-// ================================
-function vercelFileHandler(part) {
-  const uploadDir = "/tmp";
-  const filePath = path.join(uploadDir, part.originalFilename || "upload.pdf");
-  const writeStream = fs.createWriteStream(filePath);
-  part.pipe(writeStream);
-  part.on("end", () => writeStream.end());
-  return { filePath };
-}
-
-function parseMultipart(req) {
-  return new Promise((resolve, reject) => {
-    const form = formidable({
-      multiples: false,
-      maxFileSize: 25 * 1024 * 1024,
-      fileWriteStreamHandler: vercelFileHandler
-    });
-
-    form.parse(req, (err, fields, files) => {
-      if (err) return reject(err);
-      const file = files.file;
-
-      if (!file || !file.filepath) {
-        return reject(new Error("Unable to locate uploaded file path"));
-      }
-
-      resolve({ filePath: file.filepath, fields });
-    });
-  });
-}
-
-// ================================
+// -----------------------------------------------
 // AI PROMPT
-// ================================
+// -----------------------------------------------
 const LLM_PROMPT = `
-You are UnderwriteIQ. Extract ALL credit report data. ONLY return JSON.
+You are UnderwriteIQ, an AI credit analyst.
+Extract ALL credit data. Return ONLY valid JSON. No markdown.
 ...
 `;
 
-// ================================
-// AI CALL
-// ================================
+// -----------------------------------------------
+// CALL OPENAI GPT-4o-mini VISION
+// -----------------------------------------------
 async function runVisionLLM(base64PDF) {
   const payload = {
     model: "gpt-4o-mini",
@@ -81,30 +47,37 @@ async function runVisionLLM(base64PDF) {
     body: JSON.stringify(payload)
   });
 
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
 
   const json = await response.json();
-  const text =
+
+  const txt =
     json?.output_text ||
     json?.content ||
     json?.choices?.[0]?.message?.content ||
     "";
 
-  return JSON.parse(text);
+  return JSON.parse(txt);
 }
 
-// ================================
+// -----------------------------------------------
 // UNDERWRITING LOGIC
-// ================================
+// -----------------------------------------------
 function computeFundingLogic(data) {
   const score = Number(data.score || 0);
   const util = Number(data.utilization_pct || 0);
   const neg = Number(data.negative_accounts || 0);
+
   const inq = data.inquiries || { ex: 0, tu: 0, eq: 0 };
   const totalInq = inq.ex + inq.tu + inq.eq;
 
   const fundable =
-    score >= 700 && util <= 30 && neg <= 0 && totalInq <= 6;
+    score >= 700 &&
+    util <= 30 &&
+    neg <= 0 &&
+    totalInq <= 6;
 
   let base = 0;
   for (const tl of data.tradelines || []) {
@@ -112,19 +85,21 @@ function computeFundingLogic(data) {
   }
 
   const estimate = base
-    ? Math.round(base * 5.5 / 1000) * 1000
+    ? Math.round((base * 5.5) / 1000) * 1000
     : 15000;
 
   return { fundable, estimate };
 }
 
-// ================================
-// MAIN HANDLER
-// ================================
+// -----------------------------------------------
+// MAIN HANDLER — FILE UPLOAD + AI PIPELINE
+// -----------------------------------------------
 module.exports = async function handler(req, res) {
+
+  // Preflight CORS
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     return res.status(200).end();
   }
@@ -136,13 +111,37 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { filePath } = await parseMultipart(req);
-    const raw = await fs.promises.readFile(filePath);
+    // ---------- FORMIDABLE CONFIG (FINAL WORKING VERSION) ----------
+    const form = formidable({
+      multiples: false,
+      keepExtensions: true,
+      uploadDir: "/tmp",
+      maxFileSize: 25 * 1024 * 1024
+    });
+
+    const { fields, files } = await new Promise((resolve, reject) => {
+      form.parse(req, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve({ fields, files });
+      });
+    });
+
+    const uploaded = files.file;
+    if (!uploaded || !uploaded.filepath) {
+      throw new Error("No file or invalid file path");
+    }
+
+    // Read PDF from /tmp
+    const raw = await fs.promises.readFile(uploaded.filepath);
     const base64PDF = raw.toString("base64");
 
+    // Extract with Vision LLM
     const extracted = await runVisionLLM(base64PDF);
+
+    // Funding logic
     const uw = computeFundingLogic(extracted);
 
+    // Success
     return res.status(200).json({
       ok: true,
       inputs: extracted,
