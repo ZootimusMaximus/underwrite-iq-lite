@@ -1,11 +1,11 @@
 // api/lite/parse-report.js
-// CommonJS serverless function (works with @vercel/node).
+// CommonJS serverless function (works with @vercel/node) for Underwrite IQ LITE.
 
 const { formidable } = require("formidable");
 const pdfParse       = require("pdf-parse");
 const fs             = require("fs");
 
-// Vercel / Next API config if ever used via pages/api
+// Vercel / Next API config
 module.exports.config = {
   api: { bodyParser: false, sizeLimit: "25mb" }
 };
@@ -108,22 +108,45 @@ const downgrade = (g) =>
 
 /** ======= PER-BUREAU EXTRACTION ======= **/
 function extractFrom(text) {
-  const SCORE_RE = /(fico|score)\D{0,20}(\d{3})/i;
+  // --- Score extraction (FICO 8 preferred) ---
+  let score = null;
+  const scoreCandidates = [];
+
+  // Prefer "FICO Score 8"
+  const FICO8_RE = /(fico[^0-9]{0,20}score[^0-9]{0,10}8[^0-9]{0,10}(\d{3}))/gi;
+  for (const m of text.matchAll(FICO8_RE)) {
+    const n = asInt(m[2]);
+    if (!n) continue;
+    if (n < 300 || n > 850) continue;
+    scoreCandidates.push(n);
+  }
+
+  // Fallback: any FICO/Score phrasing
+  const SCORE_CAND_RE = /(fico[^0-9]{0,20}|score[^0-9]{0,20})(\d{3})/gi;
+  for (const m of text.matchAll(SCORE_CAND_RE)) {
+    const n = asInt(m[2]);
+    if (!n) continue;
+    if (n < 300 || n > 850) continue;
+    if (n === 300) continue;
+    scoreCandidates.push(n);
+  }
+
+  if (scoreCandidates.length) {
+    const freq = {};
+    for (const n of scoreCandidates) freq[n] = (freq[n] || 0) + 1;
+    const sorted = Object.entries(freq).sort((a,b) =>
+      b[1] === a[1] ? Number(b[0]) - Number(a[0]) : b[1] - a[1]
+    );
+    score = Number(sorted[0][0]);
+  }
+
+  // Utilization
   const UTIL_RE  = /(utilization|utilisation|util)\D{0,20}(\d{1,3})\s?%/i;
-  const INQ_RE   = /(inquiries|inq)[^a-zA-Z0-9]+ex\D*(\d+)\D+tu\D*(\d+)\D+eq\D*(\d+)/i;
-
-  // tighten negatives to serious derog only
-  const NEG_RE   = /(collection|charge[-\s]?off|repossession|foreclosure|public\s+record|bankruptcy)/gi;
-
-  const OPENED   = /(opened|open\s+date|date\s+opened)\D{0,12}((\d{1,2}[-\/]\d{2,4})|([A-Za-z]{3,9}\s+\d{4}))?/gi;
-  const STATUS   = /(status|account\s+status)\D{0,12}(open|opened)/gi;
-
-  const mS = text.match(SCORE_RE);
-  const score = mS ? asInt(mS[2]) : null;
-
   const mU = text.match(UTIL_RE);
   const util = mU ? asInt(mU[2]) : null;
 
+  // Inquiries aggregate
+  const INQ_RE   = /(inquiries|inq)[^a-zA-Z0-9]+ex\D*(\d+)\D+tu\D*(\d+)\D+eq\D*(\d+)/i;
   let ex = 0, tu = 0, eq = 0;
   const mI = text.match(INQ_RE);
   if (mI) {
@@ -132,12 +155,16 @@ function extractFrom(text) {
     eq = asInt(mI[4]) ?? 0;
   }
 
+  // SERIOUS negatives:
+  // collections, charge-offs, paid charge-offs / derog, public records, BK, tax liens, judgments
+  const NEG_RE   = /(collection(?!\s+status)|charge[-\s]?off|charged\s+off|derogatory|repossession|foreclosure|bankruptcy|tax\s+liens?|tax\s+lean|judgment|public\s+record)/gi;
   const negLines = (text.match(NEG_RE) || [])
     .slice(0,64)
     .map(s => s.toLowerCase());
 
   const negatives_count = negLines.length;
 
+  // AAoA
   const AAOA = /(average\s+age\s+of\s+accounts|average\s+account\s+age|aaoa)\D{0,20}(\d{1,2})\D{0,8}(year|yr|years)?\D{0,8}(\d{1,2})?\D{0,8}(month|mo|months)?/i;
   let avgAgeYears = null;
   const a = text.match(AAOA);
@@ -149,6 +176,8 @@ function extractFrom(text) {
 
   const LIMIT_RE = /(credit\s+limit|high\s+credit|highest\s+credit\s+limit)\D{0,12}\$?\s?([\d,]{2,9})/gi;
   const LOAN_RE  = /(original\s+loan\s+amount|loan\s+amount|largest\s+(original\s+)?loan)\D{0,12}\$?\s?([\d,]{2,9})/gi;
+  const OPENED   = /(opened|open\s+date|date\s+opened)\D{0,12}((\d{1,2}[-\/]\d{2,4})|([A-Za-z]{3,9}\s+\d{4}))?/gi;
+  const STATUS   = /(status|account\s+status)\D{0,12}(open|opened)/gi;
 
   let highestCardLimit = 0,
       seasonedHighestCardLimit = 0,
@@ -331,12 +360,12 @@ module.exports = async function handler(req, res) {
 
         const score = weightedAverageSafe(
           (exData || tuData || eqData) ? scoreClean : [fbData?.score ?? null],
-          (exData || tuData || eqData) ? [wEX, wTU, wEQ] : [1]
+          (exData || tuData || eqData) ? [wEX,wTU,wEQ] : [1]
         );
 
         const util  = weightedAverageSafe(
           (exData || tuData || eqData) ? utilClean  : [fbData?.util ?? null],
-          (exData || tuData || eqData) ? [wEX, wTU, wEQ] : [1]
+          (exData || tuData || eqData) ? [wEX,wTU,wEQ] : [1]
         );
 
         const inquiries = {
