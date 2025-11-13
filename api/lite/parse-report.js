@@ -1,5 +1,5 @@
 // ==================================================================================
-// UnderwriteIQ LITE — TEXT + LLM Parser (Option C: Auto-Repair + Retry)
+// UnderwriteIQ LITE — TEXT + LLM Parser (Option C: Auto-Repair + Retry + Expanded)
 // ==================================================================================
 
 const fs = require("fs");
@@ -11,7 +11,7 @@ module.exports.config = {
 };
 
 // -----------------------------------------------
-// UnderwriteIQ SYSTEM PROMPT
+// UnderwriteIQ SYSTEM PROMPT (with COMPACT JSON instruction)
 // -----------------------------------------------
 const LLM_PROMPT = `
 You are UnderwriteIQ, an AI credit analyst.
@@ -22,6 +22,13 @@ Your job is to reconstruct the report into CLEAN STRUCTURED JSON.
 
 Return ONLY VALID JSON. NO markdown. NO commentary.
 If a value is unknown, use null or 0 as appropriate.
+
+ALWAYS OUTPUT **COMPACT JSON**:
+- No spaces
+- No new lines
+- No indentation
+- No formatting
+- One-line JSON only
 
 JSON FORMAT:
 
@@ -57,36 +64,24 @@ JSON FORMAT:
     }
   ]
 }
-
-Rules:
-- Prefer ANY FICO model. If multiple FICO scores appear, prefer FICO 8 if clearly labeled.
-- If NO FICO model appears, use ANY score shown by the report (Vantage, etc).
-- "negative_accounts" = count of unique tradelines or public records that are seriously derogatory:
-  collections, charge-offs, paid charge-offs, repossessions, foreclosures, bankruptcies, judgments, tax liens, any "derogatory"/"negative" status.
-- "late_payment_events" = total count of all late marks: 30/60/90/120/150/180 day late.
-- "utilization_pct" = total revolving utilization if possible; if not, use whatever utilization is shown.
-- If inquiries by bureau are not clear, approximate from the Inquiries section.
-- The JSON MUST be valid and parseable.
 `;
 
 // -----------------------------------------------
-// Helpers for LLM output extraction & JSON repair
+// HELPERS — Extract JSON from any OpenAI Response
 // -----------------------------------------------
-
-// Safely extract the JSON string from any Responses API shape
 function extractJsonStringFromResponse(json) {
-  // 1) Legacy/simple path (not used by your current response, but safe to keep)
-  if (typeof json.output_text === "string" && json.output_text.trim()) {
+  // 1) Simple path
+  if (json.output_text && json.output_text.trim()) {
     return json.output_text.trim();
   }
 
-  // 2) New Responses API format: json.output is an array of message blocks
+  // 2) Responses API standard block (THIS IS WHERE YOUR DATA WAS)
   if (Array.isArray(json.output)) {
     for (const msg of json.output) {
       if (!msg || !Array.isArray(msg.content)) continue;
+
       for (const chunk of msg.content) {
         if (
-          chunk &&
           (chunk.type === "output_text" || chunk.type === "summary_text") &&
           typeof chunk.text === "string" &&
           chunk.text.trim()
@@ -97,7 +92,7 @@ function extractJsonStringFromResponse(json) {
     }
   }
 
-  // 3) Old chat-style
+  // 3) Chat-style fallback
   if (
     json.choices &&
     json.choices[0] &&
@@ -110,54 +105,40 @@ function extractJsonStringFromResponse(json) {
   return null;
 }
 
-// Try to parse JSON, with simple auto-repair for truncation/junk
 function tryParseJsonWithRepair(raw) {
-  if (!raw || typeof raw !== "string") {
-    throw new Error("No raw JSON string to parse");
-  }
+  if (!raw) throw new Error("No raw JSON string to parse");
 
-  // First attempt: direct parse
-  try {
-    return JSON.parse(raw);
-  } catch (e) {
-    // fall through to repair
-  }
+  // First attempt
+  try { return JSON.parse(raw); } catch(e) {}
 
-  // Repair attempt: slice between first '{' and last '}'
+  // Repair by slicing the outer braces
   const first = raw.indexOf("{");
   const last = raw.lastIndexOf("}");
+
   if (first !== -1 && last !== -1 && last > first) {
-    const sliced = raw.slice(first, last + 1);
-    try {
-      return JSON.parse(sliced);
-    } catch (e2) {
-      // fall through
-    }
+    const slice = raw.slice(first, last + 1);
+    try { return JSON.parse(slice); } catch(e2) {}
   }
 
-  // If still failing, throw with minimal leak (no full raw dump)
   const preview = raw.slice(0, 200).replace(/\s+/g, " ");
   throw new Error("JSON parse failed after repair attempts. Preview: " + preview);
 }
 
 // -----------------------------------------------
-// LLM CALL with AUTO-REPAIR + RETRY (Option C)
+// LLM CALL — Auto-Repair + Retry (Option C)
 // -----------------------------------------------
 async function callOpenAIOnce(creditText) {
   const apiKey = process.env.UNDERWRITE_IQ_VISION_KEY;
-  if (!apiKey) {
-    throw new Error("Missing UNDERWRITE_IQ_VISION_KEY environment variable.");
-  }
+  if (!apiKey) throw new Error("Missing UNDERWRITE_IQ_VISION_KEY");
 
-  const maxChars = 15000;
-  const truncated = creditText.slice(0, maxChars);
+  const truncated = creditText.slice(0, 15000);
 
   const payload = {
     model: "gpt-4o-mini",
     input: [
       {
         role: "system",
-        content: LLM_PROMPT // plain string system prompt
+        content: LLM_PROMPT
       },
       {
         role: "user",
@@ -170,7 +151,7 @@ async function callOpenAIOnce(creditText) {
       }
     ],
     temperature: 0,
-    max_output_tokens: 1200
+    max_output_tokens: 4096 // ⭐ FIXED: No more truncation
   };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -183,70 +164,56 @@ async function callOpenAIOnce(creditText) {
   });
 
   if (!response.ok) {
-    const errText = await response.text();
-    throw new Error("LLM HTTP error: " + errText);
+    throw new Error("LLM HTTP error: " + (await response.text()));
   }
 
   const json = await response.json();
 
-  // If model explicitly refused, surface that
   if (json.refusal) {
     throw new Error("LLM refusal: " + JSON.stringify(json.refusal));
   }
 
   const raw = extractJsonStringFromResponse(json);
-  if (!raw) {
-    throw new Error("No usable output_text/summary_text found in LLM response.");
-  }
+  if (!raw) throw new Error("No output_text or summary_text returned");
 
   return tryParseJsonWithRepair(raw);
 }
 
 async function runCreditTextLLM(creditText) {
-  const MAX_RETRIES = 3;
-  let attempt = 0;
-  let lastError = null;
+  let last = null;
 
-  while (attempt < MAX_RETRIES) {
+  for (let i = 1; i <= 3; i++) {
     try {
       return await callOpenAIOnce(creditText);
     } catch (err) {
-      lastError = err;
-      attempt += 1;
+      last = err;
+      console.error(`UnderwriteIQ LLM attempt ${i} failed: ${String(err)}`);
 
-      // For HTTP / refusal errors, don't bother retrying multiple times
-      const msg = String(err || "");
-      const hardError =
-        msg.includes("LLM HTTP error") ||
-        msg.includes("LLM refusal") ||
-        msg.includes("Missing UNDERWRITE_IQ_VISION_KEY");
+      // Hard fails shouldn’t retry
+      const msg = String(err);
+      if (
+        msg.includes("HTTP") ||
+        msg.includes("refusal") ||
+        msg.includes("Missing")
+      ) break;
 
-      console.error(`UnderwriteIQ LLM attempt ${attempt} failed:`, msg);
-
-      if (hardError || attempt >= MAX_RETRIES) {
-        break;
-      }
-
-      // Small backoff
-      const delayMs = 200 * attempt;
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      // Backoff
+      await new Promise((r) => setTimeout(r, 150 * i));
     }
   }
 
-  throw new Error(
-    "LLM failed after retries. Last error: " + String(lastError || "Unknown")
-  );
+  throw new Error("LLM failed after 3 attempts: " + String(last));
 }
 
 // -----------------------------------------------
-// SIMPLE FUNDING LOGIC (UnderwriteIQ LITE)
+// FUNDING LOGIC
 // -----------------------------------------------
 function computeFundingLogic(data) {
   const score = Number(data.score || 0);
   const util = Number(data.utilization_pct || 0);
-  const neg  = Number(data.negative_accounts || 0);
+  const neg = Number(data.negative_accounts || 0);
 
-  const inq  = data.inquiries || { ex: 0, tu: 0, eq: 0 };
+  const inq = data.inquiries || { ex: 0, tu: 0, eq: 0 };
   const totalInq = (inq.ex || 0) + (inq.tu || 0) + (inq.eq || 0);
 
   const fundable =
@@ -257,9 +224,7 @@ function computeFundingLogic(data) {
 
   let base = 0;
   for (const tl of data.tradelines || []) {
-    if (tl && typeof tl.limit === "number" && tl.limit > base) {
-      base = tl.limit;
-    }
+    if (tl && typeof tl.limit === "number" && tl.limit > base) base = tl.limit;
   }
 
   const estimate = base
@@ -270,17 +235,16 @@ function computeFundingLogic(data) {
 }
 
 // -----------------------------------------------
-// MAIN HANDLER — FILE UPLOAD + PARSE + LLM
+// MAIN HANDLER — Upload + Parse + LLM
 // -----------------------------------------------
 module.exports = async function handler(req, res) {
-  // CORS preflight
+  // CORS
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     return res.status(200).end();
   }
-
   res.setHeader("Access-Control-Allow-Origin", "*");
 
   if (req.method !== "POST") {
@@ -288,7 +252,6 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // -------- FORMIDABLE CONFIG --------
     const form = formidable({
       multiples: false,
       keepExtensions: true,
@@ -299,34 +262,31 @@ module.exports = async function handler(req, res) {
     const { files } = await new Promise((resolve, reject) => {
       form.parse(req, (err, fields, files) => {
         if (err) reject(err);
-        else resolve({ fields, files });
+        else resolve({ files });
       });
     });
 
     const uploaded = files.file;
-    if (!uploaded || !uploaded.filepath) {
-      return res.status(400).json({
-        ok: false,
-        msg: "No file uploaded or missing file path"
-      });
+    if (!uploaded?.filepath) {
+      return res.status(400).json({ ok: false, msg: "No file uploaded" });
     }
 
-    // -------- READ + PARSE PDF --------
+    // PDF → text
     const rawPDF = await fs.promises.readFile(uploaded.filepath);
-    const parsed = await pdfParse(rawPDF);
+    const pdf = await pdfParse(rawPDF);
+    const text = (pdf.text || "").replace(/\s+/g, " ").trim();
 
-    let text = (parsed.text || "").replace(/\s+/g, " ").trim();
-    if (!text || text.length < 50) {
+    if (text.length < 50) {
       return res.status(400).json({
         ok: false,
-        msg: "We couldn't read your PDF. Upload a text-based credit report (no photos or scans)."
+        msg: "Unreadable PDF. Upload a text-based bureau credit report."
       });
     }
 
-    // -------- RUN LLM PIPELINE --------
+    // LLM pipeline
     const extracted = await runCreditTextLLM(text);
 
-    // -------- FUNDING LOGIC --------
+    // Funding logic
     const uw = computeFundingLogic(extracted);
 
     return res.status(200).json({
