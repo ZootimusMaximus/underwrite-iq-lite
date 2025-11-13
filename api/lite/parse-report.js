@@ -74,7 +74,7 @@ Rules:
 
 // -----------------------------------------------
 // FIXED: CALL OpenAI GPT-4o-mini (TEXT ONLY)
-// Fully matches Responses API spec
+// Correct Responses API schema
 // -----------------------------------------------
 async function runCreditTextLLM(creditText) {
   const maxChars = 15000;
@@ -85,18 +85,13 @@ async function runCreditTextLLM(creditText) {
     input: [
       {
         role: "system",
-        content: [
-          {
-            type: "text",
-            text: LLM_PROMPT
-          }
-        ]
+        content: LLM_PROMPT     // ✔ MUST be a plain string
       },
       {
         role: "user",
         content: [
           {
-            type: "input_text",
+            type: "input_text", // ✔ correct type
             text: truncated
           }
         ]
@@ -121,11 +116,10 @@ async function runCreditTextLLM(creditText) {
   }
 
   const json = await response.json();
+
   const raw = json?.output_text?.trim?.() || "";
 
-  if (!raw) {
-    throw new Error("LLM returned empty output");
-  }
+  if (!raw) throw new Error("LLM returned empty output");
 
   try {
     return JSON.parse(raw);
@@ -183,7 +177,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // -------- FORMIDABLE CONFIG (Vercel-compatible) --------
+    // -------- FORMIDABLE CONFIG --------
     const form = formidable({
       multiples: false,
       keepExtensions: true,
@@ -206,7 +200,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // -------- READ + TEXT-EXTRACT PDF --------
+    // -------- READ PDF --------
     const rawPDF = await fs.promises.readFile(uploaded.filepath);
 
     const parsed = await pdfParse(rawPDF);
@@ -219,13 +213,12 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // -------- RUN LLM ON TEXT --------
+    // -------- RUN LLM --------
     const extracted = await runCreditTextLLM(text);
 
-    // -------- SIMPLE FUNDING LOGIC --------
+    // -------- FUNDING LOGIC --------
     const uw = computeFundingLogic(extracted);
 
-    // SUCCESS
     return res.status(200).json({
       ok: true,
       inputs: extracted,
