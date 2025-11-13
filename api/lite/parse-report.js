@@ -1,81 +1,90 @@
 // ==================================================================================
-// UnderwriteIQ LITE — FINAL WORKING VERCEL VERSION (PDF + Vision)
+// UnderwriteIQ LITE — Text + LLM Credit Report Parser (Vercel-safe)
+// Uses: process.env.UNDERWRITE_IQ_VISION_KEY (OpenAI API key)
+// Model: gpt-4o-mini (cheap & accurate, TEXT ONLY)
 // ==================================================================================
 
 const fs = require("fs");
 const formidable = require("formidable");
+const pdfParse = require("pdf-parse");
 
-// Disable Next.js bodyParser for uploads
+// Disable bodyParser so Formidable handles multipart form-data
 module.exports.config = {
   api: { bodyParser: false, sizeLimit: "30mb" }
 };
 
 // -----------------------------------------------
-// AI PROMPT (kept short for reliability)
+// AI PROMPT — Extract structured credit report JSON
 // -----------------------------------------------
 const LLM_PROMPT = `
 You are UnderwriteIQ, an AI credit analyst.
 
-Extract this CREDIT REPORT into structured JSON. ONLY return valid JSON.
+You will be given RAW TEXT extracted from a CREDIT REPORT PDF.
+The text may be messy and out of order.
+Your job is to reconstruct the report into CLEAN STRUCTURED JSON.
 
-Required fields:
+Return ONLY VALID JSON. NO markdown. NO commentary.
+If a value is unknown, use null or 0 as appropriate.
+
+JSON FORMAT:
+
 {
-  "score": <number|null>,
-  "score_model": "<string|null>",
-  "utilization_pct": <number|null>,
-  "inquiries": { "ex":number, "tu":number, "eq":number },
+  "score": <number or null>,
+  "score_model": "<FICO8 | FICO9 | Vantage3 | Vantage4 | Other | null>",
+  "utilization_pct": <number or null>,
+  "inquiries": {
+    "ex": <number>,
+    "tu": <number>,
+    "eq": <number>
+  },
   "negative_accounts": <number>,
   "late_payment_events": <number>,
   "tradelines": [
-     {
-       "creditor": "<string>",
-       "type": "<revolving|installment|other>",
-       "status": "<string>",
-       "balance": <number>,
-       "limit": <number|null>,
-       "past_due": <number|null>,
-       "opened": "<YYYY-MM|null>",
-       "closed": "<YYYY-MM|null>",
-       "payment_history_summary":{
-          "late_30":number,"late_60":number,"late_90":number,
-          "late_120":number,"late_150":number,"late_180":number
-       }
-     }
+    {
+      "creditor": "<string>",
+      "type": "<revolving|installment|other>",
+      "status": "<open|closed|derogatory|chargeoff|collection|paid-collection|repossession|foreclosure|unknown>",
+      "balance": <number>,
+      "limit": <number or null>,
+      "past_due": <number or null>,
+      "opened": "<YYYY-MM or null>",
+      "closed": "<YYYY-MM or null>",
+      "payment_history_summary": {
+        "late_30": <number>,
+        "late_60": <number>,
+        "late_90": <number>,
+        "late_120": <number>,
+        "late_150": <number>,
+        "late_180": <number>
+      }
+    }
   ]
 }
 
 Rules:
-- Prefer FICO 8 if available, then any FICO, otherwise any score shown.
-- negative_accounts = count of collections/chargeoffs/public records/derogs.
-- late_payment_events = total count of all late events.
-- JSON ONLY. No comments, no text outside JSON.
+- Prefer ANY FICO model. If multiple FICO scores appear, prefer FICO 8 if clearly labeled.
+- If NO FICO model appears, use ANY score shown by the report (Vantage, etc).
+- "negative_accounts" = count of unique tradelines or public records that are seriously derogatory:
+  collections, charge-offs, paid charge-offs, repossessions, foreclosures, bankruptcies, judgments, tax liens, any "derogatory"/"negative" status.
+- "late_payment_events" = total count of all late marks: 30/60/90/120/150/180 day late.
+- "utilization_pct" = total revolving utilization if possible; if not, use whatever utilization is shown.
+- If inquiries by bureau are not clear, approximate from the Inquiries section.
+- The JSON MUST be valid and parseable.
 `;
 
 // -----------------------------------------------
-// CALL OPENAI GPT-4o-mini WITH PDF SUPPORT
+// CALL OpenAI GPT-4o-mini (TEXT ONLY)
 // -----------------------------------------------
-async function runVisionLLM(base64PDF) {
+async function runCreditTextLLM(creditText) {
+  // Truncate very long text to control cost & token limits
+  const maxChars = 15000;
+  const truncated = creditText.slice(0, maxChars);
+
   const payload = {
     model: "gpt-4o-mini",
-    reasoning: { effort: "medium" },
     input: [
       { role: "system", content: LLM_PROMPT },
-      {
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: "Extract ALL credit report data. Return ONLY JSON."
-          },
-          {
-            type: "input_file",
-            file_data: {
-              data: base64PDF,
-              mime_type: "application/pdf"
-            }
-          }
-        ]
-      }
+      { role: "user", content: truncated }
     ]
   };
 
@@ -89,29 +98,39 @@ async function runVisionLLM(base64PDF) {
   });
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    const errText = await response.text();
+    throw new Error("LLM HTTP error: " + errText);
   }
 
   const json = await response.json();
 
-  const txt =
+  const raw =
     json?.output_text ||
     json?.content ||
     json?.choices?.[0]?.message?.content ||
     "";
 
-  return JSON.parse(txt);
+  if (!raw) {
+    throw new Error("LLM returned empty output");
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    throw new Error("LLM returned invalid JSON: " + raw);
+  }
 }
 
 // -----------------------------------------------
-// UNDERWRITING LOGIC
+// SIMPLE FUNDING LOGIC (UnderwriteIQ LITE)
 // -----------------------------------------------
 function computeFundingLogic(data) {
   const score = Number(data.score || 0);
   const util = Number(data.utilization_pct || 0);
-  const neg = Number(data.negative_accounts || 0);
-  const inq = data.inquiries || { ex: 0, tu: 0, eq: 0 };
-  const totalInq = inq.ex + inq.tu + inq.eq;
+  const neg  = Number(data.negative_accounts || 0);
+
+  const inq  = data.inquiries || { ex: 0, tu: 0, eq: 0 };
+  const totalInq = (inq.ex || 0) + (inq.tu || 0) + (inq.eq || 0);
 
   const fundable =
     score >= 700 &&
@@ -132,7 +151,7 @@ function computeFundingLogic(data) {
 }
 
 // -----------------------------------------------
-// MAIN HANDLER — FILE UPLOAD + AI PIPELINE
+// MAIN HANDLER — UPLOAD + PARSE + LLM
 // -----------------------------------------------
 module.exports = async function handler(req, res) {
 
@@ -168,20 +187,32 @@ module.exports = async function handler(req, res) {
 
     const uploaded = files.file;
     if (!uploaded || !uploaded.filepath) {
-      throw new Error("No file or invalid file path");
+      return res.status(400).json({
+        ok: false,
+        msg: "No file uploaded or unable to locate file path"
+      });
     }
 
-    // Read PDF from /tmp
-    const raw = await fs.promises.readFile(uploaded.filepath);
-    const base64PDF = raw.toString("base64");
+    // -------- READ + TEXT-EXTRACT PDF --------
+    const rawPDF = await fs.promises.readFile(uploaded.filepath);
 
-    // Run Vision LLM
-    const extracted = await runVisionLLM(base64PDF);
+    const parsed = await pdfParse(rawPDF);
+    let text = (parsed.text || "").replace(/\s+/g, " ").trim();
 
-    // Underwriting
+    if (!text || text.length < 50) {
+      return res.status(400).json({
+        ok: false,
+        msg: "We couldn't read your PDF. Upload a clearer bureau report PDF (no photos)."
+      });
+    }
+
+    // -------- RUN LLM ON TEXT --------
+    const extracted = await runCreditTextLLM(text);
+
+    // -------- SIMPLE FUNDING LOGIC --------
     const uw = computeFundingLogic(extracted);
 
-    // Success response
+    // SUCCESS
     return res.status(200).json({
       ok: true,
       inputs: extracted,
