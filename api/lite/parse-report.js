@@ -1,7 +1,7 @@
 // ==================================================================================
 // UnderwriteIQ LITE — TEXT + LLM Parser
-// Option C: Retry + JSON Repair + High Token Limit + Redirect Support
-// Includes negatives_count alias for frontend compatibility
+// Option C: Retry + Repair + High Token Limit + Redirect
+// Fully supports: negative_accounts + late_payment_events
 // ==================================================================================
 
 const fs = require("fs");
@@ -13,15 +13,22 @@ module.exports.config = {
 };
 
 // -----------------------------------------------
-// SYSTEM PROMPT — Compact JSON
+// SYSTEM PROMPT (Compact JSON)
 // -----------------------------------------------
 const LLM_PROMPT = `
 You are UnderwriteIQ, an AI credit analyst.
 You will be given RAW TEXT extracted from a CREDIT REPORT PDF.
-Your job is to reconstruct the report into CLEAN STRUCTURED JSON.
-
-Return ONLY VALID COMPACT JSON: one-line, no spaces, no formatting.
+Return ONLY VALID COMPACT JSON (ONE LINE).
 If unsure, use null or 0.
+
+Fields:
+score
+score_model
+utilization_pct
+inquiries { ex, tu, eq }
+negative_accounts
+late_payment_events
+tradelines[]
 `;
 
 // -----------------------------------------------
@@ -37,9 +44,7 @@ function extractJsonStringFromResponse(json) {
         if (
           (chunk.type === "output_text" || chunk.type === "summary_text") &&
           chunk.text?.trim()
-        ) {
-          return chunk.text.trim();
-        }
+        ) return chunk.text.trim();
       }
     }
   }
@@ -52,16 +57,15 @@ function extractJsonStringFromResponse(json) {
 }
 
 function tryParseJsonWithRepair(raw) {
-  try { return JSON.parse(raw); } catch(e) {}
+  try { return JSON.parse(raw); } catch(e){}
 
   const first = raw.indexOf("{");
   const last = raw.lastIndexOf("}");
-
   if (first !== -1 && last !== -1 && last > first) {
-    try { return JSON.parse(raw.slice(first, last + 1)); } catch(e2) {}
+    try { return JSON.parse(raw.slice(first, last + 1)); } catch {}
   }
 
-  throw new Error("JSON parse failed. Preview: " + raw.slice(0, 200));
+  throw new Error("JSON parse failed. Preview: " + raw.slice(0,200));
 }
 
 // -----------------------------------------------
@@ -78,7 +82,7 @@ async function callOpenAIOnce(text) {
       {
         role: "user",
         content: [
-          { type: "input_text", text: text.slice(0, 15000) }
+          { type: "input_text", text: text.slice(0,15000) }
         ]
       }
     ],
@@ -110,11 +114,11 @@ async function callOpenAIOnce(text) {
 }
 
 // -----------------------------------------------
-// Full LLM Pipeline with Retry
+// LLM Pipeline with Retry
 // -----------------------------------------------
 async function runCreditTextLLM(text) {
   let lastError = null;
-  for (let i = 1; i <= 3; i++) {
+  for (let i=1; i<=3; i++) {
     try {
       return await callOpenAIOnce(text);
     } catch (err) {
@@ -127,11 +131,12 @@ async function runCreditTextLLM(text) {
         msg.includes("HTTP") ||
         msg.includes("refusal") ||
         msg.includes("Missing")
-      ) break;  // unrecoverable
+      ) break;
 
       await new Promise(r => setTimeout(r, 150 * i));
     }
   }
+
   throw new Error("LLM failed after 3 attempts: " + String(lastError));
 }
 
@@ -143,8 +148,8 @@ function computeFundingLogic(data) {
   const util = Number(data.utilization_pct ?? 0);
   const neg  = Number(data.negative_accounts ?? 0);
 
-  const inq = data.inquiries || { ex: 0, tu: 0, eq: 0 };
-  const totalInq = (inq.ex || 0) + (inq.tu || 0) + (inq.eq || 0);
+  const inq = data.inquiries || { ex:0, tu:0, eq:0 };
+  const totalInq = (inq.ex||0)+(inq.tu||0)+(inq.eq||0);
 
   const fundable =
     score >= 700 &&
@@ -154,7 +159,8 @@ function computeFundingLogic(data) {
 
   let base = 0;
   for (const tl of data.tradelines || []) {
-    if (tl?.limit && tl.limit > base) base = tl.limit;
+    if (tl?.limit && tl.limit > base)
+      base = tl.limit;
   }
 
   const estimate = base
@@ -165,10 +171,10 @@ function computeFundingLogic(data) {
 }
 
 // -----------------------------------------------
-// MAIN API HANDLER
+// MAIN HANDLER
 // -----------------------------------------------
 module.exports = async function handler(req, res) {
-  // CORS
+
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -178,52 +184,46 @@ module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
 
   if (req.method !== "POST") {
-    return res.status(405).json({ ok: false, msg: "Method not allowed" });
+    return res.status(405).json({ ok:false, msg:"Method not allowed" });
   }
 
   try {
     // Parse file
     const form = formidable({
-      multiples: false,
-      keepExtensions: true,
-      uploadDir: "/tmp",
-      maxFileSize: 25 * 1024 * 1024
+      multiples:false,
+      keepExtensions:true,
+      uploadDir:"/tmp",
+      maxFileSize:25*1024*1024
     });
 
-    const { files } = await new Promise((resolve, reject) =>
-      form.parse(req, (err, fields, files) => {
-        if (err) reject(err); else resolve({ files });
+    const { files } = await new Promise((resolve, reject)=>
+      form.parse(req, (err, fields, files)=>{
+        if (err) reject(err);
+        else resolve({ files });
       })
     );
 
     const file = files.file;
-    if (!file?.filepath) {
-      return res.status(400).json({ ok: false, msg: "No file uploaded." });
-    }
+    if (!file?.filepath)
+      return res.status(400).json({ ok:false, msg:"No file uploaded." });
 
     const buffer = await fs.promises.readFile(file.filepath);
     const parsedPDF = await pdfParse(buffer);
 
     const text = (parsedPDF.text || "")
-      .replace(/\s+/g, " ")
+      .replace(/\s+/g," ")
       .trim();
 
-    if (text.length < 50) {
+    if (text.length < 50)
       return res.status(400).json({
-        ok: false,
-        msg: "Unreadable PDF. Upload an actual bureau credit report (no photos/scans)."
+        ok:false,
+        msg:"Unreadable PDF. Upload a real bureau report."
       });
-    }
 
-    // LLM extraction
     const extracted = await runCreditTextLLM(text);
-
-    // Compute funding logic
     const uw = computeFundingLogic(extracted);
 
-    // -----------------------------------------------
-    // REDIRECT OBJECT for frontend
-    // -----------------------------------------------
+    // ⭐ ADD late payments to redirect
     const redirect = {
       url: uw.fundable ? "/funding-approved" : "/fix-my-credit",
       query: {
@@ -233,29 +233,31 @@ module.exports = async function handler(req, res) {
         inqEx: extracted.inquiries?.ex ?? 0,
         inqTu: extracted.inquiries?.tu ?? 0,
         inqEq: extracted.inquiries?.eq ?? 0,
-        neg: extracted.negative_accounts
+        neg: extracted.negative_accounts,
+        late: extracted.late_payment_events   // ⭐ NEW
       }
     };
 
-    // SUCCESS RESPONSE
+    // SUCCESS
     return res.status(200).json({
-      ok: true,
+      ok:true,
       inputs: extracted,
       outputs: {
         fundable: uw.fundable,
         banner_estimate: uw.estimate,
         negative_accounts: extracted.negative_accounts,
-        negatives_count: extracted.negative_accounts  // <-- alias for frontend
+        negatives_count: extracted.negative_accounts,
+        late_payment_events: extracted.late_payment_events
       },
       redirect
     });
 
-  } catch (err) {
+  } catch(err) {
     console.error("❌ Parser error:", err);
     return res.status(500).json({
-      ok: false,
-      msg: "Parser failed",
-      error: String(err)
+      ok:false,
+      msg:"Parser failed",
+      error:String(err)
     });
   }
 };
