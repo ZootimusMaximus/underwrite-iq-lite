@@ -1,104 +1,61 @@
 // ==================================================================================
-// UnderwriteIQ LITE — Text + LLM Credit Report Parser (Vercel-safe)
-// Uses: process.env.UNDERWRITE_IQ_VISION_KEY (OpenAI API key)
-// Model: gpt-4o-mini (cheap & accurate, TEXT ONLY)
+// UnderwriteIQ LITE — TEXT + LLM Diagnostic Version (Vercel-safe)
 // ==================================================================================
 
 const fs = require("fs");
 const formidable = require("formidable");
 const pdfParse = require("pdf-parse");
 
-// Disable bodyParser so Formidable handles multipart form-data
 module.exports.config = {
   api: { bodyParser: false, sizeLimit: "30mb" }
 };
 
 // -----------------------------------------------
-// AI PROMPT — Extract structured credit report JSON
+// UnderwriteIQ SYSTEM PROMPT
 // -----------------------------------------------
 const LLM_PROMPT = `
 You are UnderwriteIQ, an AI credit analyst.
 
 You will be given RAW TEXT extracted from a CREDIT REPORT PDF.
-The text may be messy and out of order.
 Your job is to reconstruct the report into CLEAN STRUCTURED JSON.
 
-Return ONLY VALID JSON. NO markdown. NO commentary.
-If a value is unknown, use null or 0 as appropriate.
+Return ONLY VALID JSON. NO markdown. If unsure, use null or 0.
 
-JSON FORMAT:
-
-{
-  "score": <number or null>,
-  "score_model": "<FICO8 | FICO9 | Vantage3 | Vantage4 | Other | null>",
-  "utilization_pct": <number or null>,
-  "inquiries": {
-    "ex": <number>,
-    "tu": <number>,
-    "eq": <number>
-  },
-  "negative_accounts": <number>,
-  "late_payment_events": <number>,
-  "tradelines": [
-    {
-      "creditor": "<string>",
-      "type": "<revolving|installment|other>",
-      "status": "<open|closed|derogatory|chargeoff|collection|paid-collection|repossession|foreclosure|unknown>",
-      "balance": <number>,
-      "limit": <number or null>,
-      "past_due": <number or null>,
-      "opened": "<YYYY-MM or null>",
-      "closed": "<YYYY-MM or null>",
-      "payment_history_summary": {
-        "late_30": <number>,
-        "late_60": <number>,
-        "late_90": <number>,
-        "late_120": <number>,
-        "late_150": <number>,
-        "late_180": <number>
-      }
-    }
-  ]
-}
-
-Rules:
-- Prefer ANY FICO model. If multiple FICO scores appear, prefer FICO 8 if clearly labeled.
-- If NO FICO model appears, use ANY score shown by the report (Vantage, etc).
-- "negative_accounts" = count of unique tradelines or public records that are seriously derogatory:
-  collections, charge-offs, paid charge-offs, repossessions, foreclosures, bankruptcies, judgments, tax liens, any "derogatory"/"negative" status.
-- "late_payment_events" = total count of all late marks: 30/60/90/120/150/180 day late.
-- "utilization_pct" = total revolving utilization if possible; if not, use whatever utilization is shown.
-- If inquiries by bureau are not clear, approximate from the Inquiries section.
-- The JSON MUST be valid and parseable.
+FIELDS:
+- score
+- score_model
+- utilization_pct
+- inquiries: ex, tu, eq
+- negative_accounts
+- late_payment_events
+- tradelines[] with creditor, type, status, balance, limit, past_due, opened, closed, payment_history_summary{}
 `;
 
 // -----------------------------------------------
-// FIXED: CALL OpenAI GPT-4o-mini (TEXT ONLY)
-// Correct Responses API schema
+// FIXED + DIAGNOSTIC VERSION OF LLM CALL
 // -----------------------------------------------
 async function runCreditTextLLM(creditText) {
-  const maxChars = 15000;
-  const truncated = creditText.slice(0, maxChars);
+  const truncated = creditText.slice(0, 15000);
 
   const payload = {
     model: "gpt-4o-mini",
     input: [
       {
         role: "system",
-        content: LLM_PROMPT     // ✔ MUST be a plain string
+        content: LLM_PROMPT // MUST be plain string
       },
       {
         role: "user",
         content: [
           {
-            type: "input_text", // ✔ correct type
+            type: "input_text", // MUST be input_text
             text: truncated
           }
         ]
       }
     ],
-    max_output_tokens: 800,
-    temperature: 0
+    temperature: 0,
+    max_output_tokens: 1200
   };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -110,6 +67,7 @@ async function runCreditTextLLM(creditText) {
     body: JSON.stringify(payload)
   });
 
+  // HTTP error?
   if (!response.ok) {
     const errText = await response.text();
     throw new Error("LLM HTTP error: " + errText);
@@ -117,19 +75,53 @@ async function runCreditTextLLM(creditText) {
 
   const json = await response.json();
 
-  const raw = json?.output_text?.trim?.() || "";
+  // 🔥 LOG EVERYTHING to Vercel for diagnosis
+  console.log("🔥 RAW RESPONSE FROM OPENAI:", JSON.stringify(json, null, 2));
 
-  if (!raw) throw new Error("LLM returned empty output");
+  // -----------------------------------------------
+  // EXTRACT OUTPUT (catch ALL OpenAI formats)
+  // -----------------------------------------------
 
-  try {
-    return JSON.parse(raw);
-  } catch (e) {
-    throw new Error("LLM returned invalid JSON: " + raw);
+  // 1) Standard Responses API output
+  if (json.output_text && json.output_text.trim()) {
+    try { return JSON.parse(json.output_text); }
+    catch { /* fall through */ }
   }
+
+  // 2) New format: array of output blocks
+  if (Array.isArray(json.output)) {
+    for (const block of json.output) {
+      if (block.type === "output_text" && block.text?.trim()) {
+        try { return JSON.parse(block.text); }
+        catch { /* fall */ }
+      }
+      if (block.type === "summary_text" && block.text?.trim()) {
+        try { return JSON.parse(block.text); }
+        catch { /* fall */ }
+      }
+    }
+  }
+
+  // 3) Old chat-format
+  if (json.choices?.[0]?.message?.content) {
+    const text = json.choices[0].message.content.trim();
+    try { return JSON.parse(text); }
+    catch {}
+  }
+
+  // 4) Model refused
+  if (json.refusal) {
+    throw new Error("LLM refusal: " + JSON.stringify(json.refusal));
+  }
+
+  // 5) NOTHING usable — return full JSON to error logs
+  throw new Error(
+    "LLM returned empty or unparseable output. Full response logged above."
+  );
 }
 
 // -----------------------------------------------
-// SIMPLE FUNDING LOGIC (UnderwriteIQ LITE)
+// FUNDING LOGIC
 // -----------------------------------------------
 function computeFundingLogic(data) {
   const score = Number(data.score || 0);
@@ -158,11 +150,10 @@ function computeFundingLogic(data) {
 }
 
 // -----------------------------------------------
-// MAIN HANDLER — UPLOAD + PARSE + LLM
+// MAIN HANDLER — FILE UPLOAD + PARSE + LLM
 // -----------------------------------------------
 module.exports = async function handler(req, res) {
 
-  // Preflight CORS
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -177,7 +168,6 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // -------- FORMIDABLE CONFIG --------
     const form = formidable({
       multiples: false,
       keepExtensions: true,
@@ -185,7 +175,7 @@ module.exports = async function handler(req, res) {
       maxFileSize: 25 * 1024 * 1024
     });
 
-    const { fields, files } = await new Promise((resolve, reject) => {
+    const { files } = await new Promise((resolve, reject) => {
       form.parse(req, (err, fields, files) => {
         if (err) reject(err);
         else resolve({ fields, files });
@@ -196,27 +186,22 @@ module.exports = async function handler(req, res) {
     if (!uploaded || !uploaded.filepath) {
       return res.status(400).json({
         ok: false,
-        msg: "No file uploaded or unable to locate file path"
+        msg: "No file uploaded or missing file path"
       });
     }
 
-    // -------- READ PDF --------
     const rawPDF = await fs.promises.readFile(uploaded.filepath);
-
     const parsed = await pdfParse(rawPDF);
     let text = (parsed.text || "").replace(/\s+/g, " ").trim();
 
     if (!text || text.length < 50) {
       return res.status(400).json({
         ok: false,
-        msg: "We couldn't read your PDF. Upload a clearer bureau report PDF (no photos)."
+        msg: "Could not read PDF. Upload a text-based credit report (no photos)."
       });
     }
 
-    // -------- RUN LLM --------
     const extracted = await runCreditTextLLM(text);
-
-    // -------- FUNDING LOGIC --------
     const uw = computeFundingLogic(extracted);
 
     return res.status(200).json({
@@ -229,7 +214,7 @@ module.exports = async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error("Parser error:", err);
+    console.error("❌ Parser error:", err);
     return res.status(500).json({
       ok: false,
       msg: "Parser failed",
