@@ -1,5 +1,5 @@
 // ==================================================================================
-// UnderwriteIQ LITE — FINAL WORKING VERCEL VERSION
+// UnderwriteIQ LITE — FINAL WORKING VERCEL VERSION (PDF + Vision)
 // ==================================================================================
 
 const fs = require("fs");
@@ -11,16 +11,48 @@ module.exports.config = {
 };
 
 // -----------------------------------------------
-// AI PROMPT
+// AI PROMPT (kept short for reliability)
 // -----------------------------------------------
 const LLM_PROMPT = `
 You are UnderwriteIQ, an AI credit analyst.
-Extract ALL credit data. Return ONLY valid JSON. No markdown.
-...
+
+Extract this CREDIT REPORT into structured JSON. ONLY return valid JSON.
+
+Required fields:
+{
+  "score": <number|null>,
+  "score_model": "<string|null>",
+  "utilization_pct": <number|null>,
+  "inquiries": { "ex":number, "tu":number, "eq":number },
+  "negative_accounts": <number>,
+  "late_payment_events": <number>,
+  "tradelines": [
+     {
+       "creditor": "<string>",
+       "type": "<revolving|installment|other>",
+       "status": "<string>",
+       "balance": <number>,
+       "limit": <number|null>,
+       "past_due": <number|null>,
+       "opened": "<YYYY-MM|null>",
+       "closed": "<YYYY-MM|null>",
+       "payment_history_summary":{
+          "late_30":number,"late_60":number,"late_90":number,
+          "late_120":number,"late_150":number,"late_180":number
+       }
+     }
+  ]
+}
+
+Rules:
+- Prefer FICO 8 if available, then any FICO, otherwise any score shown.
+- negative_accounts = count of collections/chargeoffs/public records/derogs.
+- late_payment_events = total count of all late events.
+- JSON ONLY. No comments, no text outside JSON.
 `;
 
 // -----------------------------------------------
-// CALL OPENAI GPT-4o-mini VISION
+// CALL OPENAI GPT-4o-mini WITH PDF SUPPORT
 // -----------------------------------------------
 async function runVisionLLM(base64PDF) {
   const payload = {
@@ -31,8 +63,17 @@ async function runVisionLLM(base64PDF) {
       {
         role: "user",
         content: [
-          { type: "input_text", text: "Extract credit report data. JSON only." },
-          { type: "input_image", image_url: `data:application/pdf;base64,${base64PDF}` }
+          {
+            type: "input_text",
+            text: "Extract ALL credit report data. Return ONLY JSON."
+          },
+          {
+            type: "input_file",
+            file_data: {
+              data: base64PDF,
+              mime_type: "application/pdf"
+            }
+          }
         ]
       }
     ]
@@ -69,14 +110,13 @@ function computeFundingLogic(data) {
   const score = Number(data.score || 0);
   const util = Number(data.utilization_pct || 0);
   const neg = Number(data.negative_accounts || 0);
-
   const inq = data.inquiries || { ex: 0, tu: 0, eq: 0 };
   const totalInq = inq.ex + inq.tu + inq.eq;
 
   const fundable =
     score >= 700 &&
     util <= 30 &&
-    neg <= 0 &&
+    neg === 0 &&
     totalInq <= 6;
 
   let base = 0;
@@ -111,7 +151,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // ---------- FORMIDABLE CONFIG (FINAL WORKING VERSION) ----------
+    // -------- FORMIDABLE CONFIG (Vercel-compatible) --------
     const form = formidable({
       multiples: false,
       keepExtensions: true,
@@ -135,13 +175,13 @@ module.exports = async function handler(req, res) {
     const raw = await fs.promises.readFile(uploaded.filepath);
     const base64PDF = raw.toString("base64");
 
-    // Extract with Vision LLM
+    // Run Vision LLM
     const extracted = await runVisionLLM(base64PDF);
 
-    // Funding logic
+    // Underwriting
     const uw = computeFundingLogic(extracted);
 
-    // Success
+    // Success response
     return res.status(200).json({
       ok: true,
       inputs: extracted,
