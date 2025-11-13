@@ -1,6 +1,7 @@
 // ==================================================================================
-// UnderwriteIQ LITE — TEXT + LLM Parser (Option C: Auto-Repair + Retry + Expanded)
-// WITH Option B: negatives_count alias for frontend compatibility
+// UnderwriteIQ LITE — TEXT + LLM Parser
+// Option C: Retry + JSON Repair + High Token Limit + Redirect Support
+// Includes negatives_count alias for frontend compatibility
 // ==================================================================================
 
 const fs = require("fs");
@@ -12,66 +13,23 @@ module.exports.config = {
 };
 
 // -----------------------------------------------
-// UnderwriteIQ SYSTEM PROMPT (with COMPACT JSON)
+// SYSTEM PROMPT — Compact JSON
 // -----------------------------------------------
 const LLM_PROMPT = `
 You are UnderwriteIQ, an AI credit analyst.
-
 You will be given RAW TEXT extracted from a CREDIT REPORT PDF.
-The text may be messy and out of order.
 Your job is to reconstruct the report into CLEAN STRUCTURED JSON.
 
-Return ONLY VALID JSON. NO markdown. NO commentary.
-If a value is unknown, use null or 0.
-
-ALWAYS OUTPUT COMPACT JSON — one line, no extra spaces, no line breaks, no indentation.
-
-JSON FORMAT:
-
-{
-  "score": <number or null>,
-  "score_model": "<FICO8 | FICO9 | Vantage3 | Vantage4 | Other | null>",
-  "utilization_pct": <number or null>,
-  "inquiries": {
-    "ex": <number>,
-    "tu": <number>,
-    "eq": <number>
-  },
-  "negative_accounts": <number>,
-  "late_payment_events": <number>,
-  "tradelines": [
-    {
-      "creditor": "<string>",
-      "type": "<revolving|installment|other>",
-      "status": "<open|closed|derogatory|chargeoff|collection|paid-collection|repossession|foreclosure|unknown>",
-      "balance": <number>,
-      "limit": <number or null>,
-      "past_due": <number or null>,
-      "opened": "<YYYY-MM or null>",
-      "closed": "<YYYY-MM or null>",
-      "payment_history_summary": {
-        "late_30": <number>,
-        "late_60": <number>,
-        "late_90": <number>,
-        "late_120": <number>,
-        "late_150": <number>,
-        "late_180": <number>
-      }
-    }
-  ]
-}
+Return ONLY VALID COMPACT JSON: one-line, no spaces, no formatting.
+If unsure, use null or 0.
 `;
 
 // -----------------------------------------------
-// HELPERS: Extract JSON from OpenAI Responses API shapes
+// JSON Extraction Helpers
 // -----------------------------------------------
 function extractJsonStringFromResponse(json) {
-  // 1) Simple path
-  if (json.output_text && json.output_text.trim()) {
-    return json.output_text.trim();
-  }
+  if (json.output_text?.trim()) return json.output_text.trim();
 
-  // 2) Responses API (YOUR primary case)
   if (Array.isArray(json.output)) {
     for (const msg of json.output) {
       if (!msg?.content) continue;
@@ -86,46 +44,32 @@ function extractJsonStringFromResponse(json) {
     }
   }
 
-  // 3) Chat-style fallback
-  if (
-    json.choices &&
-    json.choices[0] &&
-    typeof json.choices[0].message?.content === "string"
-  ) {
+  if (json.choices?.[0]?.message?.content) {
     return json.choices[0].message.content.trim();
   }
 
   return null;
 }
 
-// AUTO-REPAIR for incomplete JSON
 function tryParseJsonWithRepair(raw) {
-  if (!raw) throw new Error("No raw JSON string");
-
-  try {
-    return JSON.parse(raw);
-  } catch (e) {}
+  try { return JSON.parse(raw); } catch(e) {}
 
   const first = raw.indexOf("{");
   const last = raw.lastIndexOf("}");
+
   if (first !== -1 && last !== -1 && last > first) {
-    const sliced = raw.slice(first, last + 1);
-    try {
-      return JSON.parse(sliced);
-    } catch (e2) {}
+    try { return JSON.parse(raw.slice(first, last + 1)); } catch(e2) {}
   }
 
-  throw new Error("Broken JSON. Preview: " + raw.slice(0, 200));
+  throw new Error("JSON parse failed. Preview: " + raw.slice(0, 200));
 }
 
 // -----------------------------------------------
-// LLM CALL — Option C (Retry + Repair + High Output Limit)
+// Single OpenAI Call
 // -----------------------------------------------
-async function callOpenAIOnce(creditText) {
-  const apiKey = process.env.UNDERWRITE_IQ_VISION_KEY;
-  if (!apiKey) throw new Error("Missing UNDERWRITE_IQ_VISION_KEY");
-
-  const truncated = creditText.slice(0, 15000);
+async function callOpenAIOnce(text) {
+  const key = process.env.UNDERWRITE_IQ_VISION_KEY;
+  if (!key) throw new Error("Missing UNDERWRITE_IQ_VISION_KEY");
 
   const payload = {
     model: "gpt-4o-mini",
@@ -134,77 +78,79 @@ async function callOpenAIOnce(creditText) {
       {
         role: "user",
         content: [
-          {
-            type: "input_text",
-            text: truncated
-          }
+          { type: "input_text", text: text.slice(0, 15000) }
         ]
       }
     ],
     temperature: 0,
-    max_output_tokens: 4096 // ⭐ BIG FIX: prevents truncation
+    max_output_tokens: 4096
   };
 
   const resp = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
+      "Authorization": `Bearer ${key}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify(payload)
   });
 
-  if (!resp.ok) {
-    throw new Error("LLM HTTP error: " + (await resp.text()));
-  }
+  if (!resp.ok)
+    throw new Error("LLM HTTP error: " + await resp.text());
 
   const json = await resp.json();
 
-  if (json.refusal) {
+  if (json.refusal)
     throw new Error("LLM refusal: " + JSON.stringify(json.refusal));
-  }
 
   const raw = extractJsonStringFromResponse(json);
-  if (!raw) throw new Error("No output_text found");
+  if (!raw) throw new Error("LLM returned no output_text.");
 
   return tryParseJsonWithRepair(raw);
 }
 
+// -----------------------------------------------
+// Full LLM Pipeline with Retry
+// -----------------------------------------------
 async function runCreditTextLLM(text) {
-  let error = null;
-
+  let lastError = null;
   for (let i = 1; i <= 3; i++) {
     try {
       return await callOpenAIOnce(text);
     } catch (err) {
-      error = err;
-      console.error(`UnderwriteIQ LLM attempt ${i} failed: ${String(err)}`);
-
+      lastError = err;
       const msg = String(err);
-      if (msg.includes("HTTP") || msg.includes("refusal") || msg.includes("Missing")) {
-        break;
-      }
 
-      await new Promise((r) => setTimeout(r, 150 * i));
+      console.error(`UnderwriteIQ LLM attempt ${i} failed:`, msg);
+
+      if (
+        msg.includes("HTTP") ||
+        msg.includes("refusal") ||
+        msg.includes("Missing")
+      ) break;  // unrecoverable
+
+      await new Promise(r => setTimeout(r, 150 * i));
     }
   }
-
-  throw new Error("LLM failed after 3 attempts: " + String(error));
+  throw new Error("LLM failed after 3 attempts: " + String(lastError));
 }
 
 // -----------------------------------------------
 // FUNDING LOGIC
 // -----------------------------------------------
 function computeFundingLogic(data) {
-  const score = Number(data.score || 0);
-  const util = Number(data.utilization_pct || 0);
-  const neg = Number(data.negative_accounts || 0);
+  const score = Number(data.score ?? 0);
+  const util = Number(data.utilization_pct ?? 0);
+  const neg  = Number(data.negative_accounts ?? 0);
 
   const inq = data.inquiries || { ex: 0, tu: 0, eq: 0 };
   const totalInq = (inq.ex || 0) + (inq.tu || 0) + (inq.eq || 0);
 
   const fundable =
-    score >= 700 && util <= 30 && neg === 0 && totalInq <= 6;
+    score >= 700 &&
+    util <= 30 &&
+    neg === 0 &&
+    totalInq <= 6;
 
   let base = 0;
   for (const tl of data.tradelines || []) {
@@ -219,9 +165,10 @@ function computeFundingLogic(data) {
 }
 
 // -----------------------------------------------
-// MAIN HANDLER — Upload + PDF + LLM + Funding Logic
+// MAIN API HANDLER
 // -----------------------------------------------
 module.exports = async function handler(req, res) {
+  // CORS
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -235,6 +182,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    // Parse file
     const form = formidable({
       multiples: false,
       keepExtensions: true,
@@ -244,35 +192,52 @@ module.exports = async function handler(req, res) {
 
     const { files } = await new Promise((resolve, reject) =>
       form.parse(req, (err, fields, files) => {
-        if (err) reject(err);
-        else resolve({ files });
+        if (err) reject(err); else resolve({ files });
       })
     );
 
-    const uploaded = files.file;
-    if (!uploaded?.filepath) {
-      return res.status(400).json({ ok: false, msg: "No file uploaded" });
+    const file = files.file;
+    if (!file?.filepath) {
+      return res.status(400).json({ ok: false, msg: "No file uploaded." });
     }
 
-    // PDF → text
-    const raw = await fs.promises.readFile(uploaded.filepath);
-    const pdf = await pdfParse(raw);
-    const text = (pdf.text || "").replace(/\s+/g, " ").trim();
+    const buffer = await fs.promises.readFile(file.filepath);
+    const parsedPDF = await pdfParse(buffer);
+
+    const text = (parsedPDF.text || "")
+      .replace(/\s+/g, " ")
+      .trim();
 
     if (text.length < 50) {
       return res.status(400).json({
         ok: false,
-        msg: "Unreadable PDF. Please upload a real bureau credit report (no scans)."
+        msg: "Unreadable PDF. Upload an actual bureau credit report (no photos/scans)."
       });
     }
 
     // LLM extraction
     const extracted = await runCreditTextLLM(text);
 
-    // Funding logic
+    // Compute funding logic
     const uw = computeFundingLogic(extracted);
 
-    // ⭐ ADDING Option B compatibility (negatives_count)
+    // -----------------------------------------------
+    // REDIRECT OBJECT for frontend
+    // -----------------------------------------------
+    const redirect = {
+      url: uw.fundable ? "/funding-approved" : "/fix-my-credit",
+      query: {
+        funding: uw.estimate,
+        score: extracted.score,
+        util: extracted.utilization_pct,
+        inqEx: extracted.inquiries?.ex ?? 0,
+        inqTu: extracted.inquiries?.tu ?? 0,
+        inqEq: extracted.inquiries?.eq ?? 0,
+        neg: extracted.negative_accounts
+      }
+    };
+
+    // SUCCESS RESPONSE
     return res.status(200).json({
       ok: true,
       inputs: extracted,
@@ -280,8 +245,9 @@ module.exports = async function handler(req, res) {
         fundable: uw.fundable,
         banner_estimate: uw.estimate,
         negative_accounts: extracted.negative_accounts,
-        negatives_count: extracted.negative_accounts // <--- compatibility alias
-      }
+        negatives_count: extracted.negative_accounts  // <-- alias for frontend
+      },
+      redirect
     });
 
   } catch (err) {
