@@ -1,7 +1,7 @@
 // ==================================================================================
 // UnderwriteIQ LITE — TEXT + LLM Parser
 // Option C: Retry + Repair + High Token Limit + Redirect
-// Fully supports: negative_accounts + late_payment_events
+// Supports: negative_accounts + late_payment_events
 // ==================================================================================
 
 const fs = require("fs");
@@ -124,7 +124,6 @@ async function runCreditTextLLM(text) {
     } catch (err) {
       lastError = err;
       const msg = String(err);
-
       console.error(`UnderwriteIQ LLM attempt ${i} failed:`, msg);
 
       if (
@@ -223,9 +222,11 @@ module.exports = async function handler(req, res) {
     const extracted = await runCreditTextLLM(text);
     const uw = computeFundingLogic(extracted);
 
-    // ⭐ ADD late payments to redirect
+    // ⭐ Correct Redirect URLs for GoHighLevel
     const redirect = {
-      url: uw.fundable ? "/funding-approved" : "/fix-my-credit",
+      url: uw.fundable
+        ? "https://fundhub.ai/confirmation-page-296844-430611"             // FUNDING APPROVED
+        : "https://fundhub.ai/confirmation-page-296844-430611-722950",     // FIX MY CREDIT
       query: {
         funding: uw.estimate,
         score: extracted.score,
@@ -234,7 +235,7 @@ module.exports = async function handler(req, res) {
         inqTu: extracted.inquiries?.tu ?? 0,
         inqEq: extracted.inquiries?.eq ?? 0,
         neg: extracted.negative_accounts,
-        late: extracted.late_payment_events   // ⭐ NEW
+        late: extracted.late_payment_events
       }
     };
 
