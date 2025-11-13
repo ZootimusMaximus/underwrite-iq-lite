@@ -73,19 +73,37 @@ Rules:
 `;
 
 // -----------------------------------------------
-// CALL OpenAI GPT-4o-mini (TEXT ONLY)
+// FIXED: CALL OpenAI GPT-4o-mini (TEXT ONLY)
+// Fully matches Responses API spec
 // -----------------------------------------------
 async function runCreditTextLLM(creditText) {
-  // Truncate very long text to control cost & token limits
   const maxChars = 15000;
   const truncated = creditText.slice(0, maxChars);
 
   const payload = {
     model: "gpt-4o-mini",
     input: [
-      { role: "system", content: LLM_PROMPT },
-      { role: "user", content: truncated }
-    ]
+      {
+        role: "system",
+        content: [
+          {
+            type: "text",
+            text: LLM_PROMPT
+          }
+        ]
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: truncated
+          }
+        ]
+      }
+    ],
+    max_output_tokens: 800,
+    temperature: 0
   };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -103,12 +121,7 @@ async function runCreditTextLLM(creditText) {
   }
 
   const json = await response.json();
-
-  const raw =
-    json?.output_text ||
-    json?.content ||
-    json?.choices?.[0]?.message?.content ||
-    "";
+  const raw = json?.output_text?.trim?.() || "";
 
   if (!raw) {
     throw new Error("LLM returned empty output");
