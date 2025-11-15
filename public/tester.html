@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>UnderwriteIQ Stress Test Dashboard</title>
+<title>UnderwriteIQ — Mass Stress Tester</title>
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -10,43 +10,75 @@
     color: #fff;
     padding: 20px;
   }
-  h1 { font-size: 22px; }
+  h1 { font-size: 22px; margin-bottom: 10px; }
+  p { opacity: 0.8; margin-bottom: 20px; }
+
   .panel {
     background: #1a1a1a;
     padding: 20px;
     border-radius: 8px;
     margin-bottom: 20px;
+    border: 1px solid #222;
   }
+
   #dropzone {
     border: 2px dashed #4CAF50;
     padding: 40px;
     text-align: center;
     cursor: pointer;
     margin-bottom: 20px;
+    border-radius: 8px;
+    font-weight: bold;
   }
+  #dropzone:hover {
+    background: rgba(76, 175, 80, 0.1);
+  }
+
   pre {
     background: #222;
     padding: 10px;
-    border-radius: 8px;
-    max-height: 300px;
+    border-radius: 6px;
+    max-height: 350px;
     overflow-y: auto;
     font-size: 12px;
+    color: #b5f3b5;
+    white-space: pre-wrap;
   }
+
   .file-result {
-    border: 1px solid #333;
     background: #161616;
-    padding: 10px;
-    margin-bottom: 10px;
+    padding: 12px;
+    margin-bottom: 12px;
     border-radius: 6px;
+    border-left: 4px solid #555;
   }
-  .fail { border-color: #ff4d4d; }
-  .success { border-color: #4CAF50; }
+  .success {
+    border-color: #4CAF50;
+  }
+  .fail {
+    border-color: #ff4d4d;
+  }
+
+  button {
+    margin-top: 10px;
+    padding: 10px 14px;
+    background: #4CAF50;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #111;
+    font-weight: bold;
+  }
+  button:hover {
+    background: #45a049;
+  }
 </style>
 </head>
+
 <body>
 
 <h1>UnderwriteIQ – Mass Stress Tester</h1>
-<p>Upload 1 or 100 PDFs. Each hits <code>/api/lite/parse-report</code> and prints results.</p>
+<p>Upload 1 or 100 PDFs. Each one hits <code>/api/lite/parse-report</code> and displays the result.</p>
 
 <div id="dropzone">Click or Drag Multiple PDFs Here</div>
 <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
@@ -57,7 +89,7 @@
 </div>
 
 <div class="panel">
-  <h3>Results</h3>
+  <h3>Successes</h3>
   <div id="results"></div>
 </div>
 
@@ -81,9 +113,10 @@ let allResults = [];
 dropzone.onclick = () => fileInput.click();
 fileInput.onchange = () => handleFiles(fileInput.files);
 
+// drag behavior
 dropzone.addEventListener("dragover", e => {
   e.preventDefault();
-  dropzone.style.background = "rgba(255,255,255,0.1)";
+  dropzone.style.background = "rgba(76, 175, 80, 0.15)";
 });
 dropzone.addEventListener("dragleave", () => {
   dropzone.style.background = "transparent";
@@ -100,10 +133,10 @@ async function handleFiles(files) {
   allResults = [];
   resultsDiv.innerHTML = "";
   failsDiv.innerHTML = "";
-  progress.innerText = "Starting…";
+  progress.innerText = "Starting tests…";
 
-  let completed = 0;
   const total = files.length;
+  let completed = 0;
 
   for (const file of files) {
     await processFile(file);
@@ -121,36 +154,42 @@ async function processFile(file) {
   let json = null;
 
   try {
-    const res = await fetch("/api/lite/parse-report", {
+    const response = await fetch("/api/lite/parse-report", {
       method: "POST",
       body: formData
     });
-    json = await res.json();
+
+    json = await response.json();
   } catch (err) {
-    json = { error: true, message: err.toString() };
+    json = { ok: false, error: true, message: err.toString() };
   }
 
   allResults.push({ filename: file.name, result: json });
 
   const div = document.createElement("div");
-  div.className = "file-result " + (json?.ok ? "success" : "fail");
+  const isSuccess = json && json.ok;
+
+  div.className = "file-result " + (isSuccess ? "success" : "fail");
 
   div.innerHTML = `
     <strong>${file.name}</strong><br>
     <pre>${JSON.stringify(json, null, 2)}</pre>
   `;
 
-  if (json?.ok) resultsDiv.appendChild(div);
+  if (isSuccess) resultsDiv.appendChild(div);
   else failsDiv.appendChild(div);
 }
 
 exportBtn.onclick = () => {
-  const blob = new Blob([JSON.stringify(allResults, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(allResults, null, 2)], {
+    type: "application/json"
+  });
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
 
   a.href = url;
-  a.download = "underwriteiq-test-results.json";
+  a.download = "underwriteiq-stress-test-results.json";
   a.click();
 
   URL.revokeObjectURL(url);
