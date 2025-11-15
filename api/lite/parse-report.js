@@ -1,8 +1,8 @@
 // ==================================================================================
-// UnderwriteIQ LITE — Upgraded TEXT + LLM Parser (Crash-Proof Edition)
-// Bureau-level parsing added for UI suggestions (NOT for letters yet).
-// Employers added to personal info extraction.
-// All underwriting logic fully preserved.
+// UnderwriteIQ LITE — Per-Bureau TEXT + LLM Parser (Crash-Proof Edition)
+// Full per-bureau underwriting (EX / EQ / TU).
+// Employers added to personal info per bureau.
+// Global funding scaled by (# fundable bureaus / # bureaus present).
 // ==================================================================================
 
 const fs = require("fs");
@@ -35,77 +35,133 @@ function buildFallbackResult(reason = "Analyzer failed") {
       confidence: 0
     },
     bureaus: {
-      experian: {},
-      equifax: {},
-      transunion: {}
+      experian: {
+        present: false,
+        names: [],
+        addresses: [],
+        employers: [],
+        inquiries: [],
+        accounts: [],
+        score: null,
+        utilization_pct: null,
+        negative_accounts: 0,
+        late_payment_events: 0,
+        inquiries_count: 0,
+        tradelines: []
+      },
+      equifax: {
+        present: false,
+        names: [],
+        addresses: [],
+        employers: [],
+        inquiries: [],
+        accounts: [],
+        score: null,
+        utilization_pct: null,
+        negative_accounts: 0,
+        late_payment_events: 0,
+        inquiries_count: 0,
+        tradelines: []
+      },
+      transunion: {
+        present: false,
+        names: [],
+        addresses: [],
+        employers: [],
+        inquiries: [],
+        accounts: [],
+        score: null,
+        utilization_pct: null,
+        negative_accounts: 0,
+        late_payment_events: 0,
+        inquiries_count: 0,
+        tradelines: []
+      }
     }
   };
 }
 
 // -----------------------------------------------
-// 📌 UPDATED SYSTEM PROMPT WITH BUREAU PARSING
+// 📌 SYSTEM PROMPT WITH FULL PER-BUREAU PARSING
 // -----------------------------------------------
 const LLM_PROMPT = `
 You are UnderwriteIQ, an AI credit analyst.
 You will be given RAW TEXT extracted from a CREDIT REPORT PDF.
 
-Return ONLY VALID COMPACT JSON (ONE LINE). No commentary. No markdown.
+Your job:
+1) Parse each CREDIT BUREAU section separately (Experian, Equifax, TransUnion).
+2) Output a SINGLE JSON object with a "bureaus" field.
+3) For each bureau, return BOTH underwriting metrics and personal-info suggestions.
 
-PART 1 — AGGREGATED FIELDS (FOR FUNDING ENGINE)
-These fields MUST be present:
+Return ONLY VALID COMPACT JSON (one line). No commentary. No markdown.
+
+The JSON shape MUST be:
 
 {
-  "score": number or null,
-  "score_model": string or null,
-  "utilization_pct": number or null,
-  "inquiries": { "ex": number, "tu": number, "eq": number },
-  "negative_accounts": number,
-  "late_payment_events": number,
-  "tradelines": [
-    {
-      "creditor": string,
-      "type": "revolving" | "installment" | "auto" | "other",
-      "status": string,
-      "balance": number,
-      "limit": number,
-      "opened": string | null,
-      "closed": string | null
+  "bureaus": {
+    "experian": {
+      "present": boolean,
+      "score": number or null,
+      "utilization_pct": number or null,
+      "negative_accounts": number,
+      "late_payment_events": number,
+      "inquiries_count": number,
+
+      "names": [ "name variations for Experian" ],
+      "addresses": [ "address lines listed under Experian" ],
+      "employers": [ "employer names listed under Experian" ],
+      "inquiries": [ "creditor/lender names for Experian inquiries" ],
+      "accounts": [ "creditor names for Experian tradelines" ],
+
+      "tradelines": [
+        {
+          "creditor": string,
+          "type": "revolving" | "installment" | "auto" | "other",
+          "status": string,
+          "balance": number,
+          "limit": number,
+          "opened": string | null,    // YYYY-MM or YYYY-MM-DD
+          "closed": string | null
+        }
+      ]
+    },
+    "equifax": {
+      "present": boolean,
+      "score": number or null,
+      "utilization_pct": number or null,
+      "negative_accounts": number,
+      "late_payment_events": number,
+      "inquiries_count": number,
+      "names": [ ... ],
+      "addresses": [ ... ],
+      "employers": [ ... ],
+      "inquiries": [ ... ],
+      "accounts": [ ... ],
+      "tradelines": [ ... ]
+    },
+    "transunion": {
+      "present": boolean,
+      "score": number or null,
+      "utilization_pct": number or null,
+      "negative_accounts": number,
+      "late_payment_events": number,
+      "inquiries_count": number,
+      "names": [ ... ],
+      "addresses": [ ... ],
+      "employers": [ ... ],
+      "inquiries": [ ... ],
+      "accounts": [ ... ],
+      "tradelines": [ ... ]
     }
-  ]
-}
-
-PART 2 — BUREAU-LEVEL PARSING (FOR SUGGESTIONS UI)
-Extract EACH BUREAU SEPARATELY:
-
-"bureaus": {
-  "experian": {
-    "names": [ "name variations" ],
-    "addresses": [ "address lines" ],
-    "employers": [ "employer names" ],
-    "inquiries": [ "inquiry names" ],
-    "accounts": [ "creditor names" ]
-  },
-  "equifax": {
-    "names": [],
-    "addresses": [],
-    "employers": [],
-    "inquiries": [],
-    "accounts": []
-  },
-  "transunion": {
-    "names": [],
-    "addresses": [],
-    "employers": [],
-    "inquiries": [],
-    "accounts": []
   }
 }
 
 RULES:
-- DO NOT mix bureaus.
-- DO NOT aggregate names/addresses across bureaus.
-- If unsure, return empty arrays, not null.
-- JSON must be valid, compact, and complete.
+- "present" = true if that bureau clearly appears in the report, else false.
+- DO NOT mix bureaus. Assign each item ONLY to its correct bureau.
+- If unsure, use empty arrays, 0, or null.
+- DO NOT invent fake data.
+- JSON MUST be valid, minified, and parseable by JSON.parse.
 `;
 
 // -----------------------------------------------
@@ -259,22 +315,35 @@ function monthsSince(dateStr) {
   return yearsDiff * 12 + monthsDiff;
 }
 
-// -----------------------------------------------
-// Underwriting Engine (unchanged)
-// -----------------------------------------------
-function computeUnderwrite(data, businessAgeMonthsRaw) {
-  const score = Number(data.score ?? 0);
-  const util = Number(data.utilization_pct ?? 0);
-  const neg = Number(data.negative_accounts ?? 0);
+function normalizeBureau(raw, key) {
+  const safe = raw && typeof raw === "object" ? raw : {};
+  return {
+    present: Boolean(safe.present),
+    score: safe.score != null ? Number(safe.score) : null,
+    utilization_pct: safe.utilization_pct != null ? Number(safe.utilization_pct) : null,
+    negative_accounts: safe.negative_accounts != null ? Number(safe.negative_accounts) : 0,
+    late_payment_events: safe.late_payment_events != null ? Number(safe.late_payment_events) : 0,
+    inquiries_count: safe.inquiries_count != null ? Number(safe.inquiries_count) : 0,
+    names: Array.isArray(safe.names) ? safe.names : [],
+    addresses: Array.isArray(safe.addresses) ? safe.addresses : [],
+    employers: Array.isArray(safe.employers) ? safe.employers : [],
+    inquiries: Array.isArray(safe.inquiries) ? safe.inquiries : [],
+    accounts: Array.isArray(safe.accounts) ? safe.accounts : [],
+    tradelines: Array.isArray(safe.tradelines) ? safe.tradelines : [],
+    bureau_key: key
+  };
+}
 
-  const inquiries = data.inquiries || { ex: 0, tu: 0, eq: 0 };
-  const exInq = Number(inquiries.ex || 0);
-  const tuInq = Number(inquiries.tu || 0);
-  const eqInq = Number(inquiries.eq || 0);
-  const totalInq = exInq + tuInq + eqInq;
-
-  const lates = Number(data.late_payment_events ?? 0);
-  const tradelines = Array.isArray(data.tradelines) ? data.tradelines : [];
+// -----------------------------------------------
+// Per-Bureau Underwriting Engine
+// -----------------------------------------------
+function computeUnderwriteForBureau(bureauKey, bureauData, businessAgeMonthsRaw) {
+  const score = Number(bureauData.score ?? 0);
+  const util = Number(bureauData.utilization_pct ?? 0);
+  const neg = Number(bureauData.negative_accounts ?? 0);
+  const lates = Number(bureauData.late_payment_events ?? 0);
+  const totalInq = Number(bureauData.inquiries_count ?? 0);
+  const tradelines = Array.isArray(bureauData.tradelines) ? bureauData.tradelines : [];
 
   const businessAgeMonths =
     typeof businessAgeMonthsRaw === "number" && Number.isFinite(businessAgeMonthsRaw)
@@ -311,7 +380,7 @@ function computeUnderwrite(data, businessAgeMonthsRaw) {
 
     if (type === "revolving") {
       hasAnyRevolving = true;
-      if (status === "open" && seasoned && limit > highestRevolvingLimit) {
+      if (status.includes("open") && seasoned && limit > highestRevolvingLimit) {
         highestRevolvingLimit = limit;
       }
     }
@@ -350,18 +419,19 @@ function computeUnderwrite(data, businessAgeMonthsRaw) {
   const canDualStack = canCardStack && canLoanStack;
   const totalPersonalFunding = personalCardFunding + personalLoanFunding;
 
-  const businessMultiplier =
-    businessAgeMonths == null
-      ? 0
-      : businessAgeMonths < 12
-        ? 0.5
-        : businessAgeMonths < 24
-          ? 1.0
-          : 2.0;
+  let businessMultiplier = 0;
+  if (businessAgeMonths != null && personalCardFunding > 0) {
+    if (businessAgeMonths < 12) {
+      businessMultiplier = 0.5;
+    } else if (businessAgeMonths < 24) {
+      businessMultiplier = 1.0;
+    } else {
+      businessMultiplier = 2.0;
+    }
+  }
 
   const canBusinessFund = businessMultiplier > 0;
   const businessFunding = personalCardFunding * businessMultiplier;
-
   const totalBusinessFunding = businessFunding;
   const totalCombinedFunding = totalPersonalFunding + totalBusinessFunding;
 
@@ -395,7 +465,13 @@ function computeUnderwrite(data, businessAgeMonthsRaw) {
     util <= 30 &&
     neg === 0;
 
+  let exInq = 0, tuInq = 0, eqInq = 0;
+  if (bureauKey === "experian") exInq = totalInq;
+  if (bureauKey === "equifax") eqInq = totalInq;
+  if (bureauKey === "transunion") tuInq = totalInq;
+
   return {
+    bureau: bureauKey,
     fundable,
     metrics: {
       score,
@@ -422,7 +498,7 @@ function computeUnderwrite(data, businessAgeMonthsRaw) {
     business: {
       business_age_months: businessAgeMonths,
       can_business_fund: canBusinessFund,
-      business_multiplier,
+      business_multiplier: businessMultiplier,
       business_funding: businessFunding
     },
     totals: {
@@ -502,17 +578,8 @@ module.exports = async function handler(req, res) {
         return res.status(200).json(buildFallbackResult("Analyzer returned invalid format"));
       }
 
-      if (!("score" in extracted)) {
-        return res.status(200).json(buildFallbackResult("Missing required fields"));
-      }
-
-      // Ensure bureaus exist
-      if (!extracted.bureaus) {
-        extracted.bureaus = {
-          experian: { names: [], addresses: [], employers: [], inquiries: [], accounts: [] },
-          equifax: { names: [], addresses: [], employers: [], inquiries: [], accounts: [] },
-          transunion: { names: [], addresses: [], employers: [], inquiries: [], accounts: [] }
-        };
+      if (!extracted.bureaus || typeof extracted.bureaus !== "object") {
+        return res.status(200).json(buildFallbackResult("Missing bureaus field"));
       }
 
     } catch (err) {
@@ -520,33 +587,151 @@ module.exports = async function handler(req, res) {
       return res.status(200).json(buildFallbackResult("Analyzer crashed: " + String(err)));
     }
 
-    // -----------------------------------
-    // Underwriting (safe)
-    // -----------------------------------
-    let uw;
-    try {
-      uw = computeUnderwrite(extracted, businessAgeMonths);
-    } catch (err) {
-      console.error("Underwrite crash:", err);
-      return res.status(200).json(buildFallbackResult("Underwriting engine crashed"));
-    }
+    // Normalize bureaus
+    const rawBureaus = extracted.bureaus || {};
+    const bureaus = {
+      experian: normalizeBureau(rawBureaus.experian, "experian"),
+      equifax: normalizeBureau(rawBureaus.equifax, "equifax"),
+      transunion: normalizeBureau(rawBureaus.transunion, "transunion")
+    };
+    extracted.bureaus = bureaus;
 
     // -----------------------------------
-    // Redirect block (unchanged)
+    // Per-bureau underwriting
+    // -----------------------------------
+    const bureauResults = {};
+    const keys = ["experian", "equifax", "transunion"];
+
+    for (const key of keys) {
+      const b = bureaus[key];
+
+      const hasAnyData =
+        b.present ||
+        b.score != null ||
+        b.utilization_pct != null ||
+        b.negative_accounts > 0 ||
+        b.late_payment_events > 0 ||
+        b.inquiries_count > 0 ||
+        (Array.isArray(b.tradelines) && b.tradelines.length > 0) ||
+        (Array.isArray(b.names) && b.names.length > 0) ||
+        (Array.isArray(b.addresses) && b.addresses.length > 0);
+
+      if (!hasAnyData) {
+        continue;
+      }
+
+      try {
+        bureauResults[key] = computeUnderwriteForBureau(key, b, businessAgeMonths);
+      } catch (err) {
+        console.error(`Underwrite crash for bureau ${key}:`, err);
+      }
+    }
+
+    const availableKeys = Object.keys(bureauResults);
+    if (availableKeys.length === 0) {
+      return res.status(200).json(buildFallbackResult("No recognizable bureau data for underwriting"));
+    }
+
+    const fundableKeys = availableKeys.filter(k => bureauResults[k].fundable);
+
+    // Choose primary bureau:
+    let primaryKey;
+    if (fundableKeys.length > 0) {
+      primaryKey = fundableKeys.reduce((best, k) => {
+        if (!best) return k;
+        const cur = bureauResults[k].totals.total_combined_funding;
+        const prev = bureauResults[best].totals.total_combined_funding;
+        return cur > prev ? k : best;
+      }, null);
+    } else {
+      primaryKey = availableKeys.reduce((best, k) => {
+        if (!best) return k;
+        const cur = bureauResults[k].metrics.score;
+        const prev = bureauResults[best].metrics.score;
+        return cur > prev ? k : best;
+      }, null);
+    }
+
+    const primary = bureauResults[primaryKey];
+
+    const totalAvailable = availableKeys.length;
+    const fundableCount = fundableKeys.length;
+    const denom = Math.max(totalAvailable, 1);
+    const scaleFactor = fundableCount === 0 ? 0 : (fundableCount / denom);
+
+    const globalFundable = fundableCount > 0;
+
+    const scaledPersonalFunding = primary.personal.total_personal_funding * scaleFactor;
+    const scaledBusinessFunding = primary.business.business_funding * scaleFactor;
+    const scaledTotalCombined = scaledPersonalFunding + scaledBusinessFunding;
+
+    const globalScore = primary.metrics.score;
+    const globalUtil = primary.metrics.utilization_pct;
+    const globalNeg = primary.metrics.negative_accounts;
+    const globalLates = primary.metrics.late_payment_events;
+
+    const globalInquiries = {
+      ex: bureauResults.experian ? bureauResults.experian.metrics.inquiries.total : 0,
+      eq: bureauResults.equifax ? bureauResults.equifax.metrics.inquiries.total : 0,
+      tu: bureauResults.transunion ? bureauResults.transunion.metrics.inquiries.total : 0
+    };
+    globalInquiries.total = globalInquiries.ex + globalInquiries.eq + globalInquiries.tu;
+
+    const globalLiteBannerFunding = Math.round(primary.lite_banner_funding * scaleFactor);
+
+    const globalUnderwrite = {
+      fundable: globalFundable,
+      primary_bureau: primaryKey,
+      fundable_bureaus: fundableKeys,
+      bureau_results: bureauResults,
+      metrics: {
+        score: globalScore,
+        utilization_pct: globalUtil,
+        negative_accounts: globalNeg,
+        late_payment_events: globalLates,
+        inquiries: globalInquiries
+      },
+      personal: {
+        highest_revolving_limit: primary.personal.highest_revolving_limit,
+        highest_installment_amount: primary.personal.highest_installment_amount,
+        can_card_stack: primary.personal.can_card_stack,
+        can_loan_stack: primary.personal.can_loan_stack,
+        can_dual_stack: primary.personal.can_dual_stack,
+        card_funding: primary.personal.card_funding * scaleFactor,
+        loan_funding: primary.personal.loan_funding * scaleFactor,
+        total_personal_funding: scaledPersonalFunding
+      },
+      business: {
+        business_age_months: primary.business.business_age_months,
+        can_business_fund: primary.business.can_business_fund,
+        business_multiplier: primary.business.business_multiplier,
+        business_funding: scaledBusinessFunding
+      },
+      totals: {
+        total_personal_funding: scaledPersonalFunding,
+        total_business_funding: scaledBusinessFunding,
+        total_combined_funding: scaledTotalCombined
+      },
+      optimization: primary.optimization,
+      lite_banner_funding: globalLiteBannerFunding
+    };
+
+    // -----------------------------------
+    // Redirect block (kept compatible)
     // -----------------------------------
     const redirect = {
-      url: uw.fundable
+      url: globalUnderwrite.fundable
         ? "https://fundhub.ai/confirmation-page-296844-430611"
         : "https://fundhub.ai/confirmation-page-296844-430611-722950",
       query: {
-        funding: uw.lite_banner_funding,
-        score: uw.metrics.score,
-        util: uw.metrics.utilization_pct,
-        inqEx: uw.metrics.inquiries.ex,
-        inqTu: uw.metrics.inquiries.tu,
-        inqEq: uw.metrics.inquiries.eq,
-        neg: uw.metrics.negative_accounts,
-        late: uw.metrics.late_payment_events
+        funding: globalUnderwrite.lite_banner_funding,
+        score: globalUnderwrite.metrics.score,
+        util: globalUnderwrite.metrics.utilization_pct,
+        inqEx: globalUnderwrite.metrics.inquiries.ex,
+        inqTu: globalUnderwrite.metrics.inquiries.tu,
+        inqEq: globalUnderwrite.metrics.inquiries.eq,
+        neg: globalUnderwrite.metrics.negative_accounts,
+        late: globalUnderwrite.metrics.late_payment_events
       }
     };
 
@@ -555,15 +740,15 @@ module.exports = async function handler(req, res) {
     // -----------------------------------
     return res.status(200).json({
       ok: true,
-      inputs: extracted,
-      underwrite: uw,
-      bureaus: extracted.bureaus,
+      inputs: extracted,          // includes bureaus with names/addresses/employers
+      underwrite: globalUnderwrite,
+      bureaus: extracted.bureaus, // convenience duplication
       outputs: {
-        fundable: uw.fundable,
-        banner_estimate: uw.lite_banner_funding,
-        negative_accounts: uw.metrics.negative_accounts,
-        negatives_count: uw.metrics.negative_accounts,
-        late_payment_events: uw.metrics.late_payment_events
+        fundable: globalUnderwrite.fundable,
+        banner_estimate: globalUnderwrite.lite_banner_funding,
+        negative_accounts: globalUnderwrite.metrics.negative_accounts,
+        negatives_count: globalUnderwrite.metrics.negative_accounts,
+        late_payment_events: globalUnderwrite.metrics.late_payment_events
       },
       redirect
     });
