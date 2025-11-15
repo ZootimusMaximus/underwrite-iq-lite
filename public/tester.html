@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>UnderwriteIQ Stress Test Dashboard</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: #fff;
+    padding: 20px;
+  }
+  h1 { font-size: 22px; }
+  .panel {
+    background: #1a1a1a;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+  }
+  #dropzone {
+    border: 2px dashed #4CAF50;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    margin-bottom: 20px;
+  }
+  pre {
+    background: #222;
+    padding: 10px;
+    border-radius: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 12px;
+  }
+  .file-result {
+    border: 1px solid #333;
+    background: #161616;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+  }
+  .fail { border-color: #ff4d4d; }
+  .success { border-color: #4CAF50; }
+</style>
+</head>
+<body>
+
+<h1>UnderwriteIQ – Mass Stress Tester</h1>
+<p>Upload 1 or 100 PDFs. Each hits <code>/api/lite/parse-report</code> and prints results.</p>
+
+<div id="dropzone">Click or Drag Multiple PDFs Here</div>
+<input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
+
+<div class="panel">
+  <h3>Progress</h3>
+  <pre id="progress">Waiting…</pre>
+</div>
+
+<div class="panel">
+  <h3>Results</h3>
+  <div id="results"></div>
+</div>
+
+<div class="panel">
+  <h3>Failures</h3>
+  <div id="fails"></div>
+</div>
+
+<button id="exportBtn">Export All Data (JSON)</button>
+
+<script>
+const dropzone = document.getElementById("dropzone");
+const fileInput = document.getElementById("fileInput");
+const progress = document.getElementById("progress");
+const resultsDiv = document.getElementById("results");
+const failsDiv = document.getElementById("fails");
+const exportBtn = document.getElementById("exportBtn");
+
+let allResults = [];
+
+dropzone.onclick = () => fileInput.click();
+fileInput.onchange = () => handleFiles(fileInput.files);
+
+dropzone.addEventListener("dragover", e => {
+  e.preventDefault();
+  dropzone.style.background = "rgba(255,255,255,0.1)";
+});
+dropzone.addEventListener("dragleave", () => {
+  dropzone.style.background = "transparent";
+});
+dropzone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropzone.style.background = "transparent";
+  handleFiles(e.dataTransfer.files);
+});
+
+async function handleFiles(files) {
+  if (!files.length) return;
+
+  allResults = [];
+  resultsDiv.innerHTML = "";
+  failsDiv.innerHTML = "";
+  progress.innerText = "Starting…";
+
+  let completed = 0;
+  const total = files.length;
+
+  for (const file of files) {
+    await processFile(file);
+    completed++;
+    progress.innerText = `Processed ${completed} / ${total}`;
+  }
+
+  progress.innerText = `DONE — ${total} files tested`;
+}
+
+async function processFile(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  let json = null;
+
+  try {
+    const res = await fetch("/api/lite/parse-report", {
+      method: "POST",
+      body: formData
+    });
+    json = await res.json();
+  } catch (err) {
+    json = { error: true, message: err.toString() };
+  }
+
+  allResults.push({ filename: file.name, result: json });
+
+  const div = document.createElement("div");
+  div.className = "file-result " + (json?.ok ? "success" : "fail");
+
+  div.innerHTML = `
+    <strong>${file.name}</strong><br>
+    <pre>${JSON.stringify(json, null, 2)}</pre>
+  `;
+
+  if (json?.ok) resultsDiv.appendChild(div);
+  else failsDiv.appendChild(div);
+}
+
+exportBtn.onclick = () => {
+  const blob = new Blob([JSON.stringify(allResults, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = "underwriteiq-test-results.json";
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
+</script>
+
+</body>
+</html>
