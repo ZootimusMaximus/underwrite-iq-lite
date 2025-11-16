@@ -103,61 +103,82 @@ Rules:
 - Never include commentary or markdown.
 `;
 
-// -----------------------------------------------
-// JSON Extraction Helpers
-// -----------------------------------------------
+// =====================================================
+// 🆕 PART 1 FIX — MULTI-LINE JSON CLEANER
+// =====================================================
+function normalizeLLMOutput(str) {
+  return str
+    .replace(/\r/g, "")
+    .replace(/\t+/g, " ")
+    .replace(/^\s+|\s+$/g, "")
+    .replace(/```json|```/gi, "");
+}
+
+// =====================================================
+// 🆕 PART 2 FIX — NEW JSON EXTRACTOR
+// =====================================================
 function extractJsonStringFromResponse(json) {
-  // New Responses API: top-level output_text
+  // 1. Direct output_text
   if (json.output_text && typeof json.output_text === "string") {
-    const trimmed = json.output_text.trim();
-    if (trimmed) return trimmed;
+    return json.output_text.trim();
   }
 
-  // New Responses API: output[] blocks
+  // 2. Responses API — output[]
   if (Array.isArray(json.output)) {
     for (const msg of json.output) {
       if (!msg || !Array.isArray(msg.content)) continue;
-      for (const chunk of msg.content) {
+      for (const block of msg.content) {
         if (
-          (chunk.type === "output_text" || chunk.type === "summary_text") &&
-          typeof chunk.text === "string"
+          (block.type === "output_text" || block.type === "summary_text") &&
+          typeof block.text === "string"
         ) {
-          const trimmed = chunk.text.trim();
-          if (trimmed) return trimmed;
+          return block.text.trim();
         }
       }
     }
   }
 
-  // Defensive: legacy chat-style
+  // 3. Legacy chat format
   if (
     json.choices &&
     json.choices[0] &&
     json.choices[0].message &&
     typeof json.choices[0].message.content === "string"
   ) {
-    const trimmed = json.choices[0].message.content.trim();
-    if (trimmed) return trimmed;
+    return json.choices[0].message.content.trim();
   }
 
   return null;
 }
 
+// =====================================================
+// 🆕 PART 3 FIX — NEW JSON REPAIR PARSER
+// =====================================================
 function tryParseJsonWithRepair(raw) {
-  try {
-    return JSON.parse(raw);
-  } catch (_) {}
-
-  const first = raw.indexOf("{");
-  const last = raw.lastIndexOf("}");
-  if (first !== -1 && last !== -1 && last > first) {
-    const sliced = raw.slice(first, last + 1);
-    try {
-      return JSON.parse(sliced);
-    } catch (_) {}
+  if (!raw || typeof raw !== "string") {
+    throw new Error("No raw JSON text to parse.");
   }
 
-  throw new Error("JSON parse failed. Preview: " + raw.slice(0, 200));
+  const cleaned = raw
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
+
+  const first = cleaned.indexOf("{");
+  const last = cleaned.lastIndexOf("}");
+
+  if (first === -1 || last === -1 || last <= first) {
+    throw new Error("Could not locate JSON object in model output.");
+  }
+
+  const sliced = cleaned.substring(first, last + 1);
+
+  try {
+    return JSON.parse(sliced);
+  } catch (err) {
+    console.error("JSON REPAIR FAILED. Preview:", sliced.slice(0, 200));
+    throw new Error("JSON parse failed (after repair): " + err.message);
+  }
 }
 
 // -----------------------------------------------
@@ -191,7 +212,7 @@ function normalizeBureau(b) {
 }
 
 // -----------------------------------------------
-// Single OpenAI Call (Responses API)
+// Single LLM Call — Responses API (patched)
 // -----------------------------------------------
 async function callOpenAIOnce(text) {
   const key = process.env.UNDERWRITE_IQ_VISION_KEY;
@@ -235,7 +256,9 @@ async function callOpenAIOnce(text) {
     throw new Error("LLM returned no output_text.");
   }
 
-  return tryParseJsonWithRepair(raw);
+  // 🆕 CLEAN + REPAIR
+  const cleanedRaw = normalizeLLMOutput(raw);
+  return tryParseJsonWithRepair(cleanedRaw);
 }
 
 // -----------------------------------------------
@@ -249,13 +272,12 @@ async function runCreditTextLLM(text) {
       return await callOpenAIOnce(text);
     } catch (err) {
       lastError = err;
-      const msg = String(err || "");
-      console.error(`UnderwriteIQ LLM attempt ${i} failed:`, msg);
+      console.error(`UnderwriteIQ LLM attempt ${i} failed:`, String(err));
 
       if (
-        msg.includes("LLM HTTP error") ||
-        msg.includes("LLM refusal") ||
-        msg.includes("Missing UNDERWRITE_IQ_VISION_KEY")
+        String(err).includes("LLM HTTP error") ||
+        String(err).includes("LLM refusal") ||
+        String(err).includes("Missing UNDERWRITE_IQ_VISION_KEY")
       ) {
         break;
       }
@@ -292,6 +314,9 @@ function monthsSince(dateStr) {
   return yearsDiff * 12 + monthsDiff;
 }
 
+// ===============================================================
+// PRO UNDERWRITING ENGINE (continues in second half)
+// ===============================================================
 // ===============================================================
 // PRO UNDERWRITING ENGINE (Per Bureau + Aggregate)
 // ===============================================================
@@ -432,7 +457,6 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
 
   let scale = 1;
   if (fundableCount === 1) {
-    // Your rule: if only one bureau is fundable, divide by 3
     scale = 1 / 3;
   }
 
@@ -573,16 +597,14 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     lite_banner_funding: liteBannerFunding
   };
 }
+
 // ============================================================================
 // SUGGESTION ENGINE (PRO VERSION)
-// Website summary + Email summary + Action list + AU logic
 // ============================================================================
 function buildSuggestions(bureaus, uw) {
-  // Extract primary bureau metrics
   const primary = uw.primary_bureau;
   const p = uw.metrics;
 
-  // Build simple text lines
   const score = p.score;
   const util = p.utilization_pct;
   const negatives = p.negative_accounts;
@@ -592,36 +614,24 @@ function buildSuggestions(bureaus, uw) {
   const actions = [];
   const au_actions = [];
 
-  // ----------------------------
-  // UTILIZATION FIX
-  // ----------------------------
   if (util > 30) {
     actions.push(
       `Your utilization is ${util}%. Reducing it to 3–10% will dramatically improve your funding limits.`
     );
   }
 
-  // ----------------------------
-  // NEGATIVE ACCOUNT FIXES
-  // ----------------------------
   if (negatives > 0) {
     actions.push(
       `You have ${negatives} negative accounts. Removing or repairing these increases approval odds.`
     );
   }
 
-  // ----------------------------
-  // INQUIRY FIXES
-  // ----------------------------
   if (inquiries > 0) {
     actions.push(
       `You have ${inquiries} total inquiries. Reducing inquiries before applying boosts approval chances.`
     );
   }
 
-  // ----------------------------
-  // AU (Authorized User) Detection
-  // ----------------------------
   const allBureaus = [
     bureaus.experian.tradelines,
     bureaus.equifax.tradelines,
@@ -636,7 +646,6 @@ function buildSuggestions(bureaus, uw) {
       const lim = Number(tl.limit || 1);
       const ratio = (bal / lim) * 100;
 
-      // High-util AU
       if (ratio > 30) {
         au_actions.push(
           `Authorized user account "${tl.creditor}" is ${ratio.toFixed(
@@ -645,7 +654,6 @@ function buildSuggestions(bureaus, uw) {
         );
       }
 
-      // Negative AU tradeline
       const st = String(tl.status || "").toLowerCase();
       if (st.includes("charge") || st.includes("collection") || st.includes("derog")) {
         au_actions.push(
@@ -655,27 +663,18 @@ function buildSuggestions(bureaus, uw) {
     }
   });
 
-  // ----------------------------
-  // THIN FILE DETECTION
-  // ----------------------------
   if (uw.optimization.needs_file_buildout) {
     actions.push(
       `Your file is thin. Adding 1–2 primary accounts (or strategic authorized users) will boost credibility.`
     );
   }
 
-  // ----------------------------
-  // RECOMMEND LIMIT INCREASE (IF SAFE)
-  // ----------------------------
   if (negatives === 0 && inquiries === 0 && util <= 30) {
     actions.push(
       "You are positioned for a credit limit increase. Consider requesting CLIs after your utilization is reduced."
     );
   }
 
-  // ----------------------------
-  // Website Summary
-  // ----------------------------
   const webSummary = (() => {
     let s = `Your strongest bureau is ${primary.toUpperCase()}. `;
 
@@ -688,9 +687,6 @@ function buildSuggestions(bureaus, uw) {
     return s;
   })();
 
-  // ----------------------------
-  // Email Deep-Dive Summary
-  // ----------------------------
   const emailSummary = `
 Your strongest funding bureau is **${primary.toUpperCase()}**.
 
@@ -713,13 +709,10 @@ We recommend cleaning up utilization, inquiries, and any negative items before r
 }
 
 // ============================================================================
-// MAIN HANDLER — FULL PIPELINE
+// MAIN HANDLER
 // ============================================================================
 module.exports = async function handler(req, res) {
   try {
-    // --------------------------------------------------------
-    // CORS + HTTP METHOD
-    // --------------------------------------------------------
     if (req.method === "OPTIONS") {
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -733,9 +726,6 @@ module.exports = async function handler(req, res) {
       return res.status(405).json({ ok: false, msg: "Method not allowed" });
     }
 
-    // --------------------------------------------------------
-    // PARSE PDF UPLOAD
-    // --------------------------------------------------------
     const form = formidable({
       multiples: false,
       keepExtensions: true,
@@ -763,14 +753,8 @@ module.exports = async function handler(req, res) {
       return res.status(200).json(buildFallbackResult("Not enough text extracted"));
     }
 
-    // --------------------------------------------------------
-    // Extract business age (optional)
-    // --------------------------------------------------------
     const businessAgeMonths = getNumberField(fields, "businessAgeMonths");
 
-    // --------------------------------------------------------
-    // LLM Extraction
-    // --------------------------------------------------------
     let extracted;
     try {
       if (!text || text.trim().length < 500) {
@@ -795,18 +779,12 @@ module.exports = async function handler(req, res) {
         .json(buildFallbackResult("Analyzer crashed: " + String(err)));
     }
 
-    // --------------------------------------------------------
-    // Normalize bureaus
-    // --------------------------------------------------------
     const bureaus = {
       experian: normalizeBureau(extracted?.bureaus?.experian),
       equifax: normalizeBureau(extracted?.bureaus?.equifax),
       transunion: normalizeBureau(extracted?.bureaus?.transunion)
     };
 
-    // --------------------------------------------------------
-    // Underwriting
-    // --------------------------------------------------------
     let uw;
     try {
       uw = computeUnderwrite(bureaus, businessAgeMonths);
@@ -817,14 +795,8 @@ module.exports = async function handler(req, res) {
         .json(buildFallbackResult("Underwriting engine crashed"));
     }
 
-    // --------------------------------------------------------
-    // Suggestions
-    // --------------------------------------------------------
     const suggestions = buildSuggestions(bureaus, uw);
 
-    // --------------------------------------------------------
-    // Redirect logic (kept lightweight)
-    // --------------------------------------------------------
     const redirect = {
       url: uw.fundable
         ? "https://fundhub.ai/confirmation-page-296844-430611"
@@ -838,9 +810,6 @@ module.exports = async function handler(req, res) {
       }
     };
 
-    // --------------------------------------------------------
-    // SUCCESS — RETURN EVERYTHING
-    // --------------------------------------------------------
     return res.status(200).json({
       ok: true,
       bureaus,
