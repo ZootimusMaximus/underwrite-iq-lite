@@ -218,7 +218,7 @@ function tryParseJsonWithRepair(raw) {
     }
   );
 
-  // 4. Quote YYYY-MM date-like fields
+  // 4. Quote YYYY-MM or YYYY-MM-DD date-like fields
   fixed = fixed.replace(/:\s*(\d{4}-\d{2}(?:-\d{2})?)/g, ':"$1"');
 
   // 5. Convert "key = value" into "key: value"
@@ -229,6 +229,39 @@ function tryParseJsonWithRepair(raw) {
   } catch (err) {
     console.error("JSON REPAIR FAILED. Preview:", fixed.slice(0, 200));
     throw new Error("JSON parse failed (after repair): " + err.message);
+  }
+}
+
+// =====================================================
+// 🆕 PART 4 — DEEP SANITIZER (OPTION D)
+// =====================================================
+function deepSanitizeJSON(data) {
+  if (Array.isArray(data)) {
+    return data.map(deepSanitizeJSON);
+  } else if (data && typeof data === "object") {
+    const cleaned = {};
+    for (const key in data) {
+      const val = data[key];
+      const k = key.trim();
+      cleaned[k] = deepSanitizeJSON(val);
+    }
+    return cleaned;
+  } else if (typeof data === "string") {
+    const trimmed = data.trim();
+    const lower = trimmed.toLowerCase();
+
+    if (["null", "undefined", "none", "nan"].includes(lower)) return null;
+    if (lower === "true") return true;
+    if (lower === "false") return false;
+
+    // Numeric string → number
+    if (!isNaN(trimmed) && trimmed !== "") {
+      return Number(trimmed);
+    }
+
+    return trimmed;
+  } else {
+    return data;
   }
 }
 
@@ -657,23 +690,23 @@ function buildSuggestions(bureaus, uw) {
   const actions = [];
   const au_actions = [];
 
-// Utilization guidance (only if we have a real number)
-if (typeof util === "number" && Number.isFinite(util)) {
-  if (util > 30) {
-    actions.push(
-      `Your utilization is about ${util}%. To maximize approvals, bring each card down to the 3–10% range before applying.`
-    );
+  // Utilization guidance (only if we have a real number)
+  if (typeof util === "number" && Number.isFinite(util)) {
+    if (util > 30) {
+      actions.push(
+        `Your utilization is about ${util}%. To maximize approvals, bring each card down to the 3–10% range before applying.`
+      );
+    } else {
+      actions.push(
+        `Your utilization is in a solid range. Keeping each card between 3–10% will help you qualify for higher limits.`
+      );
+    }
   } else {
+    // We couldn't confidently read utilization
     actions.push(
-      `Your utilization is in a solid range. Keeping each card between 3–10% will help you qualify for higher limits.`
+      `We couldn't accurately read utilization from this PDF, but the goal is simple: keep each card between 3–10% before you apply for new funding.`
     );
   }
-} else {
-  // We couldn't confidently read utilization
-  actions.push(
-    `We couldn't accurately read utilization from this PDF, but the goal is simple: keep each card between 3–10% before you apply for new funding.`
-  );
-}
 
   if (negatives > 0) {
     actions.push(
@@ -724,7 +757,13 @@ if (typeof util === "number" && Number.isFinite(util)) {
     );
   }
 
-  if (negatives === 0 && inquiries === 0 && util <= 30) {
+  if (
+    negatives === 0 &&
+    inquiries === 0 &&
+    typeof util === "number" &&
+    Number.isFinite(util) &&
+    util <= 30
+  ) {
     actions.push(
       "You are positioned for a credit limit increase. Consider requesting CLIs after your utilization is reduced."
     );
@@ -809,17 +848,22 @@ module.exports = async function handler(req, res) {
 
     const businessAgeMonths = getNumberField(fields, "businessAgeMonths");
 
+    let extractedRaw;
     let extracted;
     try {
       if (!text || text.trim().length < 500) {
         return res.status(200).json(buildFallbackResult("Not enough text extracted."));
       }
 
-      extracted = await runCreditTextLLM(text);
+      // LLM + repair
+      extractedRaw = await runCreditTextLLM(text);
 
-      if (!extracted || typeof extracted !== "object") {
+      if (!extractedRaw || typeof extractedRaw !== "object") {
         return res.status(200).json(buildFallbackResult("Analyzer returned invalid JSON"));
       }
+
+      // 🆕 DEEP SANITIZE HERE
+      extracted = deepSanitizeJSON(extractedRaw);
 
       if (!("bureaus" in extracted)) {
         return res
