@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Internal Systems Monitor</title>
+<title>Internal System Monitor</title>
 
 <style>
 /* ======================= GLOBAL ======================= */
@@ -19,7 +19,7 @@ body {
   overflow-x: hidden;
 }
 
-/* PUT MATRIX RAIN BEHIND EVERYTHING */
+/* Matrix canvas behind everything */
 #matrix {
   position: fixed;
   top: 0;
@@ -29,7 +29,7 @@ body {
   z-index: -1;
 }
 
-/* CRT scanlines (subtle) */
+/* CRT scanlines */
 body::after {
   content: "";
   position: fixed;
@@ -47,7 +47,6 @@ body::after {
 }
 
 /* ======================= UI ======================= */
-
 #ui {
   position: relative;
   z-index: 10;
@@ -57,13 +56,13 @@ body::after {
 h1 {
   color: #6fffa3;
   letter-spacing: 2px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 /* Dropzone */
 #dropzone {
   border: 1px dashed rgba(0,255,65,0.4);
-  padding: 40px;
+  padding: 30px;
   text-align: center;
   cursor: pointer;
   border-radius: 6px;
@@ -72,21 +71,30 @@ h1 {
 }
 
 /* Panels */
+.panel {
+  margin-bottom: 20px;
+  background: rgba(0,0,0,0.55);
+  padding: 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,255,65,0.25);
+}
+
 .panel h3 {
   margin: 0 0 10px 0;
 }
-.panel { margin-bottom: 25px; }
 
 pre {
-  background: rgba(0,0,0,0.4);
-  padding: 12px;
+  background: rgba(0,0,0,0.5);
+  padding: 10px;
   border-radius: 6px;
-  max-height: 250px;
+  max-height: 260px;
   overflow-y: auto;
+  font-size: 12px;
 }
 
+/* File result blocks */
 .file-result {
-  padding: 10px;
+  padding: 8px;
   margin-bottom: 10px;
   border-radius: 6px;
   border: 1px solid rgba(0,255,65,0.3);
@@ -94,6 +102,12 @@ pre {
 
 .success { border-color: rgba(0,255,65,0.6); }
 .fail    { border-color: rgba(255,60,60,0.6); }
+
+.meta-line {
+  font-size: 11px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
 
 #exportBtn {
   padding: 8px 14px;
@@ -125,6 +139,11 @@ pre {
   </div>
 
   <div class="panel">
+    <h3>Layer A — Website Summary Preview</h3>
+    <pre id="summaryA">Upload a report to preview the on-page summary…</pre>
+  </div>
+
+  <div class="panel">
     <h3>Success</h3>
     <div id="results"></div>
   </div>
@@ -138,19 +157,21 @@ pre {
 </div>
 
 <script>
-/* ======================= MATRIX RAIN (clean version) ======================= */
+/* ======================= MATRIX RAIN ======================= */
 const canvas = document.getElementById("matrix");
 const ctx = canvas.getContext("2d");
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+function resizeMatrix() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeMatrix();
+window.addEventListener("resize", resizeMatrix);
 
 const chars = "アカサタナハマヤラワ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const charset = chars.split("");
-
 const fontSize = 16;
 let columns = Math.floor(canvas.width / fontSize);
-
 let drops = Array.from({ length: columns }, () => 1);
 
 function drawMatrix() {
@@ -168,17 +189,9 @@ function drawMatrix() {
     drops[i]++;
   });
 }
-
 setInterval(drawMatrix, 50);
 
-window.onresize = () => {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-  columns = Math.floor(canvas.width / fontSize);
-  drops = Array.from({ length: columns }, () => 1);
-};
-
-/* ======================= UPLOADER ======================= */
+/* ======================= TESTER LOGIC ======================= */
 
 const dropzone = document.getElementById("dropzone");
 const fileInput = document.getElementById("fileInput");
@@ -186,23 +199,120 @@ const progress = document.getElementById("progress");
 const resultsDiv = document.getElementById("results");
 const failsDiv = document.getElementById("fails");
 const exportBtn = document.getElementById("exportBtn");
+const summaryA = document.getElementById("summaryA");
 
 let allResults = [];
 
 dropzone.onclick = () => fileInput.click();
 fileInput.onchange = () => handleFiles(fileInput.files);
 
-dropzone.addEventListener("dragover", e => { e.preventDefault(); });
+dropzone.addEventListener("dragover", e => {
+  e.preventDefault();
+});
 dropzone.addEventListener("drop", e => {
   e.preventDefault();
   handleFiles(e.dataTransfer.files);
 });
 
+// ---------- Layer A formatter (website copy) ----------
+function buildLayerASummary(json) {
+  if (!json || !json.ok || !json.underwrite) {
+    return "We analyzed your file, but the analyzer returned a fallback result. This would show the manual-review message on the website.";
+  }
+
+  const uw = json.underwrite;
+  const metrics = uw.metrics || {};
+  const inquiries = (metrics.inquiries && metrics.inquiries.total) || 0;
+
+  const bureauKey = uw.primary_bureau || "your strongest bureau";
+  const bureau =
+    typeof bureauKey === "string"
+      ? bureauKey.toUpperCase()
+      : "YOUR STRONGEST BUREAU";
+
+  const score = metrics.score;
+  const util = metrics.utilization_pct;
+  const negatives = metrics.negative_accounts ?? 0;
+
+  const totalFunding =
+    (uw.totals && uw.totals.total_combined_funding) ||
+    uw.lite_banner_funding ||
+    null;
+
+  const sentences = [];
+
+  // 1) Opening: what we did + strongest bureau
+  if (typeof score === "number" && Number.isFinite(score)) {
+    sentences.push(
+      `We scanned your full credit profile and your strongest funding bureau is ${bureau} with a score around ${score}.`
+    );
+  } else {
+    sentences.push(
+      `We scanned your full credit profile and identified ${bureau} as your strongest funding bureau.`
+    );
+  }
+
+  // 2) Utilization
+  if (typeof util === "number" && Number.isFinite(util)) {
+    sentences.push(
+      `Your overall utilization is about ${util}%. To maximize approvals, each card should land in the 3–10% range before you apply for new funding.`
+    );
+  } else {
+    sentences.push(
+      `We couldn’t cleanly read utilization from this PDF, but the target is simple: keep each card in the 3–10% range before applying.`
+    );
+  }
+
+  // 3) Negatives + inquiries
+  if (negatives > 0 || inquiries > 0) {
+    const negPart =
+      negatives > 0
+        ? `${negatives} negative account${negatives > 1 ? "s" : ""}`
+        : null;
+    const inqPart =
+      inquiries > 0 ? `${inquiries} recent inquir${inquiries === 1 ? "y" : "ies"}` : null;
+
+    let combo = [];
+    if (negPart) combo.push(negPart);
+    if (inqPart) combo.push(inqPart);
+
+    sentences.push(
+      `Right now, ${combo.join(" and ")} are suppressing your approvals. Cleaning these up is the fastest way to unlock better limits.`
+    );
+  } else {
+    sentences.push(
+      `You have a clean file with no major negatives or inquiry drag, which is ideal for high-limit approvals.`
+    );
+  }
+
+  // 4) Funding potential
+  if (uw.fundable && totalFunding && totalFunding > 0) {
+    const formatted = Math.round(totalFunding).toLocaleString();
+    sentences.push(
+      `Based on this profile, it’s realistic to target roughly $${formatted} in combined personal and business limits once you sequence applications correctly.`
+    );
+  } else {
+    sentences.push(
+      `You’re close to fundable — if you follow the clean-up steps we outline, you can move into approval range and then stack funding in a structured sequence.`
+    );
+  }
+
+  // 5) CTA-ish line
+  sentences.push(
+    `On the next steps we’ll show you exactly what to fix first so you can move into maximum funding range as quickly as possible.`
+  );
+
+  return sentences.join(" ");
+}
+
 async function handleFiles(files) {
+  if (!files || !files.length) return;
+
   allResults = [];
   resultsDiv.innerHTML = "";
   failsDiv.innerHTML = "";
   progress.innerText = "Starting…";
+  summaryA.textContent = "Waiting for first successful result…";
 
   const total = files.length;
   let done = 0;
@@ -210,30 +320,11 @@ async function handleFiles(files) {
   for (const file of files) {
     await processFile(file);
     done++;
-    const pct = ((done / total) * 100).toFixed(0);
+    const pct = ((done / total) * 100).toFixed(1);
     progress.innerText = `Processed ${done} / ${total} (${pct}%)`;
   }
 
   progress.innerText = `DONE – ${total} files tested`;
-}
-
-function buildStatusLine(json) {
-  if (!json) return "STATUS: ERROR (no response)";
-  if (!json.ok) return "STATUS: ERROR (ok=false)";
-
-  if (json.fallback || json.manual_review) {
-    return "STATUS: FALLBACK / MANUAL REVIEW";
-  }
-
-  if (json.underwrite && typeof json.underwrite.fundable === "boolean") {
-    return `STATUS: PARSED — FUNDABLE=${json.underwrite.fundable ? "YES" : "NO"}`;
-  }
-
-  if (json.outputs && typeof json.outputs.fundable === "boolean") {
-    return `STATUS: PARSED — FUNDABLE=${json.outputs.fundable ? "YES" : "NO"}`;
-  }
-
-  return "STATUS: PARSED";
 }
 
 async function processFile(file) {
@@ -241,7 +332,6 @@ async function processFile(file) {
   formData.append("file", file);
 
   let json;
-
   try {
     const res = await fetch("/api/lite/parse-report", {
       method: "POST",
@@ -252,38 +342,34 @@ async function processFile(file) {
     json = { ok: false, error: true, message: err.toString() };
   }
 
+  // Track all
+  allResults.push({ filename: file.name, size: file.size, result: json });
+
   const div = document.createElement("div");
   div.className = "file-result " + (json.ok ? "success" : "fail");
 
-  const sizeKB = (file.size / 1024).toFixed(1);
-  const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-  const sizeLabel = file.size < 1024 * 1024 ? `${sizeKB} KB` : `${sizeMB} MB`;
-
-  let sizeBadge = "🟢";
-  if (file.size < 50000) sizeBadge = "🔴";           // very small, probably incomplete
-  else if (file.size > 7000000) sizeBadge = "🔴";    // huge, likely image-only
-  else if (file.size > 3000000) sizeBadge = "🟡";    // large, scanned/OCR
-
-  const statusLine = buildStatusLine(json);
+  const sizeKb = (file.size / 1024).toFixed(1);
 
   div.innerHTML = `
-    <strong>${file.name}</strong>
-    <span style="opacity:0.7; font-size:12px;">
-      — ${sizeBadge} ${sizeLabel}
-    </span>
-    <br>
-    <span style="font-size:12px; opacity:0.85;">${statusLine}</span>
+    <div class="meta-line">
+      FILE: ${file.name} — ${sizeKb} KB
+    </div>
     <pre>${JSON.stringify(json, null, 2)}</pre>
   `;
 
-  if (json.ok) resultsDiv.appendChild(div);
-  else failsDiv.appendChild(div);
-
-  allResults.push({ filename: file.name, size: file.size, status: statusLine, result: json });
+  if (json.ok) {
+    resultsDiv.appendChild(div);
+    // Update Layer A summary for the most recent successful file
+    summaryA.textContent = buildLayerASummary(json);
+  } else {
+    failsDiv.appendChild(div);
+  }
 }
 
 exportBtn.onclick = () => {
-  const blob = new Blob([JSON.stringify(allResults, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(allResults, null, 2)], {
+    type: "application/json"
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
