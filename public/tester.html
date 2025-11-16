@@ -26,7 +26,7 @@ body {
   left: 0;
   width: 100vw;
   height: 100vh;
-  z-index: -1;   /* FIX */
+  z-index: -1;
 }
 
 /* CRT scanlines (subtle) */
@@ -50,7 +50,7 @@ body::after {
 
 #ui {
   position: relative;
-  z-index: 10; /* ABOVE canvas */
+  z-index: 10;
   padding: 25px;
 }
 
@@ -210,10 +210,30 @@ async function handleFiles(files) {
   for (const file of files) {
     await processFile(file);
     done++;
-    progress.innerText = `Processed ${done} / ${total}`;
+    const pct = ((done / total) * 100).toFixed(0);
+    progress.innerText = `Processed ${done} / ${total} (${pct}%)`;
   }
 
   progress.innerText = `DONE – ${total} files tested`;
+}
+
+function buildStatusLine(json) {
+  if (!json) return "STATUS: ERROR (no response)";
+  if (!json.ok) return "STATUS: ERROR (ok=false)";
+
+  if (json.fallback || json.manual_review) {
+    return "STATUS: FALLBACK / MANUAL REVIEW";
+  }
+
+  if (json.underwrite && typeof json.underwrite.fundable === "boolean") {
+    return `STATUS: PARSED — FUNDABLE=${json.underwrite.fundable ? "YES" : "NO"}`;
+  }
+
+  if (json.outputs && typeof json.outputs.fundable === "boolean") {
+    return `STATUS: PARSED — FUNDABLE=${json.outputs.fundable ? "YES" : "NO"}`;
+  }
+
+  return "STATUS: PARSED";
 }
 
 async function processFile(file) {
@@ -234,12 +254,32 @@ async function processFile(file) {
 
   const div = document.createElement("div");
   div.className = "file-result " + (json.ok ? "success" : "fail");
-  div.innerHTML = `<strong>${file.name}</strong><pre>${JSON.stringify(json, null, 2)}</pre>`;
+
+  const sizeKB = (file.size / 1024).toFixed(1);
+  const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+  const sizeLabel = file.size < 1024 * 1024 ? `${sizeKB} KB` : `${sizeMB} MB`;
+
+  let sizeBadge = "🟢";
+  if (file.size < 50000) sizeBadge = "🔴";           // very small, probably incomplete
+  else if (file.size > 7000000) sizeBadge = "🔴";    // huge, likely image-only
+  else if (file.size > 3000000) sizeBadge = "🟡";    // large, scanned/OCR
+
+  const statusLine = buildStatusLine(json);
+
+  div.innerHTML = `
+    <strong>${file.name}</strong>
+    <span style="opacity:0.7; font-size:12px;">
+      — ${sizeBadge} ${sizeLabel}
+    </span>
+    <br>
+    <span style="font-size:12px; opacity:0.85;">${statusLine}</span>
+    <pre>${JSON.stringify(json, null, 2)}</pre>
+  `;
 
   if (json.ok) resultsDiv.appendChild(div);
   else failsDiv.appendChild(div);
 
-  allResults.push({ filename: file.name, result: json });
+  allResults.push({ filename: file.name, size: file.size, status: statusLine, result: json });
 }
 
 exportBtn.onclick = () => {
