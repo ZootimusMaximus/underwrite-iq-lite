@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>UnderwriteIQ — Matrix Test Harness</title>
+
+<style>
+/* -------------------------
+   BASE STYLING (Matrix Feel)
+--------------------------*/
+body {
+  background: #000;
+  font-family: Consolas, Menlo, monospace;
+  color: #00ff9c;
+  margin: 0;
+  padding: 40px;
+}
+
+h1 {
+  font-size: 26px;
+  text-align: center;
+  margin-bottom: 30px;
+  color: #00ffea;
+  letter-spacing: 1px;
+}
+
+.panel {
+  background: rgba(0, 20, 0, 0.6);
+  border: 1px solid #00ff9c50;
+  box-shadow: 0 0 10px #00ff9c33;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+}
+
+/* -------------------------
+   DRAG & DROP ZONE
+--------------------------*/
+#dropzone {
+  border: 2px dashed #00ff9c;
+  padding: 50px;
+  text-align: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: 0.3s;
+  background: rgba(0, 40, 0, 0.3);
+}
+
+#dropzone:hover {
+  background: rgba(0, 80, 0, 0.3);
+  box-shadow: 0 0 15px #00ff9c77;
+}
+
+/* -------------------------
+   RESULTS + FAILS
+--------------------------*/
+.file-result {
+  background: rgba(0, 40, 0, 0.4);
+  border: 1px solid #00ff9c44;
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+}
+
+.success { border-color: #00ff9c; }
+.fail { border-color: #ff0066; }
+
+/* -------------------------
+   PROGRESS + MATRIX ANIMATION
+--------------------------*/
+#progress {
+  background: #001900;
+  padding: 10px;
+  border-radius: 6px;
+  min-height: 30px;
+  font-size: 14px;
+  color: #00ff9c;
+  border: 1px solid #00ff9c44;
+}
+
+#loaderBar {
+  width: 0%;
+  height: 6px;
+  background: #00ff9c;
+  box-shadow: 0 0 10px #00ff9c;
+  transition: width 0.2s;
+  margin-top: 10px;
+  border-radius: 3px;
+}
+
+/* -------------------------
+   MATRIX RAIN BACKGROUND (LIGHT)
+--------------------------*/
+@keyframes rain {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 2000px; }
+}
+.matrix-bg {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  background-image: url('data:image/svg+xml;utf8,\
+    <svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">\
+      <text x="0" y="20" fill="#00ff9c22" font-size="20">0 1 0 1 1 0 1 0 1</text>\
+      <text x="0" y="60" fill="#00ff9c22" font-size="20">1 1 0 0 1 0 1 1 0</text>\
+      <text x="0" y="100" fill="#00ff9c22" font-size="20">1 0 1 0 0 1 1 0 1</text>\
+    </svg>');
+  animation: rain 20s linear infinite;
+  opacity: 0.15;
+}
+
+/* Export button */
+#exportBtn {
+  background: #002f00;
+  border: 1px solid #00ff9c;
+  padding: 10px 20px;
+  color: #00ff9c;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 14px;
+}
+#exportBtn:hover {
+  background: #004f00;
+}
+</style>
+</head>
+
+<body>
+
+<div class="matrix-bg"></div>
+
+<h1>UNDERWRITEIQ — INTERNAL MATRIX TEST HARNESS</h1>
+
+<div id="dropzone">CLICK or DRAG PDF(s)</div>
+<input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
+
+<div class="panel">
+  <h3>Progress</h3>
+  <div id="progress">Waiting…</div>
+  <div id="loaderBar"></div>
+</div>
+
+<div class="panel">
+  <h3>Success Results</h3>
+  <div id="results"></div>
+</div>
+
+<div class="panel">
+  <h3>Failed Files</h3>
+  <div id="fails"></div>
+</div>
+
+<button id="exportBtn">EXPORT JSON</button>
+
+
+<script>
+const fileInput = document.getElementById("fileInput");
+const dropzone = document.getElementById("dropzone");
+const resultsDiv = document.getElementById("results");
+const failsDiv = document.getElementById("fails");
+const progress = document.getElementById("progress");
+const loaderBar = document.getElementById("loaderBar");
+const exportBtn = document.getElementById("exportBtn");
+
+let allResults = [];
+
+dropzone.onclick = () => fileInput.click();
+fileInput.onchange = () => handleFiles(fileInput.files);
+
+dropzone.addEventListener("dragover", e => {
+  e.preventDefault();
+  dropzone.style.background = "rgba(0, 100, 0, 0.3)";
+});
+dropzone.addEventListener("dragleave", () => {
+  dropzone.style.background = "rgba(0, 40, 0, 0.3)";
+});
+dropzone.addEventListener("drop", e => {
+  e.preventDefault();
+  handleFiles(e.dataTransfer.files);
+});
+
+async function handleFiles(files) {
+  if (!files.length) return;
+
+  resultsDiv.innerHTML = "";
+  failsDiv.innerHTML = "";
+  allResults = [];
+  progress.innerText = "Starting…";
+
+  let completed = 0;
+  const total = files.length;
+
+  for (const file of files) {
+    await processFile(file);
+    completed++;
+    const pct = Math.floor((completed / total) * 100);
+    loaderBar.style.width = pct + "%";
+    progress.innerText = `Processing ${completed}/${total} — ${pct}%`;
+  }
+
+  progress.innerText = "✔ COMPLETE";
+}
+
+async function processFile(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+
+  let json;
+  try {
+    const res = await fetch("/api/lite/parse-report", {
+      method: "POST",
+      body: fd
+    });
+    json = await res.json();
+  } catch (err) {
+    json = { ok: false, error: err.toString() };
+  }
+
+  allResults.push({ filename: file.name, result: json });
+
+  const div = document.createElement("div");
+  div.className = "file-result " + (json.ok ? "success" : "fail");
+  div.innerHTML = `<strong>${file.name}</strong>\n<pre>${JSON.stringify(json, null, 2)}</pre>`;
+
+  if (json.ok) resultsDiv.appendChild(div);
+  else failsDiv.appendChild(div);
+}
+
+exportBtn.onclick = () => {
+  const blob = new Blob([JSON.stringify(allResults, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "underwriteiq-matrix-test-results.json";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+</script>
+
+</body>
+</html>
