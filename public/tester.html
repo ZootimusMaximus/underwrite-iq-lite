@@ -5,8 +5,7 @@
 <title>UnderwriteIQ – Matrix Internal Harness</title>
 
 <style>
-/* ======================= CRT + GLOBAL ======================= */
-
+/* ======================= GLOBAL ======================= */
 @font-face {
   font-family: "Matrix";
   src: local("Courier New"), monospace;
@@ -14,131 +13,110 @@
 
 body {
   margin: 0;
-  overflow: hidden;
+  font-family: Matrix, monospace;
   background: #000;
   color: #7dfc8a;
-  font-family: Matrix, monospace;
+  overflow-x: hidden;
 }
 
-/* CRT scanlines */
+/* PUT MATRIX RAIN BEHIND EVERYTHING */
+#matrix {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;   /* FIX */
+}
+
+/* CRT scanlines (subtle) */
 body::after {
   content: "";
-  pointer-events: none;
   position: fixed;
   inset: 0;
+  pointer-events: none;
   background: repeating-linear-gradient(
     to bottom,
-    rgba(0,0,0,0.15) 0px,
-    rgba(0,0,0,0.15) 2px,
+    rgba(0,0,0,0.17) 0px,
+    rgba(0,0,0,0.17) 2px,
     rgba(0,0,0,0.20) 3px
   );
+  z-index: 9999;
   mix-blend-mode: multiply;
-  z-index: 99999;
-}
-
-/* CRT flicker */
-@keyframes crtFlicker {
-  0% { opacity: 0.92; }
-  5% { opacity: 0.94; }
-  10% { opacity: 0.90; }
-  15% { opacity: 0.96; }
-  20% { opacity: 0.92; }
-  25% { opacity: 0.95; }
-  30% { opacity: 0.91; }
-  100% { opacity: 0.92; }
-}
-
-body {
-  animation: crtFlicker 0.8s infinite;
+  opacity: 0.35;
 }
 
 /* ======================= UI ======================= */
 
 #ui {
   position: relative;
-  z-index: 10;
+  z-index: 10; /* ABOVE canvas */
   padding: 25px;
 }
 
 h1 {
-  font-size: 28px;
-  margin-bottom: 15px;
   color: #6fffa3;
   letter-spacing: 2px;
-  text-shadow: 0 0 5px rgba(0,255,65,0.35);
+  margin-bottom: 20px;
 }
 
+/* Dropzone */
 #dropzone {
   border: 1px dashed rgba(0,255,65,0.4);
-  padding: 35px;
+  padding: 40px;
   text-align: center;
   cursor: pointer;
-  margin-bottom: 20px;
   border-radius: 6px;
-  background: rgba(0,0,0,0.25);
-  color: #7dfc8a;
-  transition: background 0.3s;
+  background: rgba(0,0,0,0.4);
+  margin-bottom: 20px;
 }
 
-#dropzone:hover {
-  background: rgba(0,255,65,0.05);
-}
-
+/* Panels */
 .panel h3 {
-  font-size: 14px;
-  margin-bottom: 6px;
-  text-transform: uppercase;
-  color: #6fffa3;
+  margin: 0 0 10px 0;
 }
-
-.panel {
-  margin-bottom: 25px;
-}
+.panel { margin-bottom: 25px; }
 
 pre {
-  font-size: 12px;
-  background: rgba(0,0,0,0.45);
-  padding: 10px;
+  background: rgba(0,0,0,0.4);
+  padding: 12px;
   border-radius: 6px;
-  max-height: 280px;
+  max-height: 250px;
   overflow-y: auto;
-  color: #9dfdb7;
 }
 
 .file-result {
-  margin-bottom: 12px;
   padding: 10px;
+  margin-bottom: 10px;
   border-radius: 6px;
-  border: 1px solid rgba(0,255,65,0.25);
-  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(0,255,65,0.3);
 }
 
 .success { border-color: rgba(0,255,65,0.6); }
-.fail { border-color: rgba(255,60,60,0.5); }
+.fail    { border-color: rgba(255,60,60,0.6); }
 
 #exportBtn {
-  background: transparent;
-  border: 1px solid #6fffa3;
-  color: #6fffa3;
   padding: 8px 14px;
+  border: 1px solid #6fffa3;
+  background: black;
+  color: #6fffa3;
   cursor: pointer;
   border-radius: 4px;
-  margin-top: 10px;
-  font-family: Matrix, monospace;
 }
-
 </style>
 </head>
 
 <body>
 
-<!-- MATRIX RAIN -->
+<!-- MATRIX CANVAS -->
 <canvas id="matrix"></canvas>
 
+<!-- ======================= UI ======================= -->
 <div id="ui">
+
   <h1>UNDERWRITEIQ – MATRIX INTERNAL HARNESS</h1>
 
-  <div id="dropzone">DRAG OR CLICK TO UPLOAD PDF(s)</div>
+  <div id="dropzone">CLICK OR DRAG PDF(s)</div>
   <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
 
   <div class="panel">
@@ -160,8 +138,7 @@ pre {
 </div>
 
 <script>
-/* ======================= MATRIX RAIN ======================= */
-
+/* ======================= MATRIX RAIN (clean version) ======================= */
 const canvas = document.getElementById("matrix");
 const ctx = canvas.getContext("2d");
 
@@ -174,74 +151,34 @@ const charset = chars.split("");
 const fontSize = 16;
 let columns = Math.floor(canvas.width / fontSize);
 
-let drops = Array.from({ length: columns }, () => Math.random() * canvas.height / fontSize);
+let drops = Array.from({ length: columns }, () => 1);
 
-/* Smooth movie-style rain */
 function drawMatrix() {
-  ctx.fillStyle = "rgba(0,0,0,0.08)";
+  ctx.fillStyle = "rgba(0,0,0,0.07)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.fillStyle = "rgba(0,255,65,0.45)";
+  ctx.fillStyle = "rgba(0,255,65,0.55)";
   ctx.font = fontSize + "px Matrix";
 
-  for (let i = 0; i < drops.length; i++) {
-    const char = charset[Math.floor(Math.random() * charset.length)];
-    const x = i * fontSize;
-    const y = drops[i] * fontSize;
+  drops.forEach((y, i) => {
+    const text = charset[Math.floor(Math.random() * charset.length)];
+    ctx.fillText(text, i * fontSize, y * fontSize);
 
-    ctx.fillText(char, x, y);
-
-    if (y > canvas.height && Math.random() > 0.975) {
-      drops[i] = 0;
-    }
-    drops[i] += 0.85;
-  }
+    if (y * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
+  });
 }
 
-/* ======================= GLITCH EFFECT ======================= */
-
-function glitch() {
-  const intensity = Math.random();
-
-  if (intensity < 0.93) return;
-
-  const x = Math.random() * canvas.width;
-  const y = Math.random() * canvas.height;
-
-  const w = 80 + Math.random() * 250;
-  const h = 5 + Math.random() * 20;
-
-  ctx.fillStyle = "rgba(0,255,65," + (0.3 + Math.random() * 0.4) + ")";
-  ctx.fillRect(x, y, w, h);
-}
-
-/* Deja-vu cat effect (flash of white + slice) */
-function catGlitch() {
-  if (Math.random() < 0.996) return;
-
-  ctx.fillStyle = "rgba(255,255,255,0.05)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  let y = Math.random() * canvas.height;
-  ctx.fillStyle = "rgba(0,255,65,0.6)";
-  ctx.fillRect(0, y, canvas.width, 2);
-}
-
-/* Master renderer */
-setInterval(() => {
-  drawMatrix();
-  glitch();
-  catGlitch();
-}, 40);
+setInterval(drawMatrix, 50);
 
 window.onresize = () => {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
   columns = Math.floor(canvas.width / fontSize);
-  drops = Array.from({ length: columns }, () => Math.random() * canvas.height / fontSize);
+  drops = Array.from({ length: columns }, () => 1);
 };
 
-/* ======================= UPLOADER LOGIC ======================= */
+/* ======================= UPLOADER ======================= */
 
 const dropzone = document.getElementById("dropzone");
 const fileInput = document.getElementById("fileInput");
@@ -255,16 +192,9 @@ let allResults = [];
 dropzone.onclick = () => fileInput.click();
 fileInput.onchange = () => handleFiles(fileInput.files);
 
-dropzone.addEventListener("dragover", e => {
-  e.preventDefault();
-  dropzone.style.background = "rgba(0,255,65,0.05)";
-});
-dropzone.addEventListener("dragleave", () => {
-  dropzone.style.background = "rgba(0,0,0,0.25)";
-});
+dropzone.addEventListener("dragover", e => { e.preventDefault(); });
 dropzone.addEventListener("drop", e => {
   e.preventDefault();
-  dropzone.style.background = "rgba(0,0,0,0.25)";
   handleFiles(e.dataTransfer.files);
 });
 
@@ -272,16 +202,15 @@ async function handleFiles(files) {
   allResults = [];
   resultsDiv.innerHTML = "";
   failsDiv.innerHTML = "";
+  progress.innerText = "Starting…";
 
   const total = files.length;
-  let completed = 0;
-
-  progress.innerText = "Starting…";
+  let done = 0;
 
   for (const file of files) {
     await processFile(file);
-    completed++;
-    progress.innerText = `Processed ${completed} / ${total}`;
+    done++;
+    progress.innerText = `Processed ${done} / ${total}`;
   }
 
   progress.innerText = `DONE – ${total} files tested`;
@@ -305,11 +234,7 @@ async function processFile(file) {
 
   const div = document.createElement("div");
   div.className = "file-result " + (json.ok ? "success" : "fail");
-
-  div.innerHTML = `
-    <strong>${file.name}</strong>
-    <pre>${JSON.stringify(json, null, 2)}</pre>
-  `;
+  div.innerHTML = `<strong>${file.name}</strong><pre>${JSON.stringify(json, null, 2)}</pre>`;
 
   if (json.ok) resultsDiv.appendChild(div);
   else failsDiv.appendChild(div);
@@ -322,7 +247,7 @@ exportBtn.onclick = () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "uwiq-stress-results.json";
+  a.download = "uwiq-results.json";
   a.click();
   URL.revokeObjectURL(url);
 };
