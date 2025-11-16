@@ -49,76 +49,106 @@ const LLM_PROMPT = `
 You are UnderwriteIQ.
 Extract data PER BUREAU from a consumer credit report.
 
-Return ONLY COMPACT VALID JSON (ONE LINE). NO EXTRA TEXT.
+Return ONLY COMPACT VALID JSON. NO EXTRA TEXT. NO MARKDOWN.
 
-Output fields:
+Output:
 
-bureaus: {
-  experian: {
-    score,
-    utilization_pct,
-    inquiries,
-    negatives,
-    late_payment_events,
-    names[],
-    addresses[],
-    employers[],
-    tradelines: [
-      { creditor, type, status, balance, limit, opened, closed, is_au }
-    ]
-  },
-  equifax: {
-    score,
-    utilization_pct,
-    inquiries,
-    negatives,
-    late_payment_events,
-    names[],
-    addresses[],
-    employers[],
-    tradelines: [
-      { creditor, type, status, balance, limit, opened, closed, is_au }
-    ]
-  },
-  transunion: {
-    score,
-    utilization_pct,
-    inquiries,
-    negatives,
-    late_payment_events,
-    names[],
-    addresses[],
-    employers[],
-    tradelines: [
-      { creditor, type, status, balance, limit, opened, closed, is_au }
-    ]
+{
+  "bureaus": {
+    "experian": {
+      "score": number | null,
+      "utilization_pct": number | null,
+      "inquiries": number | null,
+      "negatives": number | null,
+      "late_payment_events": number | null,
+      "names": string[],
+      "addresses": string[],
+      "employers": string[],
+      "tradelines": [
+        {
+          "creditor": string | null,
+          "type": "revolving" | "installment" | "auto" | "mortgage" | "other" | null,
+          "status": string | null,
+          "balance": number | null,
+          "limit": number | null,
+          "opened": "YYYY-MM" | "YYYY-MM-DD" | null,
+          "closed": "YYYY-MM" | "YYYY-MM-DD" | null,
+          "is_au": boolean | null
+        }
+      ]
+    },
+    "equifax": {
+      "score": number | null,
+      "utilization_pct": number | null,
+      "inquiries": number | null,
+      "negatives": number | null,
+      "late_payment_events": number | null,
+      "names": string[],
+      "addresses": string[],
+      "employers": string[],
+      "tradelines": [
+        {
+          "creditor": string | null,
+          "type": "revolving" | "installment" | "auto" | "mortgage" | "other" | null,
+          "status": string | null,
+          "balance": number | null,
+          "limit": number | null,
+          "opened": "YYYY-MM" | "YYYY-MM-DD" | null,
+          "closed": "YYYY-MM" | "YYYY-MM-DD" | null,
+          "is_au": boolean | null
+        }
+      ]
+    },
+    "transunion": {
+      "score": number | null,
+      "utilization_pct": number | null,
+      "inquiries": number | null,
+      "negatives": number | null,
+      "late_payment_events": number | null,
+      "names": string[],
+      "addresses": string[],
+      "employers": string[],
+      "tradelines": [
+        {
+          "creditor": string | null,
+          "type": "revolving" | "installment" | "auto" | "mortgage" | "other" | null,
+          "status": string | null,
+          "balance": number | null,
+          "limit": number | null,
+          "opened": "YYYY-MM" | "YYYY-MM-DD" | null,
+          "closed": "YYYY-MM" | "YYYY-MM-DD" | null,
+          "is_au": boolean | null
+        }
+      ]
+    }
   }
 }
 
 Rules:
-- If a bureau is missing, use null or empty fields.
+- If a bureau is missing, set that bureau to null or empty arrays.
 - If unsure, use null.
-- Do NOT guess bank names or lender names.
-- Never hallucinate.
-- Never include commentary or markdown.
+- Do NOT invent or guess creditor names.
+- Do NOT include any explanation, commentary, or markdown.
+- Output ONLY JSON, nothing else.
 `;
 
 // =====================================================
-// 🆕 PART 1 FIX — MULTI-LINE JSON CLEANER
+// 🆕 PART 1 — LLM OUTPUT NORMALIZER
 // =====================================================
 function normalizeLLMOutput(str) {
-  return str
+  return String(str || "")
     .replace(/\r/g, "")
     .replace(/\t+/g, " ")
-    .replace(/^\s+|\s+$/g, "")
-    .replace(/```json|```/gi, "");
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
 }
 
 // =====================================================
-// 🆕 PART 2 FIX — NEW JSON EXTRACTOR
+// 🆕 PART 2 — JSON STRING EXTRACTOR
 // =====================================================
 function extractJsonStringFromResponse(json) {
-  // 1. Direct output_text
+  // 1. Direct output_text (Responses API)
   if (json.output_text && typeof json.output_text === "string") {
     return json.output_text.trim();
   }
@@ -138,7 +168,7 @@ function extractJsonStringFromResponse(json) {
     }
   }
 
-  // 3. Legacy chat format
+  // 3. Legacy chat.completions format
   if (
     json.choices &&
     json.choices[0] &&
@@ -152,31 +182,52 @@ function extractJsonStringFromResponse(json) {
 }
 
 // =====================================================
-// 🆕 PART 3 FIX — NEW JSON REPAIR PARSER
+// 🆕 PART 3 — JSON REPAIR PARSER (MULTI-LINE + FIXES)
 // =====================================================
 function tryParseJsonWithRepair(raw) {
   if (!raw || typeof raw !== "string") {
     throw new Error("No raw JSON text to parse.");
   }
 
-  const cleaned = raw
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
-    .trim();
+  const cleaned = normalizeLLMOutput(raw);
 
   const first = cleaned.indexOf("{");
   const last = cleaned.lastIndexOf("}");
-
   if (first === -1 || last === -1 || last <= first) {
     throw new Error("Could not locate JSON object in model output.");
   }
 
   const sliced = cleaned.substring(first, last + 1);
 
+  // 🆕 AUTO-REPAIR LLM JSON
+  let fixed = sliced;
+
+  // 1. Fix trailing commas before } or ]
+  fixed = fixed.replace(/,\s*([}\]])/g, "$1");
+
+  // 2. Quote unquoted keys: { key: ... } => { "key": ... }
+  fixed = fixed.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
+
+  // 3. Fix unquoted string values (simple heuristic)
+  fixed = fixed.replace(
+    /:\s*([A-Za-z][A-Za-z0-9 _\-]*)\s*(,|\})/g,
+    (m, val, end) => {
+      // If already quoted or looks like a number, skip
+      if (val.startsWith('"') || /^[0-9.\-]+$/.test(val)) return `:${val}${end}`;
+      return `:"${val}"${end}`;
+    }
+  );
+
+  // 4. Quote YYYY-MM date-like fields
+  fixed = fixed.replace(/:\s*(\d{4}-\d{2}(?:-\d{2})?)/g, ':"$1"');
+
+  // 5. Convert "key = value" into "key: value"
+  fixed = fixed.replace(/=\s*/g, ": ");
+
   try {
-    return JSON.parse(sliced);
+    return JSON.parse(fixed);
   } catch (err) {
-    console.error("JSON REPAIR FAILED. Preview:", sliced.slice(0, 200));
+    console.error("JSON REPAIR FAILED. Preview:", fixed.slice(0, 200));
     throw new Error("JSON parse failed (after repair): " + err.message);
   }
 }
@@ -256,7 +307,6 @@ async function callOpenAIOnce(text) {
     throw new Error("LLM returned no output_text.");
   }
 
-  // 🆕 CLEAN + REPAIR
   const cleanedRaw = normalizeLLMOutput(raw);
   return tryParseJsonWithRepair(cleanedRaw);
 }
@@ -314,9 +364,6 @@ function monthsSince(dateStr) {
   return yearsDiff * 12 + monthsDiff;
 }
 
-// ===============================================================
-// PRO UNDERWRITING ENGINE (continues in second half)
-// ===============================================================
 // ===============================================================
 // PRO UNDERWRITING ENGINE (Per Bureau + Aggregate)
 // ===============================================================
@@ -498,10 +545,6 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     file_all_negative: primary.fileAllNegative
   };
 
-  const exInq2 = exInq;
-  const eqInq2 = eqInq;
-  const tuInq2 = tuInq;
-
   let liteBannerFunding = primary.cardFunding || cardFunding;
   if (!liteBannerFunding && primary.score >= 700 && primary.util <= 30 && primary.neg === 0) {
     liteBannerFunding = 15000;
@@ -525,9 +568,9 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
       negative_accounts: primary.neg,
       late_payment_events: primary.lates,
       inquiries: {
-        ex: exInq2,
-        tu: tuInq2,
-        eq: eqInq2,
+        ex: exInq,
+        tu: tuInq,
+        eq: eqInq,
         total: totalInq
       }
     },
@@ -602,7 +645,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
 // SUGGESTION ENGINE (PRO VERSION)
 // ============================================================================
 function buildSuggestions(bureaus, uw) {
-  const primary = uw.primary_bureau;
+  const primaryKey = uw.primary_bureau;
   const p = uw.metrics;
 
   const score = p.score;
@@ -676,19 +719,17 @@ function buildSuggestions(bureaus, uw) {
   }
 
   const webSummary = (() => {
-    let s = `Your strongest bureau is ${primary.toUpperCase()}. `;
-
+    let s = `Your strongest bureau is ${primaryKey.toUpperCase()}. `;
     if (!uw.fundable) {
       s += `You're close — here’s what to fix next for maximum funding:`;
     } else {
       s += `You're fundable right now. Here’s how to maximize your approvals:`;
     }
-
     return s;
   })();
 
   const emailSummary = `
-Your strongest funding bureau is **${primary.toUpperCase()}**.
+Your strongest funding bureau is **${primaryKey.toUpperCase()}**.
 
 To maximize the amount of credit you can receive, focus on the following:
 
@@ -696,9 +737,10 @@ Score: ${score}
 Utilization: ${util}%
 Negatives: ${negatives}
 Inquiries: ${inquiries}
+Late Payments: ${late}
 
-We recommend cleaning up utilization, inquiries, and any negative items before requesting new credit or applying for funding.  
-`;
+We recommend cleaning up utilization, inquiries, and any negative items before requesting new credit or applying for funding.
+`.trim();
 
   return {
     web_summary: webSummary,
