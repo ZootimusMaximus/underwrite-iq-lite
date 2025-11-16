@@ -657,11 +657,23 @@ function buildSuggestions(bureaus, uw) {
   const actions = [];
   const au_actions = [];
 
+// Utilization guidance (only if we have a real number)
+if (typeof util === "number" && Number.isFinite(util)) {
   if (util > 30) {
     actions.push(
-      `Your utilization is ${util}%. Reducing it to 3–10% will dramatically improve your funding limits.`
+      `Your utilization is about ${util}%. To maximize approvals, bring each card down to the 3–10% range before applying.`
+    );
+  } else {
+    actions.push(
+      `Your utilization is in a solid range. Keeping each card between 3–10% will help you qualify for higher limits.`
     );
   }
+} else {
+  // We couldn't confidently read utilization
+  actions.push(
+    `We couldn't accurately read utilization from this PDF, but the goal is simple: keep each card between 3–10% before you apply for new funding.`
+  );
+}
 
   if (negatives > 0) {
     actions.push(
