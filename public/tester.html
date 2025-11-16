@@ -2,195 +2,178 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>UnderwriteIQ — MATRIX INTERNAL HARNESS</title>
-
+<title>UnderwriteIQ – Matrix Internal Harness</title>
 <style>
-/* -------------------------
-   GLOBAL MATRIX STYLING
---------------------------*/
-body {
-  margin: 0;
-  background: #000;
-  font-family: "Courier New", monospace;
-  color: #00ff41;
-  overflow-x: hidden;
-}
+  @font-face {
+    font-family: "Matrix";
+    src: local("Courier New"), monospace;
+  }
 
-/* Real Matrix rain canvas */
-#matrixCanvas {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  z-index: -2;
-  opacity: 0.06; /* Subtle, movie-accurate */
-  filter: blur(1px);
-}
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #000;
+    color: #7dfc8a; /* softer neon */
+    font-family: Matrix, monospace;
+  }
 
-/* Vignette for cinematic depth */
-body::after {
-  content: "";
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.7) 100%);
-  pointer-events: none;
-  z-index: -1;
-}
+  /* UI container */
+  #ui {
+    position: relative;
+    z-index: 10;
+    padding: 20px;
+  }
 
-/* Wrapper */
-.wrapper {
-  padding: 40px;
-  position: relative;
-  z-index: 10;
-}
+  h1 {
+    font-size: 28px;
+    margin-bottom: 15px;
+    color: #6fffa3; /* softer neon */
+    letter-spacing: 2px;
+    text-shadow: 0 0 4px rgba(0,255,65,0.35);
+  }
 
-/* UI text glow */
-h1, h2, h3, label {
-  color: #00ff41;
-  text-shadow: 0 0 5px #00ff41aa;
-}
+  #dropzone {
+    border: 1px dashed rgba(0,255,65,0.4);
+    padding: 35px;
+    text-align: center;
+    cursor: pointer;
+    margin-bottom: 20px;
+    border-radius: 6px;
+    background: rgba(0,0,0,0.35);
+    color: #7dfc8a;
+    transition: background 0.3s;
+  }
 
-/* Title */
-h1 {
-  margin-top: 0;
-  margin-bottom: 30px;
-  font-size: 26px;
-  letter-spacing: 1px;
-  text-align: center;
-}
+  #dropzone:hover {
+    background: rgba(0,255,65,0.08);
+  }
 
-/* Upload zone */
-#dropzone {
-  border: 1px dashed #00ff41aa;
-  padding: 40px;
-  text-align: center;
-  cursor: pointer;
-  margin-bottom: 20px;
-  background: rgba(0, 20, 0, 0.3);
-  backdrop-filter: blur(2px);
-  transition: 0.3s;
-}
-#dropzone:hover {
-  background: rgba(0, 40, 0, 0.5);
-  box-shadow: 0 0 10px #00ff41aa;
-}
+  .panel h3 {
+    font-size: 14px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    color: #6fffa3;
+  }
 
-/* Progress */
-#progress {
-  margin-top: 10px;
-  font-size: 14px;
-}
-#loaderBar {
-  height: 6px;
-  width: 0%;
-  background: #00ff41;
-  box-shadow: 0 0 8px #00ff41;
-  margin-top: 8px;
-  border-radius: 2px;
-  transition: width 0.2s linear;
-}
+  .panel {
+    margin-bottom: 25px;
+  }
 
-/* Results */
-.file-result {
-  background: rgba(0, 30, 0, 0.35);
-  border-left: 3px solid #00ff41;
-  padding: 10px;
-  margin-bottom: 12px;
-  white-space: pre-wrap;
-  border-radius: 4px;
-}
+  pre {
+    font-size: 12px;
+    background: rgba(0,0,0,0.4);
+    padding: 10px;
+    border-radius: 6px;
+    max-height: 280px;
+    overflow-y: auto;
+    color: #9dfdb7;
+  }
 
-.fail {
-  border-color: #ff0044;
-}
+  .file-result {
+    margin-bottom: 12px;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(0,255,65,0.25);
+    background: rgba(0,0,0,0.4);
+  }
 
-/* Export button */
-button {
-  background: transparent;
-  border: 1px solid #00ff41;
-  padding: 10px 20px;
-  color: #00ff41;
-  cursor: pointer;
-  margin-top: 20px;
-  font-family: inherit;
-  text-shadow: 0 0 5px #00ff41aa;
-}
-button:hover {
-  background: rgba(0, 40, 0, 0.5);
-}
+  .success { border-color: rgba(0,255,65,0.6); }
+  .fail { border-color: rgba(255,60,60,0.5); }
+
+  #exportBtn {
+    background: transparent;
+    border: 1px solid #6fffa3;
+    color: #6fffa3;
+    padding: 8px 14px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-top: 10px;
+    font-family: Matrix, monospace;
+  }
 </style>
 </head>
 
 <body>
 
-<!-- REAL MATRIX RAIN -->
-<canvas id="matrixCanvas"></canvas>
+<canvas id="matrix"></canvas>
 
-<div class="wrapper">
-  <h1>UNDERWRITEIQ — MATRIX INTERNAL HARNESS</h1>
+<div id="ui">
+  <h1>UNDERWRITEIQ – MATRIX INTERNAL HARNESS</h1>
 
   <div id="dropzone">DRAG OR CLICK TO UPLOAD PDF(s)</div>
   <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
 
-  <h3>PROGRESS</h3>
-  <div id="progress">Waiting…</div>
-  <div id="loaderBar"></div>
+  <div class="panel">
+    <h3>Progress</h3>
+    <pre id="progress">Waiting…</pre>
+  </div>
 
-  <h3>SUCCESS</h3>
-  <div id="results"></div>
+  <div class="panel">
+    <h3>Success</h3>
+    <div id="results"></div>
+  </div>
 
-  <h3>FAILED</h3>
-  <div id="fails"></div>
+  <div class="panel">
+    <h3>Failed</h3>
+    <div id="fails"></div>
+  </div>
 
-  <button id="exportBtn">EXPORT JSON</button>
+  <button id="exportBtn">Export JSON</button>
 </div>
 
-
 <script>
-/* -------------------------
-   MATRIX DIGITAL RAIN
---------------------------*/
-const canvas = document.getElementById("matrixCanvas");
+/* ========================= MATRIX RAIN ========================= */
+
+const canvas = document.getElementById("matrix");
 const ctx = canvas.getContext("2d");
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-const letters = "アカサタナハマヤラワ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const matrix = letters.split("");
+const chars = "アカサタナハマヤラワ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const charset = chars.split("");
 
 const fontSize = 14;
 const columns = Math.floor(canvas.width / fontSize);
-const drops = Array.from({ length: columns }, () => Math.random() * canvas.height);
 
-/* Cinematic, slower rain */
-function drawMatrix() {
-  ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+// Soft rain start positions
+const drops = Array.from({ length: columns }, () => Math.random() * canvas.height / fontSize);
+
+function draw() {
+  // More transparent so it's subtle
+  ctx.fillStyle = "rgba(0, 0, 0, 0.10)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.fillStyle = "#00cc39";         /* darker matrix green */
-  ctx.font = fontSize + "px Courier";
+  ctx.fillStyle = "rgba(0, 255, 65, 0.45)"; // movie perfect soft green
+  ctx.font = fontSize + "px Matrix";
 
-  drops.forEach((y, i) => {
-    const char = matrix[Math.floor(Math.random() * matrix.length)];
-    ctx.fillText(char, i * fontSize, y * fontSize);
+  for (let i = 0; i < drops.length; i++) {
+    const char = charset[Math.floor(Math.random() * charset.length)];
+    const x = i * fontSize;
+    const y = drops[i] * fontSize;
 
-    if (y * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
-    drops[i] += 0.9; /* slightly slower */
-  });
+    ctx.fillText(char, x, y);
+
+    // reset with random fade chance
+    if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i] += 0.85; // smooth, non-distracting
+  }
 }
-setInterval(drawMatrix, 40);
 
+setInterval(draw, 40);
 
-/* -------------------------
-   TEST HARNESS LOGIC
---------------------------*/
-const fileInput = document.getElementById("fileInput");
+window.onresize = () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+};
+
+/* ========================= UPLOADER LOGIC ========================= */
+
 const dropzone = document.getElementById("dropzone");
+const fileInput = document.getElementById("fileInput");
+const progress = document.getElementById("progress");
 const resultsDiv = document.getElementById("results");
 const failsDiv = document.getElementById("fails");
-const progress = document.getElementById("progress");
-const loaderBar = document.getElementById("loaderBar");
 const exportBtn = document.getElementById("exportBtn");
 
 let allResults = [];
@@ -198,65 +181,75 @@ let allResults = [];
 dropzone.onclick = () => fileInput.click();
 fileInput.onchange = () => handleFiles(fileInput.files);
 
-dropzone.ondragover = e => { e.preventDefault(); dropzone.style.background = "rgba(0,50,0,0.4)"; };
-dropzone.ondragleave = () => dropzone.style.background = "rgba(0,20,0,0.3)";
-dropzone.ondrop = e => {
+dropzone.addEventListener("dragover", e => {
   e.preventDefault();
-  dropzone.style.background = "rgba(0,20,0,0.3)";
+  dropzone.style.background = "rgba(0,255,65,0.08)";
+});
+dropzone.addEventListener("dragleave", () => {
+  dropzone.style.background = "rgba(0,0,0,0.35)";
+});
+dropzone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropzone.style.background = "rgba(0,0,0,0.35)";
   handleFiles(e.dataTransfer.files);
-};
+});
 
 async function handleFiles(files) {
+  allResults = [];
   resultsDiv.innerHTML = "";
   failsDiv.innerHTML = "";
-  allResults = [];
-
-  let done = 0;
   const total = files.length;
+  let completed = 0;
+
+  progress.innerText = "Starting…";
 
   for (const file of files) {
-    await handleOne(file);
-    done++;
-
-    const pct = Math.floor((done / total) * 100);
-    loaderBar.style.width = pct + "%";
-    progress.innerText = `Processing ${done}/${total} (${pct}%)`;
+    await processFile(file);
+    completed++;
+    progress.innerText = `Processed ${completed} / ${total}`;
   }
 
-  progress.innerText = "✔ COMPLETE";
+  progress.innerText = `DONE – ${total} files tested`;
 }
 
-async function handleOne(file) {
-  const fd = new FormData();
-  fd.append("file", file);
+async function processFile(file) {
+  const formData = new FormData();
+  formData.append("file", file);
 
-  let json;
+  let json = null;
+
   try {
     const res = await fetch("/api/lite/parse-report", {
       method: "POST",
-      body: fd
+      body: formData
     });
+
     json = await res.json();
   } catch (err) {
-    json = { ok: false, error: err.toString() };
+    json = { ok: false, error: true, message: err.toString() };
   }
 
-  allResults.push({ filename: file.name, result: json });
-
   const div = document.createElement("div");
-  div.className = "file-result " + (json.ok ? "" : "fail");
-  div.innerHTML = `<strong>${file.name}</strong>\n${JSON.stringify(json, null, 2)}`;
+  div.className = "file-result " + (json.ok ? "success" : "fail");
 
-  (json.ok ? resultsDiv : failsDiv).appendChild(div);
+  div.innerHTML = `
+    <strong>${file.name}</strong>
+    <pre>${JSON.stringify(json, null, 2)}</pre>
+  `;
+
+  if (json.ok) resultsDiv.appendChild(div);
+  else failsDiv.appendChild(div);
+
+  allResults.push({ filename: file.name, result: json });
 }
 
 exportBtn.onclick = () => {
   const blob = new Blob([JSON.stringify(allResults, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-
   const a = document.createElement("a");
+
   a.href = url;
-  a.download = "underwriteiq-matrix-results.json";
+  a.download = "uwiq-stress-results.json";
   a.click();
 
   URL.revokeObjectURL(url);
