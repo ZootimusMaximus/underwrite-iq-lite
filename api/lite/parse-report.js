@@ -1,15 +1,20 @@
 // ==================================================================================
-// UnderwriteIQ LITE — TEXT + LLM Parser (PRO VERSION)
+// UnderwriteIQ LITE — TEXT + LLM Parser (PRO VERSION v2)
 // Per-bureau extraction + underwriting + suggestion scaffold
+// Accuracy upgrades: larger window, JSON repair, safer numbers, text cleaning
 // ==================================================================================
 
 const fs = require("fs");
 const formidable = require("formidable");
 const pdfParse = require("pdf-parse");
 
+// Increase body limit for large PDFs
 module.exports.config = {
   api: { bodyParser: false, sizeLimit: "30mb" }
 };
+
+// Max characters we send to LLM from extracted text
+const MAX_TEXT_CHARS = 45000;
 
 // -------------------------------------------------------------
 // 🔒 FALLBACK RESULT — ALWAYS RETURN VALID JSON ON FAILURE
@@ -133,6 +138,31 @@ Rules:
 `;
 
 // =====================================================
+// TEXT CLEANER — handles boilerplate / AnnualCreditReport style
+// =====================================================
+function cleanCreditReportText(raw) {
+  if (!raw) return "";
+
+  let text = String(raw);
+
+  // Normalize whitespace
+  text = text.replace(/\r/g, " ").replace(/\t/g, " ");
+
+  // Strip common boilerplate / page headers / footers
+  text = text
+    .replace(/Page \d+ of \d+/gi, " ")
+    .replace(/Viewing your credit report online.*/gi, " ")
+    .replace(/For assistance call .*?(\n|$)/gi, " ")
+    .replace(/This information is supplied by .*/gi, " ")
+    .replace(/www\.annualcreditreport\.com.*/gi, " ");
+
+  // Collapse huge whitespace runs
+  text = text.replace(/\s{3,}/g, " ");
+
+  return text.trim();
+}
+
+// =====================================================
 // 🆕 PART 1 — LLM OUTPUT NORMALIZER
 // =====================================================
 function normalizeLLMOutput(str) {
@@ -197,10 +227,7 @@ function tryParseJsonWithRepair(raw) {
     throw new Error("Could not locate JSON object in model output.");
   }
 
-  const sliced = cleaned.substring(first, last + 1);
-
-  // 🆕 AUTO-REPAIR LLM JSON
-  let fixed = sliced;
+  let fixed = cleaned.substring(first, last + 1);
 
   // 1. Fix trailing commas before } or ]
   fixed = fixed.replace(/,\s*([}\]])/g, "$1");
@@ -212,13 +239,13 @@ function tryParseJsonWithRepair(raw) {
   fixed = fixed.replace(
     /:\s*([A-Za-z][A-Za-z0-9 _\-]*)\s*(,|\})/g,
     (m, val, end) => {
-      // If already quoted or looks like a number, skip
       if (val.startsWith('"') || /^[0-9.\-]+$/.test(val)) return `:${val}${end}`;
+      if (val === "null" || val === "NaN") return `:null${end}`;
       return `:"${val}"${end}`;
     }
   );
 
-  // 4. Quote YYYY-MM or YYYY-MM-DD date-like fields
+  // 4. Quote YYYY-MM / YYYY-MM-DD date-like fields
   fixed = fixed.replace(/:\s*(\d{4}-\d{2}(?:-\d{2})?)/g, ':"$1"');
 
   // 5. Convert "key = value" into "key: value"
@@ -233,36 +260,25 @@ function tryParseJsonWithRepair(raw) {
 }
 
 // =====================================================
-// 🆕 PART 4 — DEEP SANITIZER (OPTION D)
+// NUMBER HELPERS — avoid NaN / bogus 0s
 // =====================================================
-function deepSanitizeJSON(data) {
-  if (Array.isArray(data)) {
-    return data.map(deepSanitizeJSON);
-  } else if (data && typeof data === "object") {
-    const cleaned = {};
-    for (const key in data) {
-      const val = data[key];
-      const k = key.trim();
-      cleaned[k] = deepSanitizeJSON(val);
+function toNumberOrNull(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string") {
+    const trimmed = v.trim().toLowerCase();
+    if (!trimmed || trimmed === "null" || trimmed === "nan" || trimmed === "na") {
+      return null;
     }
-    return cleaned;
-  } else if (typeof data === "string") {
-    const trimmed = data.trim();
-    const lower = trimmed.toLowerCase();
-
-    if (["null", "undefined", "none", "nan"].includes(lower)) return null;
-    if (lower === "true") return true;
-    if (lower === "false") return false;
-
-    // Numeric string → number
-    if (!isNaN(trimmed) && trimmed !== "") {
-      return Number(trimmed);
-    }
-
-    return trimmed;
-  } else {
-    return data;
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? n : null;
   }
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toNumberOrZero(v) {
+  const n = toNumberOrNull(v);
+  return n == null ? 0 : n;
 }
 
 // -----------------------------------------------
@@ -283,11 +299,11 @@ function normalizeBureau(b) {
     };
   }
   return {
-    score: b.score ?? null,
-    utilization_pct: b.utilization_pct ?? null,
-    inquiries: b.inquiries ?? null,
-    negatives: b.negatives ?? null,
-    late_payment_events: b.late_payment_events ?? null,
+    score: toNumberOrNull(b.score),
+    utilization_pct: toNumberOrNull(b.utilization_pct),
+    inquiries: toNumberOrNull(b.inquiries),
+    negatives: toNumberOrNull(b.negatives),
+    late_payment_events: toNumberOrNull(b.late_payment_events),
     names: Array.isArray(b.names) ? b.names : [],
     addresses: Array.isArray(b.addresses) ? b.addresses : [],
     employers: Array.isArray(b.employers) ? b.employers : [],
@@ -296,19 +312,22 @@ function normalizeBureau(b) {
 }
 
 // -----------------------------------------------
-// Single LLM Call — Responses API (patched)
+// Single LLM Call — Responses API (patched, gpt-4o)
 // -----------------------------------------------
 async function callOpenAIOnce(text) {
   const key = process.env.UNDERWRITE_IQ_VISION_KEY;
   if (!key) throw new Error("Missing UNDERWRITE_IQ_VISION_KEY");
 
+  const cleaned = cleanCreditReportText(text).slice(0, MAX_TEXT_CHARS);
+
   const payload = {
-    model: "gpt-4o-mini",
+    // Primary model for accuracy; you can change via env if needed
+    model: process.env.UNDERWRITE_IQ_MODEL || "gpt-4o",
     input: [
       { role: "system", content: LLM_PROMPT },
       {
         role: "user",
-        content: [{ type: "input_text", text: text.slice(0, 15000) }]
+        content: [{ type: "input_text", text: cleaned }]
       }
     ],
     temperature: 0,
@@ -340,8 +359,7 @@ async function callOpenAIOnce(text) {
     throw new Error("LLM returned no output_text.");
   }
 
-  const cleanedRaw = normalizeLLMOutput(raw);
-  return tryParseJsonWithRepair(cleanedRaw);
+  return tryParseJsonWithRepair(raw);
 }
 
 // -----------------------------------------------
@@ -407,16 +425,20 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
   const eq = normalizeBureau(safeBureaus.equifax);
   const tu = normalizeBureau(safeBureaus.transunion);
 
-  const exInq = Number(ex.inquiries || 0);
-  const eqInq = Number(eq.inquiries || 0);
-  const tuInq = Number(tu.inquiries || 0);
+  const exInq = toNumberOrZero(ex.inquiries);
+  const eqInq = toNumberOrZero(eq.inquiries);
+  const tuInq = toNumberOrZero(tu.inquiries);
   const totalInq = exInq + eqInq + tuInq;
 
   function buildBureauSummary(key, label, b) {
-    const score = Number(b.score ?? 0) || 0;
-    const util = Number(b.utilization_pct ?? 0) || 0;
-    const neg = Number(b.negatives ?? 0) || 0;
-    const lates = Number(b.late_payment_events ?? 0) || 0;
+    const rawScore = toNumberOrNull(b.score);
+    const score = rawScore == null ? 0 : rawScore;
+
+    const rawUtil = toNumberOrNull(b.utilization_pct);
+    const util = rawUtil == null ? 0 : rawUtil;
+
+    const neg = toNumberOrZero(b.negatives);
+    const lates = toNumberOrZero(b.late_payment_events);
     const tradelines = Array.isArray(b.tradelines) ? b.tradelines : [];
 
     let highestRevolvingLimit = 0;
@@ -429,16 +451,18 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     for (const tl of tradelines) {
       const type = String(tl.type || "").toLowerCase();
       const status = String(tl.status || "").toLowerCase();
-      const limit = Number(tl.limit || 0);
-      const balance = Number(tl.balance || 0);
+      const limit = toNumberOrZero(tl.limit);
+      const balance = toNumberOrZero(tl.balance);
       const ageMonths = monthsSince(tl.opened);
 
       const isDerog =
         status.includes("chargeoff") ||
+        status.includes("charge-off") ||
         status.includes("collection") ||
         status.includes("derog") ||
         status.includes("repossession") ||
-        status.includes("foreclosure");
+        status.includes("foreclosure") ||
+        status.includes("severe");
 
       if (!isDerog) {
         positiveTradelinesCount++;
@@ -448,12 +472,12 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
 
       if (type === "revolving") {
         hasAnyRevolving = true;
-        if (status === "open" && seasoned && limit > highestRevolvingLimit) {
+        if (status.includes("open") && seasoned && limit > highestRevolvingLimit) {
           highestRevolvingLimit = limit;
         }
       }
 
-      if (type === "installment") {
+      if (type === "installment" || type === "auto" || type === "mortgage") {
         hasAnyInstallment = true;
         const originalAmount = limit || balance;
         if (originalAmount > 0 && seasoned && !isDerog) {
@@ -477,16 +501,18 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     const canDualStack = canCardStack && canLoanStack;
     const totalPersonalFunding = cardFunding + loanFunding;
 
-    const fundable = score >= 700 && util <= 30 && neg === 0;
+    const fundable = rawScore != null && rawScore >= 700 && rawUtil != null && rawUtil <= 30 && neg === 0;
 
     return {
       key,
       label,
+      rawScore,
+      rawUtil,
       score,
       util,
       neg,
       lates,
-      inquiries: Number(b.inquiries || 0) || 0,
+      inquiries: toNumberOrZero(b.inquiries),
       tradelines,
       highestRevolvingLimit,
       highestInstallmentAmount,
@@ -511,9 +537,10 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     buildBureauSummary("transunion", "TransUnion", tu)
   ];
 
+  // Primary = highest score bureau
   let primary = bureauSummaries[0];
   for (const b of bureauSummaries) {
-    if (b.score > primary.score) {
+    if ((b.rawScore || 0) > (primary.rawScore || 0)) {
       primary = b;
     }
   }
@@ -560,7 +587,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
   const totalBusinessFunding = businessFunding;
   const totalCombinedFunding = totalPersonalFunding + totalBusinessFunding;
 
-  const needsUtilReduction = primary.util > 30;
+  const needsUtilReduction = (primary.rawUtil != null ? primary.rawUtil : primary.util) > 30;
   const needsNewPrimaryRevolving =
     !primary.hasAnyRevolving || primary.highestRevolvingLimit < 5000;
   const needsInquiryCleanup = totalInq > 0;
@@ -579,16 +606,19 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
   };
 
   let liteBannerFunding = primary.cardFunding || cardFunding;
-  if (!liteBannerFunding && primary.score >= 700 && primary.util <= 30 && primary.neg === 0) {
+  const primaryScore = primary.rawScore != null ? primary.rawScore : primary.score;
+  const primaryUtil = primary.rawUtil != null ? primary.rawUtil : primary.util;
+
+  if (!liteBannerFunding && primaryScore >= 700 && primaryUtil <= 30 && primary.neg === 0) {
     liteBannerFunding = 15000;
   }
-  if (primary.score < 700 || primary.util > 30 || primary.neg !== 0) {
+  if (primaryScore < 700 || primaryUtil > 30 || primary.neg !== 0) {
     liteBannerFunding = liteBannerFunding || 15000;
   }
 
   const fundable =
-    primary.score >= 700 &&
-    primary.util <= 30 &&
+    primaryScore >= 700 &&
+    primaryUtil <= 30 &&
     primary.neg === 0 &&
     totalPersonalFunding > 0;
 
@@ -596,8 +626,8 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     fundable,
     primary_bureau: primary.key,
     metrics: {
-      score: primary.score,
-      utilization_pct: primary.util,
+      score: primaryScore,
+      utilization_pct: primaryUtil,
       negative_accounts: primary.neg,
       late_payment_events: primary.lates,
       inquiries: {
@@ -609,8 +639,8 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     },
     per_bureau: {
       experian: {
-        score: bureauSummaries[0].score,
-        utilization_pct: bureauSummaries[0].util,
+        score: bureauSummaries[0].rawScore,
+        utilization_pct: bureauSummaries[0].rawUtil,
         negatives: bureauSummaries[0].neg,
         late_payment_events: bureauSummaries[0].lates,
         inquiries: bureauSummaries[0].inquiries,
@@ -622,8 +652,8 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
         fundable: bureauSummaries[0].fundable
       },
       equifax: {
-        score: bureauSummaries[1].score,
-        utilization_pct: bureauSummaries[1].util,
+        score: bureauSummaries[1].rawScore,
+        utilization_pct: bureauSummaries[1].rawUtil,
         negatives: bureauSummaries[1].neg,
         late_payment_events: bureauSummaries[1].lates,
         inquiries: bureauSummaries[1].inquiries,
@@ -635,8 +665,8 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
         fundable: bureauSummaries[1].fundable
       },
       transunion: {
-        score: bureauSummaries[2].score,
-        utilization_pct: bureauSummaries[2].util,
+        score: bureauSummaries[2].rawScore,
+        utilization_pct: bureauSummaries[2].rawUtil,
         negatives: bureauSummaries[2].neg,
         late_payment_events: bureauSummaries[2].lates,
         inquiries: bureauSummaries[2].inquiries,
@@ -681,16 +711,16 @@ function buildSuggestions(bureaus, uw) {
   const primaryKey = uw.primary_bureau;
   const p = uw.metrics;
 
-  const score = p.score;
-  const util = p.utilization_pct;
-  const negatives = p.negative_accounts;
-  const inquiries = p.inquiries.total;
-  const late = p.late_payment_events;
+  const score = typeof p.score === "number" ? p.score : null;
+  const util = typeof p.utilization_pct === "number" ? p.utilization_pct : null;
+  const negatives = typeof p.negative_accounts === "number" ? p.negative_accounts : 0;
+  const inquiries = typeof p.inquiries.total === "number" ? p.inquiries.total : 0;
+  const late = typeof p.late_payment_events === "number" ? p.late_payment_events : 0;
 
   const actions = [];
   const au_actions = [];
 
-  // Utilization guidance (only if we have a real number)
+  // Utilization guidance
   if (typeof util === "number" && Number.isFinite(util)) {
     if (util > 30) {
       actions.push(
@@ -702,7 +732,6 @@ function buildSuggestions(bureaus, uw) {
       );
     }
   } else {
-    // We couldn't confidently read utilization
     actions.push(
       `We couldn't accurately read utilization from this PDF, but the goal is simple: keep each card between 3–10% before you apply for new funding.`
     );
@@ -730,22 +759,22 @@ function buildSuggestions(bureaus, uw) {
 
   flattened.forEach((tl) => {
     if (tl.is_au === true) {
-      const bal = Number(tl.balance || 0);
-      const lim = Number(tl.limit || 1);
+      const bal = toNumberOrZero(tl.balance);
+      const lim = toNumberOrZero(tl.limit) || 1;
       const ratio = (bal / lim) * 100;
 
       if (ratio > 30) {
         au_actions.push(
-          `Authorized user account "${tl.creditor}" is ${ratio.toFixed(
+          `Authorized user account "${tl.creditor}" is about ${ratio.toFixed(
             1
-          )}% utilized. Removing it improves your utilization instantly.`
+          )}% utilized. Ask the primary to pay this down or remove you as an AU to instantly improve your utilization.`
         );
       }
 
       const st = String(tl.status || "").toLowerCase();
       if (st.includes("charge") || st.includes("collection") || st.includes("derog")) {
         au_actions.push(
-          `Authorized user account "${tl.creditor}" is negative. Remove it immediately.`
+          `Authorized user account "${tl.creditor}" is reporting negative. Ask the primary to fix it or remove you from the account immediately.`
         );
       }
     }
@@ -753,19 +782,13 @@ function buildSuggestions(bureaus, uw) {
 
   if (uw.optimization.needs_file_buildout) {
     actions.push(
-      `Your file is thin. Adding 1–2 primary accounts (or strategic authorized users) will boost credibility.`
+      `Your file is thin. Adding 1–2 primary accounts (or strategic authorized users with low utilization and no negatives) will boost credibility.`
     );
   }
 
-  if (
-    negatives === 0 &&
-    inquiries === 0 &&
-    typeof util === "number" &&
-    Number.isFinite(util) &&
-    util <= 30
-  ) {
+  if (negatives === 0 && inquiries === 0 && util != null && util <= 30) {
     actions.push(
-      "You are positioned for a credit limit increase. Consider requesting CLIs after your utilization is reduced."
+      "You are positioned for a credit limit increase. Consider requesting CLIs after your utilization is reduced and stable for at least 1–2 statement cycles."
     );
   }
 
@@ -784,8 +807,8 @@ Your strongest funding bureau is **${primaryKey.toUpperCase()}**.
 
 To maximize the amount of credit you can receive, focus on the following:
 
-Score: ${score}
-Utilization: ${util}%
+Score: ${score !== null ? score : "N/A"}
+Utilization: ${util !== null ? util + "%" : "N/A"}
 Negatives: ${negatives}
 Inquiries: ${inquiries}
 Late Payments: ${late}
@@ -840,7 +863,9 @@ module.exports = async function handler(req, res) {
 
     const buffer = await fs.promises.readFile(file.filepath);
     const pdf = await pdfParse(buffer);
-    const text = (pdf.text || "").replace(/\s+/g, " ").trim();
+
+    const rawText = (pdf.text || "");
+    const text = cleanCreditReportText(rawText);
 
     if (!text || text.length < 200) {
       return res.status(200).json(buildFallbackResult("Not enough text extracted"));
@@ -848,22 +873,17 @@ module.exports = async function handler(req, res) {
 
     const businessAgeMonths = getNumberField(fields, "businessAgeMonths");
 
-    let extractedRaw;
     let extracted;
     try {
       if (!text || text.trim().length < 500) {
         return res.status(200).json(buildFallbackResult("Not enough text extracted."));
       }
 
-      // LLM + repair
-      extractedRaw = await runCreditTextLLM(text);
+      extracted = await runCreditTextLLM(text);
 
-      if (!extractedRaw || typeof extractedRaw !== "object") {
+      if (!extracted || typeof extracted !== "object") {
         return res.status(200).json(buildFallbackResult("Analyzer returned invalid JSON"));
       }
-
-      // 🆕 DEEP SANITIZE HERE
-      extracted = deepSanitizeJSON(extractedRaw);
 
       if (!("bureaus" in extracted)) {
         return res
