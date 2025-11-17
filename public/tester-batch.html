@@ -78,7 +78,7 @@ iframe {
 // --------------------------------------------
 // CHANNEL LISTENER
 // --------------------------------------------
-const channel = new BroadcastChannel("uwiq_batch");
+const channel = new BroadcastChannel("uwiq-batch"); // unified name
 const resultsEl = document.getElementById("results");
 
 // Clears all rendered entries
@@ -97,7 +97,8 @@ channel.onmessage = (ev) => {
 
   const title = document.createElement("div");
   title.className = "result-title";
-  title.textContent = filename + " — " + (payload?.underwrite?.fundable ? "APPROVED" : "NEEDS REPAIR");
+  title.textContent =
+    filename + " — " + (payload?.underwrite?.fundable ? "APPROVED" : "NEEDS REPAIR");
 
   const frame = document.createElement("iframe");
 
@@ -127,17 +128,17 @@ function buildApprovedUI(data) {
   const u = data.underwrite || {};
   const m = u.metrics || {};
 
-  const personal  = u.personal?.card_funding + u.personal?.loan_funding || 0;
-  const business  = u.business?.business_funding || 0;
-  const total     = u.totals?.total_combined_funding || 0;
+  const personal =
+    (u.personal?.card_funding || 0) + (u.personal?.loan_funding || 0);
+  const business = u.business?.business_funding || 0;
+  const total = u.totals?.total_combined_funding || 0;
 
-  const score     = m.score || "--";
-  const util      = m.utilization_pct || 0;
-  const inqEx     = m.inquiries?.ex || 0;
-  const inqTu     = m.inquiries?.tu || 0;
-  const inqEq     = m.inquiries?.eq || 0;
+  const score = m.score || "--";
+  const util = m.utilization_pct || 0;
+  const inqEx = m.inquiries?.ex || 0;
+  const inqTu = m.inquiries?.tu || 0;
+  const inqEq = m.inquiries?.eq || 0;
 
-  // build URL with params for UI
   const params = new URLSearchParams({
     personalTotal: personal,
     businessTotal: business,
@@ -151,20 +152,19 @@ function buildApprovedUI(data) {
     late: m.late_payment_events || 0
   }).toString();
 
-  // load direct HTML from your APPROVED page
   return approvedHTML.replace("{{PARAMS}}", params);
 }
 
 function buildRepairUI(data) {
   const m = data.underwrite?.metrics || {};
 
-  const personal  = data.underwrite?.personal?.total_personal_funding || 0;
-  const business  = data.underwrite?.business?.business_funding || 0;
-  const total     = data.underwrite?.totals?.total_combined_funding || 0;
+  const personal = data.underwrite?.personal?.total_personal_funding || 0;
+  const business = data.underwrite?.business?.business_funding || 0;
+  const total = data.underwrite?.totals?.total_combined_funding || 0;
 
-  const score     = m.score || "--";
-  const neg       = m.negative_accounts || 0;
-  const late      = m.late_payment_events || 0;
+  const score = m.score || "--";
+  const neg = m.negative_accounts || 0;
+  const late = m.late_payment_events || 0;
 
   const params = new URLSearchParams({
     score,
@@ -178,17 +178,11 @@ function buildRepairUI(data) {
   return repairHTML.replace("{{PARAMS}}", params);
 }
 
-// --------------------------------------------
-// Placeholders for your full UI HTML
-// They get replaced with the real content in PART 2
-// --------------------------------------------
+// placeholders, filled by second <script> tag
 let approvedHTML = "";
 let repairHTML   = "";
-
 </script>
-
-</body>
-</html>
+<script>
 approvedHTML = `
 <!DOCTYPE html>
 <html lang="en">
@@ -247,7 +241,6 @@ section, .section, .row, .wrapper, .container,
   margin-bottom:26px;
   color:#fff!important;
   box-shadow:0 10px 30px rgba(56,189,248,.5);
-  transition:box-shadow .4s ease;
 }
 
 .funding-grid{
@@ -263,21 +256,9 @@ section, .section, .row, .wrapper, .container,
   border-radius:14px;
   padding:18px 26px;
   min-width:220px;
-  box-shadow:0 10px 28px rgba(0,0,0,.55);
-  transition:box-shadow .4s ease;
 }
-.fund-card h2{
-  margin:0 0 6px;
-  font-size:18px;
-  font-weight:700;
-  color:rgba(255,255,255,.82);
-}
-.fund-card p{
-  margin:0;
-  font-size:22px;
-  font-weight:900;
-  color:#fff;
-}
+.fund-card h2{ margin:0 0 6px; font-size:18px; font-weight:700; }
+.fund-card p{ margin:0; font-size:22px; font-weight:900; }
 
 .cards{
   display:flex;
@@ -292,10 +273,9 @@ section, .section, .row, .wrapper, .container,
   border-radius:12px;
   padding:18px 24px;
   min-width:160px;
-  box-shadow:0 8px 24px rgba(0,0,0,.45);
 }
-.card h3{margin:0;font-size:20px;color:rgba(255,255,255,.7);}
-.card p{margin:6px 0 0;font-size:15px;color:#fff;}
+.card h3{ margin:0; font-size:20px; }
+.card p{ margin:6px 0 0; font-size:15px; }
 
 .btn{
   background:linear-gradient(135deg,#5b7cfa,#38bdf8);
@@ -309,35 +289,15 @@ section, .section, .row, .wrapper, .container,
   display:inline-block;
   margin-top:4px;
 }
-.btn:hover{
-  transform:translateY(-2px);
-  box-shadow:0 14px 32px rgba(24,164,255,.55);
-}
 
 .opt-section{
   margin-top:40px;
   max-width:760px;
   text-align:left;
 }
-.opt-section h2{
-  font-size:20px;
-  margin:0 0 10px;
-  font-weight:800;
-}
-.opt-section ul{
-  margin:0;
-  padding-left:20px;
-  font-size:14px;
-  color:rgba(255,255,255,.9);
-}
-.opt-section li{
-  margin-bottom:6px;
-}
-.opt-note{
-  margin-top:10px;
-  font-size:13px;
-  color:rgba(226,232,240,.9);
-}
+.opt-section h2{ font-size:20px; margin:0 0 10px; font-weight:800; }
+.opt-section ul{ margin:0; padding-left:20px; font-size:14px; }
+.opt-section li{ margin-bottom:6px; }
 
 .footerNote{
   margin-top:26px;
@@ -345,8 +305,8 @@ section, .section, .row, .wrapper, .container,
   font-size:13px;
 }
 </style>
-
 </head>
+
 <body>
 
 <section class="hero">
@@ -385,9 +345,11 @@ section, .section, .row, .wrapper, .container,
 <script>
 location.search = "{{PARAMS}}";
 </script>
+
 </body>
 </html>
 `;
+
 repairHTML = `
 <!DOCTYPE html>
 <html lang="en">
@@ -438,8 +400,8 @@ p.sub{
   padding:18px 24px;
   min-width:160px;
 }
-.card h3{ margin:0; font-size:22px;}
-.card p{ margin:6px 0 0; font-size:15px;}
+.card h3{ margin:0; font-size:22px; }
+.card p{ margin:6px 0 0; font-size:15px; }
 
 .btn{
   background:linear-gradient(135deg,#5b7cfa,#38bdf8);
@@ -450,6 +412,7 @@ p.sub{
   border-radius:12px;
   font-size:18px;
 }
+
 .fundBox{
   background:#fff;
   border-radius:24px;
@@ -460,6 +423,7 @@ p.sub{
   border:1px solid #e2e8f0;
   text-align:center;
 }
+
 .fixBox{
   background:#fff;
   border-radius:24px;
@@ -471,6 +435,7 @@ p.sub{
 </style>
 
 </head>
+
 <body>
 
 <section class="hero">
@@ -510,3 +475,7 @@ location.search = "{{PARAMS}}";
 </body>
 </html>
 `;
+</script>
+
+</body>
+</html>
