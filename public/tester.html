@@ -19,7 +19,7 @@ body {
   overflow-x: hidden;
 }
 
-/* Matrix canvas behind everything */
+/* Matrix background */
 #matrix {
   position: fixed;
   top: 0;
@@ -214,7 +214,7 @@ dropzone.addEventListener("drop", e => {
 // ---------- Layer A summary ----------
 function buildLayerASummary(json) {
   if (!json || !json.ok || !json.underwrite)
-    return "Analyzer fallback. PDF was non-standard or unreadable.";
+    return "Analyzer fallback. PDF unreadable or unsupported.";
 
   const uw = json.underwrite;
   const m = uw.metrics;
@@ -227,17 +227,17 @@ function buildLayerASummary(json) {
 
   const s = [];
 
-  if (score) s.push(`Strongest bureau: ${bureau} (${score} score).`);
+  if (score) s.push(`Strongest bureau: ${bureau} (${score}).`);
   else s.push(`Strongest bureau: ${bureau}.`);
 
   if (util != null) s.push(`Utilization: ${util}%. Target 3–10%.`);
-  else s.push(`Utilization unreadable, target 3–10%.`);
+  else s.push(`Utilization unreadable.`);
 
   if (negatives > 0 || inquiries > 0) {
     const parts = [];
     if (negatives > 0) parts.push(`${negatives} negatives`);
     if (inquiries > 0) parts.push(`${inquiries} inquiries`);
-    s.push(`${parts.join(" and ")} are hurting approvals.`);
+    s.push(`${parts.join(" and ")} hurt approvals.`);
   } else {
     s.push(`Clean file — strong approvals expected.`);
   }
@@ -245,7 +245,7 @@ function buildLayerASummary(json) {
   if (uw.fundable)
     s.push(`Est. Funding: ~$${Math.round(funding).toLocaleString()}.`);
   else
-    s.push(`Close to fundable — cleanup steps unlock full approvals.`);
+    s.push(`Close — cleanup steps needed.`);
 
   return s.join(" ");
 }
@@ -255,6 +255,7 @@ async function handleFiles(files) {
   resultsDiv.innerHTML = "";
   failsDiv.innerHTML = "";
   allResults = [];
+
   progress.textContent = "Starting…";
   summaryA.textContent = "Waiting…";
 
@@ -270,20 +271,19 @@ async function handleFiles(files) {
   progress.textContent = `DONE — ${total} files`;
 }
 
-// ---------- Process one file (100% POST, JSON-safe) ----------
+// ---------- Process one file ----------
 async function processFile(file) {
   const form = new FormData();
   form.append("file", file);
 
   let json;
   try {
-    const res = await fetch("/api/parse-report", {
+    const res = await fetch("/api/lite/parse-report", {
       method: "POST",
       body: form
     });
 
     const text = await res.text();
-
     try { json = JSON.parse(text); }
     catch {
       json = { ok: false, error: true, message: text.slice(0,200) };
