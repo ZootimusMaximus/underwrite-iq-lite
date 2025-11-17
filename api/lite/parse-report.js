@@ -1,18 +1,14 @@
-// ==================================================================================
-// UnderwriteIQ — PERFECTION PIPELINE v1 (FINAL BUILD)
-// Patch v9.0 — Ultra-Stable GPT-4.1 VISION Pipeline
-// - JSON Repair v4
-// - Input_file sanitizer
-// - Dead-zone PDF detection
-// - Absolute Vercel compatibility
-// - Crash-proof fallback engine
-// ==================================================================================
+// ============================================================================
+// UNDERWRITEIQ — PERFECTION PIPELINE v1
+// Full PDF → Vision → Clean JSON → Underwrite → Suggestions → Redirect
+// Node/Vercel Single-File Edition
+// ============================================================================
 
 const fs = require("fs");
 const formidable = require("formidable");
 
 // ============================================================================
-// Vercel API Config — handles file uploads + large PDFs
+// VERCEL CONFIG — allow PDF uploads up to 30MB
 // ============================================================================
 module.exports.config = {
   api: { bodyParser: false, sizeLimit: "30mb" }
@@ -24,18 +20,20 @@ module.exports.config = {
 function logError(tag, err, context = "") {
   const msg = `
 ==== ${new Date().toISOString()} — ${tag} ====
-${context ? "Context:\n" + context + "\n" : ""}
+${context ? "context:\n" + context + "\n" : ""}
 ${String(err)}
 ---------------------------------------------
 `;
-  console.error(msg);
-  try { fs.appendFileSync("/tmp/uwiq-errors.log", msg); } catch (_) {}
+  try {
+    console.error(msg);
+    fs.appendFileSync("/tmp/uwiq-errors.log", msg);
+  } catch (_) {}
 }
 
 // ============================================================================
-// BUILT-IN FALLBACK RESULT
+// FALLBACK RESPONSE — never breaks UI
 // ============================================================================
-function buildFallbackResult(reason = "Analyzer failed") {
+function fallback(reason) {
   return {
     ok: true,
     fallback: true,
@@ -44,16 +42,16 @@ function buildFallbackResult(reason = "Analyzer failed") {
       score: null,
       risk_band: "unknown",
       note:
-        "We couldn't clearly read this credit report file. Please upload a different credit report PDF (Experian, Equifax, TransUnion, or AnnualCreditReport.com)."
+        "We couldn’t read this credit report. Please upload a different PDF (Experian, Equifax, TransUnion, AnnualCreditReport.com)."
     },
     issues: [],
     dispute_groups: [],
     funding_estimate: { low: null, high: null, confidence: 0 },
     suggestions: {
       web_summary:
-        "We had trouble reading this specific credit report file. Please upload a standard credit report PDF.",
+        "This report version couldn’t be analyzed. Try uploading a more standard PDF.",
       email_summary:
-        "Our system couldn't reliably read the file uploaded. Please upload a standard credit report PDF.",
+        "We could not analyze the uploaded PDF. Please try a different credit report format.",
       actions: [],
       au_actions: []
     }
@@ -61,18 +59,17 @@ function buildFallbackResult(reason = "Analyzer failed") {
 }
 
 // ============================================================================
-// BASE SYSTEM PROMPT — clean & strict
+// SYSTEM PROMPT — GPT-4.1 Vision PDF schema
 // ============================================================================
 const LLM_PROMPT = `
-You are UnderwriteIQ. Extract the FULL per-bureau data from a consumer credit report.
+You are UnderwriteIQ. Extract FULL per-bureau data from a consumer credit report.
 
 Rules:
-- VALID JSON ONLY
-- NO markdown
-- NO commentary
-- NO invented tradelines
-- Null ANYTHING missing
-- Follow schema EXACTLY
+- Output strictly VALID JSON.
+- No markdown.
+- No commentary.
+- No invented tradelines.
+- If a bureau is missing → set it to null values.
 
 Schema:
 {
@@ -108,24 +105,27 @@ Return ONLY JSON.
 `;
 
 // ============================================================================
-// JSON Normalizer
+// CLEANER — removes markdown wrappers, tabs, fences, garbage
 // ============================================================================
-function normalizeLLMOutput(str) {
-  return String(str || "")
+function normalize(raw) {
+  return String(raw || "")
     .replace(/\r/g, "")
-    .replace(/\t+/g, " ")
     .replace(/```json/gi, "")
     .replace(/```/g, "")
+    .replace(/\t+/g, " ")
     .trim();
 }
 
 // ============================================================================
-// Extract LLM JSON text
+// JSON EXTRACTOR — supports Responses API + legacy Chat API
 // ============================================================================
 function extractJsonStringFromResponse(json) {
-  if (json.output_text && typeof json.output_text === "string")
+  // new Responses API → output_text
+  if (json.output_text && typeof json.output_text === "string") {
     return json.output_text.trim();
+  }
 
+  // new Responses API → output array
   if (Array.isArray(json.output)) {
     for (const msg of json.output) {
       if (!msg || !Array.isArray(msg.content)) continue;
@@ -133,43 +133,58 @@ function extractJsonStringFromResponse(json) {
         if (
           (block.type === "output_text" || block.type === "summary_text") &&
           typeof block.text === "string"
-        ) return block.text.trim();
+        ) {
+          return block.text.trim();
+        }
       }
     }
   }
 
+  // legacy chat format
   if (
     json.choices &&
     json.choices[0] &&
     json.choices[0].message &&
     typeof json.choices[0].message.content === "string"
-  ) return json.choices[0].message.content.trim();
+  ) {
+    return json.choices[0].message.content.trim();
+  }
 
   return null;
 }
 
 // ============================================================================
-// JSON Repair v4 — strongest version
+// MASSIVE JSON REPAIR ENGINE v4 — near-bulletproof
 // ============================================================================
-function tryParseJsonWithRepair(raw) {
-  if (!raw) throw new Error("EMPTY_RAW");
+function repairJson(raw) {
+  if (!raw) throw new Error("No model output.");
 
-  let cleaned = normalizeLLMOutput(raw);
-  const first = cleaned.indexOf("{");
-  const last = cleaned.lastIndexOf("}");
-  if (first === -1 || last === -1) throw new Error("NO_JSON_OBJECT");
+  let txt = normalize(raw);
 
-  let fixed = cleaned.substring(first, last + 1);
+  const first = txt.indexOf("{");
+  const last = txt.lastIndexOf("}");
+  if (first === -1 || last === -1) {
+    throw new Error("Model output contains no JSON object.");
+  }
 
+  let fixed = txt.slice(first, last + 1);
+
+  // remove trailing commas
   fixed = fixed.replace(/,\s*([}\]])/g, "$1");
+
+  // quote keys
   fixed = fixed.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
+
+  // quote date-like
   fixed = fixed.replace(/:\s*(\d{4}-\d{2}(-\d{2})?)/g, ':"$1"');
 
+  // auto-quote barewords
   fixed = fixed.replace(
     /:\s*([A-Za-z][A-Za-z0-9 _\-]*)\s*(,|\})/g,
-    (m, val, end) => {
-      if (val.startsWith('"') || /^[0-9.\-]+$/.test(val)) return `:${val}${end}`;
-      return `:"${val}"${end}`;
+    (m, word, end) => {
+      if (word.startsWith('"')) return `:${word}${end}`;
+      if (/^[0-9.\-]+$/.test(word)) return `:${word}${end}`;
+      return `:"${word}"${end}`;
     }
   );
 
@@ -177,12 +192,94 @@ function tryParseJsonWithRepair(raw) {
     return JSON.parse(fixed);
   } catch (err) {
     logError("JSON_REPAIR_FAIL", err, fixed.slice(0, 500));
-    throw new Error("JSON_PARSE_FAILED");
+    throw new Error("JSON parse failed: " + err.message);
   }
 }
 
 // ============================================================================
-// Bureau Normalizer
+// SCORE SANITIZER — fixes 9340/8920 etc
+// ============================================================================
+function sanitizeScore(s) {
+  if (s == null) return null;
+  let n = Number(s);
+  if (!Number.isFinite(n)) return null;
+
+  if (n > 9000) n = Math.floor(n / 10);
+  if (n > 850) n = 850;
+  if (n < 300) return null;
+
+  return n;
+}
+
+// ============================================================================
+// GPT-4.1 CALL — PDF is passed via base64 data URL
+// ============================================================================
+async function callLLM(pdfBuffer, filename) {
+  const key = process.env.UNDERWRITE_IQ_VISION_KEY;
+  if (!key) throw new Error("Missing env UNDERWRITE_IQ_VISION_KEY.");
+
+  const base64 = pdfBuffer.toString("base64");
+  const dataUrl = `data:application/pdf;base64,${base64}`;
+  const safeName = filename || "credit-report.pdf";
+
+  const payload = {
+    model: "gpt-4.1",
+    input: [
+      { role: "system", content: LLM_PROMPT },
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: "Extract data from this credit report PDF." },
+          { type: "input_file", filename: safeName, file_data: dataUrl }
+        ]
+      }
+    ],
+    temperature: 0,
+    max_output_tokens: 4096
+  };
+
+  const resp = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!resp.ok) {
+    const errTxt = await resp.text();
+    throw new Error("LLM HTTP ERROR: " + errTxt);
+  }
+
+  const json = await resp.json();
+  const raw = extractJsonStringFromResponse(json);
+
+  if (!raw) throw new Error("LLM returned no JSON.");
+
+  return repairJson(raw);
+}
+
+// ============================================================================
+// RETRY WRAPPER — 3 attempts with exponential backoff
+// ============================================================================
+async function runLLM(pdfBuffer, filename) {
+  let last = null;
+
+  for (let i = 1; i <= 3; i++) {
+    try {
+      return await callLLM(pdfBuffer, filename);
+    } catch (err) {
+      last = err;
+      logError("LLM_ATTEMPT_" + i, err);
+      await new Promise(r => setTimeout(r, 120 * i));
+    }
+  }
+
+  throw new Error("LLM failed after 3 attempts: " + last);
+}
+// ============================================================================
+// BUREAU NORMALIZER + HELPERS
 // ============================================================================
 function normalizeBureau(b) {
   if (!b || typeof b !== "object") {
@@ -213,101 +310,27 @@ function normalizeBureau(b) {
   };
 }
 
-// ============================================================================
-// Score Sanitizer
-// ============================================================================
-function sanitizeScore(score) {
-  if (score == null) return null;
-  let s = Number(score);
-  if (s > 9000) s = Math.floor(s / 10);
-  if (s > 850) s = 850;
-  if (s < 300) return null;
-  return s;
-}
-
-// ============================================================================
-// Call GPT-4.1 Vision with PDF (input_file)
-// ============================================================================
-async function callOpenAIOnce(pdfBuffer, filename) {
-  const key = process.env.UNDERWRITE_IQ_VISION_KEY;
-  if (!key) throw new Error("NO_API_KEY");
-
-  const dataUrl = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
-  const safeFilename = filename || "credit-report.pdf";
-
-  const payload = {
-    model: "gpt-4.1",
-    input: [
-      { role: "system", content: LLM_PROMPT },
-      {
-        role: "user",
-        content: [
-          { type: "input_text", text: "Extract per-bureau data." },
-          { type: "input_file", filename: safeFilename, file_data: dataUrl }
-        ]
-      }
-    ],
-    temperature: 0,
-    max_output_tokens: 4096
-  };
-
-  const resp = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-
-  if (!resp.ok) throw new Error(await resp.text());
-
-  const json = await resp.json();
-  const raw = extractJsonStringFromResponse(json);
-  if (!raw) throw new Error("NO_RAW_JSON");
-
-  return tryParseJsonWithRepair(raw);
-}
-
-// ============================================================================
-// Retry Wrapper — 3 tries, backoff
-// ============================================================================
-async function runCreditPdfLLM(pdfBuffer, filename) {
-  let lastErr = null;
-  for (let i = 1; i <= 3; i++) {
-    try {
-      return await callOpenAIOnce(pdfBuffer, filename);
-    } catch (err) {
-      lastErr = err;
-      logError("ATTEMPT_" + i, err);
-      await new Promise(r => setTimeout(r, 100 * i));
-    }
-  }
-  throw new Error("LLM_FAILED_THREE_TIMES: " + lastErr);
-}
-
-// ============================================================================
-// PART 1 ENDS HERE
-// ============================================================================
-// ============================================================================
-// DATE + NUMBER HELPERS
-// ============================================================================
-function getNumberField(fields, key) {
-  if (!fields || fields[key] == null) return null;
-  const raw = Array.isArray(fields[key]) ? fields[key][0] : fields[key];
-  const n = Number(raw);
+function toNumberOrNull(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string" && v.toLowerCase() === "null") return null;
+  const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+function numOrZero(v) {
+  const n = toNumberOrNull(v);
+  return n == null ? 0 : n;
 }
 
 function monthsSince(dateStr) {
   if (!dateStr || typeof dateStr !== "string") return null;
-  const m = dateStr.match(/^(\d{4})-(\d{2})/);
-  if (!m) return null;
+  const match = dateStr.match(/^(\d{4})-(\d{2})/);
+  if (!match) return null;
 
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
+  const y = Number(match[1]);
+  const m = Number(match[2]);
 
-  const opened = new Date(y, mo - 1, 1);
+  const opened = new Date(y, m - 1, 1);
   const now = new Date();
 
   return (
@@ -316,76 +339,94 @@ function monthsSince(dateStr) {
   );
 }
 
+function getNumberField(fields, key) {
+  if (!fields || fields[key] == null) return null;
+  const raw = Array.isArray(fields[key]) ? fields[key][0] : fields[key];
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 // ============================================================================
-// UNDERWRITING ENGINE (stable version)
+// UNDERWRITE ENGINE — per bureau + multi-bureau
 // ============================================================================
 function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
-  const ex = normalizeBureau(bureaus.experian);
-  const eq = normalizeBureau(bureaus.equifax);
-  const tu = normalizeBureau(bureaus.transunion);
+  const safe = bureaus || {};
+
+  const ex = normalizeBureau(safe.experian);
+  const eq = normalizeBureau(safe.equifax);
+  const tu = normalizeBureau(safe.transunion);
 
   ex.score = sanitizeScore(ex.score);
   eq.score = sanitizeScore(eq.score);
   tu.score = sanitizeScore(tu.score);
 
-  const num = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const exInq = numOrZero(ex.inquiries);
+  const eqInq = numOrZero(eq.inquiries);
+  const tuInq = numOrZero(tu.inquiries);
+  const totalInq = exInq + eqInq + tuInq;
 
-  const build = (key, label, b) => {
+  function buildBureauSummary(key, label, b) {
     const score = sanitizeScore(b.score);
-    const util = b.utilization_pct == null ? null : Number(b.utilization_pct);
-    const neg = num(b.negatives);
-    const lates = num(b.late_payment_events);
-    const inquiries = num(b.inquiries);
+    const util = toNumberOrNull(b.utilization_pct);
+    const neg = numOrZero(b.negatives);
+    const lates = numOrZero(b.late_payment_events);
+    const tradelines = Array.isArray(b.tradelines) ? b.tradelines : [];
 
-    let highestRev = 0;
-    let highestInst = 0;
-    let hasRev = false;
-    let hasInst = false;
-    let positives = 0;
+    let highestRevolvingLimit = 0;
+    let highestInstallmentAmount = 0;
+    let hasAnyRevolving = false;
+    let hasAnyInstallment = false;
+    let positiveTradelinesCount = 0;
 
-    for (const tl of b.tradelines) {
+    for (const tl of tradelines) {
       if (!tl || typeof tl !== "object") continue;
 
       const type = String(tl.type || "").toLowerCase();
       const status = String(tl.status || "").toLowerCase();
-      const limit = num(tl.limit);
-      const balance = num(tl.balance);
-      const age = monthsSince(tl.opened);
+      const limit = numOrZero(tl.limit);
+      const balance = numOrZero(tl.balance);
+      const ageMonths = monthsSince(tl.opened);
 
-      const derog =
-        status.includes("charge") ||
+      const isDerog =
+        status.includes("chargeoff") ||
         status.includes("collection") ||
         status.includes("derog") ||
-        status.includes("repo") ||
+        status.includes("repossession") ||
         status.includes("foreclosure");
 
-      if (!derog) positives++;
+      if (!isDerog) positiveTradelinesCount++;
 
-      const seasoned = age != null && age >= 24;
+      const seasoned = ageMonths != null && ageMonths >= 24;
 
       if (type === "revolving") {
-        hasRev = true;
-        if (status.includes("open") && seasoned && limit > highestRev)
-          highestRev = limit;
+        hasAnyRevolving = true;
+        if (status.includes("open") && seasoned && limit > highestRevolvingLimit) {
+          highestRevolvingLimit = limit;
+        }
       }
 
       if (["installment", "auto", "mortgage"].includes(type)) {
-        hasInst = true;
-        const amt = limit || balance;
-        if (amt > 0 && seasoned && !derog) {
-          if (amt > highestInst) highestInst = amt;
+        hasAnyInstallment = true;
+        const originalAmount = limit || balance;
+        if (originalAmount > 0 && seasoned && !isDerog) {
+          if (originalAmount > highestInstallmentAmount) {
+            highestInstallmentAmount = originalAmount;
+          }
         }
       }
     }
 
-    const thin = positives < 3;
-    const fileNeg = positives === 0 && neg > 0;
+    const thinFile = positiveTradelinesCount < 3;
+    const fileAllNegative = positiveTradelinesCount === 0 && neg > 0;
 
-    const canCard = hasRev && highestRev >= 5000;
-    const canLoan = hasInst && highestInst >= 10000 && lates === 0;
+    const canCardStack = highestRevolvingLimit >= 5000 && hasAnyRevolving;
+    const cardFunding = canCardStack ? highestRevolvingLimit * 5.5 : 0;
 
-    const cardFunding = canCard ? highestRev * 5.5 : 0;
-    const loanFunding = canLoan ? highestInst * 3 : 0;
+    const canLoanStack =
+      highestInstallmentAmount >= 10000 && hasAnyInstallment && lates === 0;
+    const loanFunding = canLoanStack ? highestInstallmentAmount * 3.0 : 0;
+
+    const totalPersonalFunding = cardFunding + loanFunding;
 
     const fundable =
       score != null &&
@@ -397,88 +438,100 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
       key,
       label,
       available: b.available,
-      score,
+      score: score ?? 0,
       util,
       neg,
       lates,
-      inquiries,
-      tradelines: b.tradelines,
-      highestRevolvingLimit: highestRev,
-      highestInstallmentAmount: highestInst,
-      hasAnyRevolving: hasRev,
-      hasAnyInstallment: hasInst,
-      thinFile: thin,
-      fileAllNegative: fileNeg,
-      canCardStack: canCard,
-      canLoanStack: canLoan,
-      canDualStack: canCard && canLoan,
+      inquiries: numOrZero(b.inquiries),
+      tradelines,
+      highestRevolvingLimit,
+      highestInstallmentAmount,
+      hasAnyRevolving,
+      hasAnyInstallment,
+      thinFile,
+      fileAllNegative,
+      canCardStack,
+      canLoanStack,
+      canDualStack: canCardStack && canLoanStack,
       cardFunding,
       loanFunding,
-      totalPersonalFunding: cardFunding + loanFunding,
+      totalPersonalFunding,
       fundable,
-      positiveTradelinesCount: positives
+      positiveTradelinesCount
     };
-  };
+  }
 
-  const exSum = build("experian", "Experian", ex);
-  const eqSum = build("equifax", "Equifax", eq);
-  const tuSum = build("transunion", "TransUnion", tu);
+  const bureauSummaries = [
+    buildBureauSummary("experian", "Experian", ex),
+    buildBureauSummary("equifax", "Equifax", eq),
+    buildBureauSummary("transunion", "TransUnion", tu)
+  ];
 
-  const bureausArr = [exSum, eqSum, tuSum];
-
-  let primary = bureausArr.find(b => b.available) || exSum;
-  for (const b of bureausArr) {
-    if (b.available && b.score > primary.score) primary = b;
+  // primary = highest score among available bureaus
+  let primary = bureauSummaries[0];
+  for (const b of bureauSummaries) {
+    if (!b.available) continue;
+    if (!primary.available || b.score > primary.score) primary = b;
   }
 
   const businessAgeMonths =
-    Number.isFinite(businessAgeMonthsRaw) ? businessAgeMonthsRaw : null;
+    typeof businessAgeMonthsRaw === "number" && Number.isFinite(businessAgeMonthsRaw)
+      ? businessAgeMonthsRaw
+      : null;
 
-  const fundableCount = bureausArr.filter(b => b.fundable).length;
+  const fundableBureaus = bureauSummaries.filter(
+    b => b.available && b.fundable
+  );
+  const fundableCount = fundableBureaus.length;
 
-  const totalCard = bureausArr.reduce(
-    (s, b) => s + (b.available ? b.cardFunding : 0),
+  const totalCardFundingBase = bureauSummaries.reduce(
+    (sum, b) => sum + (b.available ? b.cardFunding : 0),
     0
   );
-  const totalLoan = bureausArr.reduce(
-    (s, b) => s + (b.available ? b.loanFunding : 0),
+  const totalLoanFundingBase = bureauSummaries.reduce(
+    (sum, b) => sum + (b.available ? b.loanFunding : 0),
     0
   );
 
-  let scale = fundableCount === 1 ? 1 / 3 : 1;
+  let scale = 1;
+  if (fundableCount === 1) scale = 1 / 3;
 
-  const cardFunding = totalCard * scale;
-  const loanFunding = totalLoan * scale;
+  const cardFunding = totalCardFundingBase * scale;
+  const loanFunding = totalLoanFundingBase * scale;
   const totalPersonalFunding = cardFunding + loanFunding;
 
   let businessMultiplier = 0;
   if (businessAgeMonths != null && primary.cardFunding > 0) {
     if (businessAgeMonths < 12) businessMultiplier = 0.5;
-    else if (businessAgeMonths < 24) businessMultiplier = 1;
-    else businessMultiplier = 2;
+    else if (businessAgeMonths < 24) businessMultiplier = 1.0;
+    else businessMultiplier = 2.0;
   }
 
+  const canBusinessFund = businessMultiplier > 0;
   const businessFunding = primary.cardFunding * businessMultiplier;
   const totalCombinedFunding = totalPersonalFunding + businessFunding;
 
-  const needsUtil = primary.util != null && primary.util > 30;
-  const needsRev = !primary.hasAnyRevolving || primary.highestRevolvingLimit < 5000;
-  const needsNeg = primary.neg > 0;
-  const needsInq = exSum.inquiries + eqSum.inquiries + tuSum.inquiries > 0;
-  const needsBuild = primary.thinFile || primary.fileAllNegative;
+  const needsUtilReduction =
+    primary.util != null && Number.isFinite(primary.util) && primary.util > 30;
+  const needsNewPrimaryRevolving =
+    !primary.hasAnyRevolving || primary.highestRevolvingLimit < 5000;
+  const needsInquiryCleanup = totalInq > 0;
+  const needsNegativeCleanup = primary.neg > 0;
+  const needsFileBuildOut = primary.thinFile || primary.fileAllNegative;
 
   const optimization = {
-    needs_util_reduction: needsUtil,
-    target_util_pct: needsUtil ? 30 : null,
-    needs_new_primary_revolving: needsRev,
-    needs_inquiry_cleanup: needsInq,
-    needs_negative_cleanup: needsNeg,
-    needs_file_buildout: needsBuild,
+    needs_util_reduction: needsUtilReduction,
+    target_util_pct: needsUtilReduction ? 30 : null,
+    needs_new_primary_revolving: needsNewPrimaryRevolving,
+    needs_inquiry_cleanup: needsInquiryCleanup,
+    needs_negative_cleanup: needsNegativeCleanup,
+    needs_file_buildout: needsFileBuildOut,
     thin_file: primary.thinFile,
     file_all_negative: primary.fileAllNegative
   };
 
-  const liteBannerFunding = primary.cardFunding || cardFunding || 15000;
+  let liteBannerFunding = primary.cardFunding || cardFunding;
+  if (!liteBannerFunding) liteBannerFunding = 15000;
 
   const fundable =
     primary.score != null &&
@@ -495,16 +548,55 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
       negative_accounts: primary.neg,
       late_payment_events: primary.lates,
       inquiries: {
-        ex: exSum.inquiries,
-        eq: eqSum.inquiries,
-        tu: tuSum.inquiries,
-        total: exSum.inquiries + eqSum.inquiries + tuSum.inquiries
+        ex: exInq,
+        eq: eqInq,
+        tu: tuInq,
+        total: totalInq
       }
     },
     per_bureau: {
-      experian: exSum,
-      equifax: eqSum,
-      transunion: tuSum
+      experian: {
+        score: bureauSummaries[0].score,
+        utilization_pct: bureauSummaries[0].util,
+        negatives: bureauSummaries[0].neg,
+        late_payment_events: bureauSummaries[0].lates,
+        inquiries: bureauSummaries[0].inquiries,
+        thin_file: bureauSummaries[0].thinFile,
+        file_all_negative: bureauSummaries[0].fileAllNegative,
+        card_funding: bureauSummaries[0].cardFunding,
+        loan_funding: bureauSummaries[0].loanFunding,
+        total_personal_funding: bureauSummaries[0].totalPersonalFunding,
+        fundable: bureauSummaries[0].fundable,
+        available: bureauSummaries[0].available
+      },
+      equifax: {
+        score: bureauSummaries[1].score,
+        utilization_pct: bureauSummaries[1].util,
+        negatives: bureauSummaries[1].neg,
+        late_payment_events: bureauSummaries[1].lates,
+        inquiries: bureauSummaries[1].inquiries,
+        thin_file: bureauSummaries[1].thinFile,
+        file_all_negative: bureauSummaries[1].fileAllNegative,
+        card_funding: bureauSummaries[1].cardFunding,
+        loan_funding: bureauSummaries[1].loanFunding,
+        total_personal_funding: bureauSummaries[1].totalPersonalFunding,
+        fundable: bureauSummaries[1].fundable,
+        available: bureauSummaries[1].available
+      },
+      transunion: {
+        score: bureauSummaries[2].score,
+        utilization_pct: bureauSummaries[2].util,
+        negatives: bureauSummaries[2].neg,
+        late_payment_events: bureauSummaries[2].lates,
+        inquiries: bureauSummaries[2].inquiries,
+        thin_file: bureauSummaries[2].thinFile,
+        file_all_negative: bureauSummaries[2].fileAllNegative,
+        card_funding: bureauSummaries[2].cardFunding,
+        loan_funding: bureauSummaries[2].loanFunding,
+        total_personal_funding: bureauSummaries[2].totalPersonalFunding,
+        fundable: bureauSummaries[2].fundable,
+        available: bureauSummaries[2].available
+      }
     },
     personal: {
       highest_revolving_limit: primary.highestRevolvingLimit,
@@ -518,12 +610,12 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     },
     business: {
       business_age_months: businessAgeMonths,
-      can_business_fund: businessMultiplier > 0,
+      can_business_fund: canBusinessFund,
       business_multiplier: businessMultiplier,
       business_funding: businessFunding
     },
     totals: {
-      total_personal_funding,
+      total_personal_funding: totalPersonalFunding,
       total_business_funding: businessFunding,
       total_combined_funding: totalCombinedFunding
     },
@@ -536,7 +628,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
 // SUGGESTION ENGINE
 // ============================================================================
 function buildSuggestions(bureaus, uw) {
-  const p = uw.primary_bureau.toUpperCase();
+  const primaryKey = uw.primary_bureau;
   const m = uw.metrics;
 
   const score = m.score;
@@ -548,90 +640,124 @@ function buildSuggestions(bureaus, uw) {
   const actions = [];
   const au_actions = [];
 
-  if (util != null) {
-    if (util > 30)
+  if (typeof util === "number" && Number.isFinite(util)) {
+    if (util > 30) {
       actions.push(
-        `Your utilization is about ${util}%. Pay balances down to 3–10% for max approvals.`
+        `Your utilization is about ${util}%. Pay balances down into the 3–10% range before applying for new credit to maximize approvals.`
       );
-    else
+    } else {
       actions.push(
-        `Your utilization is solid. Keep cards between 3–10% for strongest approvals.`
+        `Your utilization is in a solid range. Keeping each card between 3–10% will help you qualify for stronger limits.`
       );
+    }
   } else {
-    actions.push(`Utilization unreadable — target 3–10%.`);
+    actions.push(
+      `We couldn't clearly read utilization from this PDF, but keep each card between 3–10% before applying for new credit.`
+    );
   }
 
-  if (negatives > 0)
-    actions.push(`You have ${negatives} negative account(s). Clean-up will help.`);
-
-  if (inquiries > 0)
+  if (negatives > 0) {
     actions.push(
-      `${inquiries} inquiries found — removing recent or unnecessary ones improves approvals.`
+      `You have ${negatives} negative account(s). Cleaning these up greatly improves approval odds with lenders.`
     );
+  }
 
-  const allTL = [
-    ...(bureaus.experian.tradelines || []),
-    ...(bureaus.equifax.tradelines || []),
-    ...(bureaus.transunion.tradelines || [])
+  if (inquiries > 0) {
+    actions.push(
+      `You have ${inquiries} total inquiries. Removing unnecessary or recent inquiries helps reduce “too many inquiries” denials.`
+    );
+  }
+
+  const allTradelines = [
+    ...(bureaus.experian?.tradelines || []),
+    ...(bureaus.equifax?.tradelines || []),
+    ...(bureaus.transunion?.tradelines || [])
   ];
 
-  for (const tl of allTL) {
-    if (!tl || !tl.is_au) continue;
+  for (const tl of allTradelines) {
+    if (!tl || typeof tl !== "object") continue;
+    if (tl.is_au !== true) continue;
 
-    const lim = Number(tl.limit || 1);
-    const bal = Number(tl.balance || 0);
+    const bal = tl.balance ? Number(tl.balance) : 0;
+    const lim = tl.limit ? Number(tl.limit) : 1;
     const ratio = (bal / lim) * 100;
-    const creditor = tl.creditor || "AU account";
+    const creditor = tl.creditor || "authorized user account";
     const status = String(tl.status || "").toLowerCase();
 
-    if (ratio > 30)
+    if (ratio > 30) {
       au_actions.push(
-        `AU "${creditor}" is ${ratio.toFixed(1)}% utilized — pay down or remove.`
+        `Authorized user account "${creditor}" is around ${ratio.toFixed(
+          1
+        )}% utilized. Have the primary cardholder pay it down or remove you as an AU.`
       );
+    }
 
     if (
       status.includes("charge") ||
       status.includes("collection") ||
       status.includes("derog") ||
       status.includes("delinquent")
-    )
+    ) {
       au_actions.push(
-        `AU "${creditor}" is reporting negative history — remove from report.`
+        `Authorized user account "${creditor}" is reporting negative history. Ask the primary cardholder to remove you as an AU so it stops reporting.`
       );
+    }
   }
 
-  if (uw.optimization.needs_file_buildout)
-    actions.push(`File is thin — add 1–2 primary or low-utilization AU accounts.`);
+  if (uw.optimization.needs_file_buildout) {
+    actions.push(
+      `Your credit file is on the thin side. Adding 1–2 new primary accounts or low-utilization authorized user accounts will strengthen your profile.`
+    );
+  }
 
-  const webSummary = `Strongest bureau: ${p}. ${
-    uw.fundable
-      ? "You are fundable — here’s how to maximize limits:"
-      : "You're close — improve these items next:"
-  }`;
+  if (negatives === 0 && inquiries === 0 && (typeof util !== "number" || util <= 30)) {
+    actions.push(
+      `You're in a good position to request credit limit increases once balances are paid down.`
+    );
+  }
+
+  const webSummary = (() => {
+    let s = `Your strongest bureau right now is ${primaryKey.toUpperCase()}. `;
+    if (!uw.fundable) {
+      s += `You're close — here’s what to improve next to unlock higher approvals:`;
+    } else {
+      s += `You're fundable based on your profile. Here’s how to maximize approvals and starting limits:`;
+    }
+    return s;
+  })();
 
   const emailSummary = `
-Strongest bureau: ${p}
+Your strongest funding bureau is ${primaryKey.toUpperCase()}.
 
-Score: ${score ?? "N/A"}
-Utilization: ${util != null ? util + "%" : "N/A"}
-Negatives: ${negatives}
-Inquiries: ${inquiries}
-Late Payments: ${late}
+Snapshot:
+- Score: ${score ?? "not available"}
+- Utilization: ${
+    util != null && Number.isFinite(util) ? util + "%" : "not clearly readable"
+  }
+- Negative accounts: ${negatives}
+- Total inquiries: ${inquiries}
+- Recent late payments: ${late}
 
-Key Improvements:
-1. Keep all revolving accounts at 3–10%.
-2. Remove negatives & high-impact inquiries.
-3. Fix/remove AU accounts with high utilization or derogatory history.
+Fastest improvements:
+1) Keep all cards in the 3–10% utilization range.
+2) Remove negative items and unnecessary inquiries.
+3) Fix or remove any AU cards that are maxed out or reporting negative history.
 `.trim();
 
-  return { web_summary: webSummary, email_summary: emailSummary, actions, au_actions };
+  return {
+    web_summary: webSummary,
+    email_summary: emailSummary,
+    actions,
+    au_actions
+  };
 }
 
 // ============================================================================
-// MAIN HANDLER — Perfection Pipeline
+// MAIN HANDLER — single endpoint: POST /api/lite/parse-report
 // ============================================================================
 module.exports = async function handler(req, res) {
   try {
+    // CORS
     if (req.method === "OPTIONS") {
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -645,6 +771,7 @@ module.exports = async function handler(req, res) {
       return res.status(405).json({ ok: false, msg: "Method not allowed" });
     }
 
+    // Parse multipart form
     const form = formidable({
       multiples: false,
       keepExtensions: true,
@@ -652,63 +779,89 @@ module.exports = async function handler(req, res) {
       maxFileSize: 25 * 1024 * 1024
     });
 
-    const { fields, files } = await new Promise((resolve, reject) =>
-      form.parse(req, (e, flds, fls) => (e ? reject(e) : resolve({ fields: flds, files: fls })))
-    );
+    const { fields, files } = await new Promise((resolve, reject) => {
+      form.parse(req, (err, flds, fls) => {
+        if (err) reject(err);
+        else resolve({ fields: flds, files: fls });
+      });
+    });
 
     const file = files.file;
     if (!file || !file.filepath) {
-      return res.status(200).json(buildFallbackResult("No file detected."));
+      return res
+        .status(200)
+        .json(fallback("No file detected. Please upload a credit report PDF."));
     }
 
     const buffer = await fs.promises.readFile(file.filepath);
+
     if (!buffer || buffer.length < 1000) {
-      return res.status(200).json(buildFallbackResult("PDF too small."));
+      return res.status(200).json(
+        fallback(
+          "This file is too small to be a full credit report. Please upload a different PDF."
+        )
+      );
     }
 
     const businessAgeMonths = getNumberField(fields, "businessAgeMonths");
 
+    // ---------------- LLM extraction ----------------
     let extracted;
     try {
-      extracted = await runCreditPdfLLM(buffer, file.originalFilename || file.newFilename);
-
-      if (!extracted || typeof extracted !== "object")
-        return res.status(200).json(buildFallbackResult("Unreadable credit report."));
-
-      if (!("bureaus" in extracted))
-        return res.status(200).json(buildFallbackResult("Missing bureau data."));
+      extracted = await runLLM(buffer, file.originalFilename || file.newFilename);
+      if (!extracted || typeof extracted !== "object" || !extracted.bureaus) {
+        return res.status(200).json(
+          fallback(
+            "The analyzer could not understand this report. Please upload a different credit report PDF."
+          )
+        );
+      }
     } catch (err) {
-      logError("LLM_FAIL", err);
-      return res.status(200).json(buildFallbackResult("PDF could not be analyzed."));
+      logError("ANALYZER_CRASH", err);
+      return res.status(200).json(
+        fallback(
+          "We had trouble reading this file. Please upload a different type of credit report PDF."
+        )
+      );
     }
 
+    // ---------------- normalize bureaus ----------------
     const bureaus = {
-      experian: normalizeBureau(extracted.bureaus.experian),
-      equifax: normalizeBureau(extracted.bureaus.equifax),
-      transunion: normalizeBureau(extracted.bureaus.transunion)
+      experian: normalizeBureau(extracted.bureaus?.experian),
+      equifax: normalizeBureau(extracted.bureaus?.equifax),
+      transunion: normalizeBureau(extracted.bureaus?.transunion)
     };
 
+    // ---------------- underwriting ----------------
     let uw;
     try {
       uw = computeUnderwrite(bureaus, businessAgeMonths);
     } catch (err) {
-      logError("UW_FAIL", err);
-      return res.status(200).json(buildFallbackResult("Underwriting crashed."));
+      logError("UNDERWRITE_CRASH", err, JSON.stringify(extracted).slice(0, 800));
+      return res.status(200).json(
+        fallback(
+          "Underwriting crashed on this file. Please upload a different credit report PDF."
+        )
+      );
     }
 
+    // ---------------- suggestions ----------------
     let suggestions;
     try {
       suggestions = buildSuggestions(bureaus, uw);
     } catch (err) {
-      logError("SUGGEST_FAIL", err);
+      logError("SUGGESTION_ENGINE_CRASH", err);
       suggestions = {
-        web_summary: "Suggestions unavailable.",
-        email_summary: "Suggestions unavailable.",
+        web_summary:
+          "We analyzed your file but couldn't generate detailed suggestions.",
+        email_summary:
+          "The system analyzed your report but couldn't generate full suggestions.",
         actions: [],
         au_actions: []
       };
     }
 
+    // ---------------- redirect ----------------
     const redirect = {
       url: uw.fundable
         ? "https://fundhub.ai/confirmation-page-296844-430611"
@@ -722,6 +875,7 @@ module.exports = async function handler(req, res) {
       }
     };
 
+    // ---------------- success ----------------
     return res.status(200).json({
       ok: true,
       bureaus,
@@ -729,9 +883,14 @@ module.exports = async function handler(req, res) {
       suggestions,
       redirect
     });
-
   } catch (err) {
-    logError("FATAL", err);
-    return res.status(200).json(buildFallbackResult("Fatal system error."));
+    logError("FATAL_HANDLER", err);
+    return res
+      .status(200)
+      .json(
+        fallback(
+          "A system-level error occurred. Please upload a different credit report PDF."
+        )
+      );
   }
 };
