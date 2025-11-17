@@ -1,7 +1,7 @@
 // ==================================================================================
-// UnderwriteIQ — FULL PRO VERSION (Patch v7.0)
+// UnderwriteIQ — FULL PRO VERSION (Patch v7.2)
 // Includes:
-// - GPT-4o model
+// - GPT-4.1 model (vision-capable, used in text mode)
 // - AnnualCreditReport handling
 // - Score sanitizer
 // - Bureau availability logic
@@ -13,14 +13,14 @@
 const fs = require("fs");
 const formidable = require("formidable");
 const pdfParse = require("pdf-parse");
-const path = require("path");
 
+// Vercel API Config — handles large PDFs + file upload
 module.exports.config = {
   api: { bodyParser: false, sizeLimit: "30mb" }
 };
 
 // ============================================================================
-// ERROR LOGGER — writes to /tmp/uwiq-errors.log (survives runtime on Vercel)
+// ERROR LOGGER — writes to /tmp/uwiq-errors.log (persists during runtime)
 // ============================================================================
 function logError(tag, err, context = "") {
   const msg = `
@@ -36,18 +36,18 @@ ${String(err)}
 }
 
 // ============================================================================
-// FALLBACK RESULT — returned anytime we cannot trust output
+// FALLBACK RESULT — user-safe, no “manual review” language
 // ============================================================================
 function buildFallbackResult(reason = "Analyzer failed") {
   return {
     ok: true,
-    manual_review: true,
     fallback: true,
     reason,
     summary: {
       score: null,
       risk_band: "unknown",
-      note: "Your report has been queued for manual review."
+      note:
+        "We couldn't read this credit report file clearly. Please try uploading a different credit report PDF (Experian, Equifax, TransUnion, or AnnualCreditReport.com)."
     },
     issues: [],
     dispute_groups: [],
@@ -57,9 +57,10 @@ function buildFallbackResult(reason = "Analyzer failed") {
       confidence: 0
     },
     suggestions: {
-      web_summary: "We received your report and queued it for manual review.",
+      web_summary:
+        "We had trouble reading this specific credit report file. Please try again using a more standard PDF version such as Experian, Equifax, TransUnion, or AnnualCreditReport.com.",
       email_summary:
-        "Our system could not confidently parse your report. A human analyst will review your file and follow up with a custom plan.",
+        "Our system couldn't reliably read the credit report file that was uploaded. Please try again using a more standard PDF version from Experian, Equifax, TransUnion, or AnnualCreditReport.com so we can run a clean analysis for you.",
       actions: [],
       au_actions: []
     }
@@ -67,7 +68,7 @@ function buildFallbackResult(reason = "Analyzer failed") {
 }
 
 // ============================================================================
-// GPT-4o SYSTEM PROMPT (UPGRADED)
+// GPT-4.1 SYSTEM PROMPT
 // ============================================================================
 const LLM_PROMPT = `
 You are UnderwriteIQ. Extract FULL per-bureau data from a consumer credit report.
@@ -126,7 +127,7 @@ Return ONLY JSON.
 `;
 
 // ============================================================================
-// NORMALIZER — strips markdown/noise
+// NORMALIZER — strips markdown / fences / whitespace
 // ============================================================================
 function normalizeLLMOutput(str) {
   return String(str || "")
@@ -138,13 +139,15 @@ function normalizeLLMOutput(str) {
 }
 
 // ============================================================================
-// JSON EXTRACTOR — supports Responses API / Chat API
+// JSON EXTRACTOR — supports Responses API and Chat API outputs
 // ============================================================================
 function extractJsonStringFromResponse(json) {
+  // Responses API "output_text"
   if (json.output_text && typeof json.output_text === "string") {
     return json.output_text.trim();
   }
 
+  // Responses API "output" array
   if (Array.isArray(json.output)) {
     for (const msg of json.output) {
       if (!msg || !Array.isArray(msg.content)) continue;
@@ -159,6 +162,7 @@ function extractJsonStringFromResponse(json) {
     }
   }
 
+  // Chat Completions format
   if (
     json.choices &&
     json.choices[0] &&
@@ -172,7 +176,7 @@ function extractJsonStringFromResponse(json) {
 }
 
 // ============================================================================
-// MASSIVE JSON REPAIR ENGINE
+// MASSIVE JSON REPAIR ENGINE — guarantees valid JSON or throws
 // ============================================================================
 function tryParseJsonWithRepair(raw) {
   if (!raw) throw new Error("No raw JSON from model.");
@@ -187,12 +191,16 @@ function tryParseJsonWithRepair(raw) {
 
   let fixed = cleaned.substring(first, last + 1);
 
-  // --- Core repairs ---
-  fixed = fixed.replace(/,\s*([}\]])/g, "$1");                     // remove trailing commas
-  fixed = fixed.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":'); // quote keys
-  fixed = fixed.replace(/:\s*(\d{4}-\d{2}(-\d{2})?)/g, ':"$1"');      // quote dates
+  // Remove trailing commas
+  fixed = fixed.replace(/,\s*([}\]])/g, "$1");
 
-  // auto-quote simple unquoted strings
+  // Quote keys
+  fixed = fixed.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
+
+  // Quote date-like values
+  fixed = fixed.replace(/:\s*(\d{4}-\d{2}(-\d{2})?)/g, ':"$1"');
+
+  // Auto-quote simple barewords
   fixed = fixed.replace(
     /:\s*([A-Za-z][A-Za-z0-9 _\-]*)\s*(,|\})/g,
     (m, val, end) => {
@@ -204,13 +212,13 @@ function tryParseJsonWithRepair(raw) {
   try {
     return JSON.parse(fixed);
   } catch (err) {
-    logError("JSON_PARSE_REPAIR_FAIL", err, fixed.slice(0, 300));
+    logError("JSON_PARSE_REPAIR_FAIL", err, fixed.slice(0, 500));
     throw new Error("JSON parse failed: " + err.message);
   }
 }
 
 // ============================================================================
-// BUREAU NORMALIZER — handles missing bureaus
+// BUREAU NORMALIZER — ensures structure never breaks
 // ============================================================================
 function normalizeBureau(b) {
   if (!b || typeof b !== "object") {
@@ -242,13 +250,12 @@ function normalizeBureau(b) {
 }
 
 // ============================================================================
-// SCORE SANITIZER — fixes cases like 8516, 8548, 9350
+// SCORE SANITIZER — fixes weird values like 8516 / 9350
 // ============================================================================
 function sanitizeScore(score) {
   if (score == null) return null;
   let s = Number(score);
 
-  // Fix 8500/85000 format
   if (s > 9000) s = Math.floor(s / 10);
   if (s > 850) s = 850;
   if (s < 300) return null;
@@ -257,19 +264,24 @@ function sanitizeScore(score) {
 }
 
 // ============================================================================
-// GPT-4o CALL (Upgraded from gpt-4o-mini)
+// GPT-4.1 CALL — core LLM call
 // ============================================================================
 async function callOpenAIOnce(text) {
   const key = process.env.UNDERWRITE_IQ_VISION_KEY;
   if (!key) throw new Error("Missing UNDERWRITE_IQ_VISION_KEY");
 
   const payload = {
-    model: "gpt-4o",
+    model: "gpt-4.1",
     input: [
       { role: "system", content: LLM_PROMPT },
       {
         role: "user",
-        content: [{ type: "input_text", text: text.slice(0, 18000) }]
+        content: [
+          {
+            type: "input_text",
+            text: text.slice(0, 18000) // safety cap
+          }
+        ]
       }
     ],
     temperature: 0,
@@ -301,22 +313,22 @@ async function callOpenAIOnce(text) {
 }
 
 // ============================================================================
-// LLM RETRY WRAPPER
+// RETRY WRAPPER — 3 attempts with backoff
 // ============================================================================
 async function runCreditTextLLM(text) {
-  let error = null;
+  let lastError = null;
 
   for (let i = 1; i <= 3; i++) {
     try {
       return await callOpenAIOnce(text);
     } catch (err) {
-      error = err;
-      logError("LLM_ATTEMPT_FAIL_" + i, err);
+      lastError = err;
+      logError("LLM_ATTEMPT_" + i, err);
       await new Promise(r => setTimeout(r, 150 * i));
     }
   }
 
-  throw new Error("LLM failed after 3 attempts: " + error);
+  throw new Error("LLM failed after 3 attempts: " + lastError);
 }
 
 // ============================================================================
@@ -343,13 +355,14 @@ function monthsSince(dateStr) {
   const opened = new Date(y, m - 1, 1);
   const now = new Date();
 
-  return (now.getFullYear() - opened.getFullYear()) * 12 +
-         (now.getMonth() - opened.getMonth());
+  return (
+    (now.getFullYear() - opened.getFullYear()) * 12 +
+    (now.getMonth() - opened.getMonth())
+  );
 }
 
 // ============================================================================
-// >>>>>>>>>> STOP HERE — THIS IS THE END OF PART 1 <<<<<<<<<<
-// Wait until you say “second half”
+// END OF PART 1
 // ============================================================================
 // ============================================================================
 // PRO UNDERWRITING ENGINE (Per Bureau + Aggregate)
@@ -361,7 +374,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
   const eq = normalizeBureau(safe.equifax);
   const tu = normalizeBureau(safe.transunion);
 
-  // sanitize scores (fix weird 8516/9350 shit)
+  // sanitize scores
   ex.score = sanitizeScore(ex.score);
   eq.score = sanitizeScore(eq.score);
   tu.score = sanitizeScore(tu.score);
@@ -383,6 +396,9 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
   const tuInq = numOrZero(tu.inquiries);
   const totalInq = exInq + eqInq + tuInq;
 
+  // --------------------------------------------------------------------------
+  // Per-bureau summary builder
+  // --------------------------------------------------------------------------
   function buildBureauSummary(key, label, b) {
     const score = sanitizeScore(b.score);
     const util = toNumberOrNull(b.utilization_pct);
@@ -395,7 +411,6 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     let hasAnyRevolving = false;
     let hasAnyInstallment = false;
     let positiveTradelinesCount = 0;
-    let fileAllNegative = false;
 
     for (const tl of tradelines) {
       if (!tl || typeof tl !== "object") continue;
@@ -413,9 +428,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
         status.includes("repossession") ||
         status.includes("foreclosure");
 
-      if (!isDerog) {
-        positiveTradelinesCount++;
-      }
+      if (!isDerog) positiveTradelinesCount++;
 
       const seasoned = ageMonths != null && ageMonths >= 24;
 
@@ -426,11 +439,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
         }
       }
 
-      if (
-        type === "installment" ||
-        type === "auto" ||
-        type === "mortgage"
-      ) {
+      if (["installment", "auto", "mortgage"].includes(type)) {
         hasAnyInstallment = true;
         const originalAmount = limit || balance;
         if (originalAmount > 0 && seasoned && !isDerog) {
@@ -441,8 +450,8 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
       }
     }
 
-    fileAllNegative = positiveTradelinesCount === 0 && neg > 0;
     const thinFile = positiveTradelinesCount < 3;
+    const fileAllNegative = positiveTradelinesCount === 0 && neg > 0;
 
     const canCardStack = highestRevolvingLimit >= 5000 && hasAnyRevolving;
     const cardFunding = canCardStack ? highestRevolvingLimit * 5.5 : 0;
@@ -451,10 +460,9 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
       highestInstallmentAmount >= 10000 && hasAnyInstallment && lates === 0;
     const loanFunding = canLoanStack ? highestInstallmentAmount * 3.0 : 0;
 
-    const canDualStack = canCardStack && canLoanStack;
     const totalPersonalFunding = cardFunding + loanFunding;
 
-    // basic fundability for THIS bureau
+    // fundability rules per bureau
     const fundable =
       score != null &&
       score >= 700 &&
@@ -479,7 +487,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
       fileAllNegative,
       canCardStack,
       canLoanStack,
-      canDualStack,
+      canDualStack: canCardStack && canLoanStack,
       cardFunding,
       loanFunding,
       totalPersonalFunding,
@@ -488,13 +496,16 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     };
   }
 
+  // --------------------------------------------------------------------------
+  // Build summaries for each bureau
+  // --------------------------------------------------------------------------
   const bureauSummaries = [
     buildBureauSummary("experian", "Experian", ex),
     buildBureauSummary("equifax", "Equifax", eq),
     buildBureauSummary("transunion", "TransUnion", tu)
   ];
 
-  // pick primary: highest score among AVAILABLE bureaus, fallback to first
+  // Choose primary bureau = highest score among available
   let primary = bureauSummaries[0];
   for (const b of bureauSummaries) {
     if (!b.available) continue;
@@ -503,51 +514,48 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     }
   }
 
+  // Business age
   const businessAgeMonths =
     typeof businessAgeMonthsRaw === "number" && Number.isFinite(businessAgeMonthsRaw)
       ? businessAgeMonthsRaw
       : null;
 
+  // Multi-bureau fundability logic
   const fundableBureaus = bureauSummaries.filter(
-    (b) => b.available && b.fundable
+    b => b.available && b.fundable
   );
   const fundableCount = fundableBureaus.length;
 
   const totalCardFundingBase = bureauSummaries.reduce(
-    (sum, b) => sum + (b.available ? (b.cardFunding || 0) : 0),
+    (sum, b) => sum + (b.available ? b.cardFunding : 0),
     0
   );
   const totalLoanFundingBase = bureauSummaries.reduce(
-    (sum, b) => sum + (b.available ? (b.loanFunding || 0) : 0),
+    (sum, b) => sum + (b.available ? b.loanFunding : 0),
     0
   );
 
-  // scaling if only 1 bureau is fundable
+  // Reduce expectations if only one bureau is fundable
   let scale = 1;
-  if (fundableCount === 1) {
-    scale = 1 / 3;
-  }
+  if (fundableCount === 1) scale = 1/3;
 
   const cardFunding = totalCardFundingBase * scale;
   const loanFunding = totalLoanFundingBase * scale;
   const totalPersonalFunding = cardFunding + loanFunding;
 
+  // Business multiplier
   let businessMultiplier = 0;
   if (businessAgeMonths != null && primary.cardFunding > 0) {
-    if (businessAgeMonths < 12) {
-      businessMultiplier = 0.5;
-    } else if (businessAgeMonths < 24) {
-      businessMultiplier = 1.0;
-    } else {
-      businessMultiplier = 2.0;
-    }
+    if (businessAgeMonths < 12) businessMultiplier = 0.5;
+    else if (businessAgeMonths < 24) businessMultiplier = 1.0;
+    else businessMultiplier = 2.0;
   }
 
   const canBusinessFund = businessMultiplier > 0;
   const businessFunding = primary.cardFunding * businessMultiplier;
-  const totalBusinessFunding = businessFunding;
-  const totalCombinedFunding = totalPersonalFunding + totalBusinessFunding;
+  const totalCombinedFunding = totalPersonalFunding + businessFunding;
 
+  // Optimization flags
   const needsUtilReduction =
     primary.util != null && Number.isFinite(primary.util) && primary.util > 30;
   const needsNewPrimaryRevolving =
@@ -567,23 +575,16 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     file_all_negative: primary.fileAllNegative
   };
 
+  // Lite banner funding minimum
   let liteBannerFunding = primary.cardFunding || cardFunding;
+  if (!liteBannerFunding) liteBannerFunding = 15000;
 
-  // minimum banner so lander never looks "empty"
-  if (!liteBannerFunding && primary.score && primary.score >= 700) {
-    liteBannerFunding = 15000;
-  }
-  if (!liteBannerFunding) {
-    liteBannerFunding = 15000;
-  }
-
-  // global fundable flag (for routing)
+  // Final global fundability for routing
   const fundable =
     primary.score != null &&
     primary.score >= 700 &&
     (primary.util == null || primary.util <= 30) &&
-    primary.neg === 0 &&
-    totalPersonalFunding >= 0; // you will loosen this later
+    primary.neg === 0;
 
   return {
     fundable,
@@ -662,7 +663,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     },
     totals: {
       total_personal_funding: totalPersonalFunding,
-      total_business_funding: totalBusinessFunding,
+      total_business_funding: businessFunding,
       total_combined_funding: totalCombinedFunding
     },
     optimization,
@@ -671,7 +672,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
 }
 
 // ============================================================================
-// SUGGESTION ENGINE (Layer A + B foundation)
+// SUGGESTION ENGINE
 // ============================================================================
 function buildSuggestions(bureaus, uw) {
   const primaryKey = uw.primary_bureau;
@@ -686,36 +687,36 @@ function buildSuggestions(bureaus, uw) {
   const actions = [];
   const au_actions = [];
 
-  // Utilization — human & technical, with null-safe handling
+  // Utilization recommendations
   if (typeof util === "number" && Number.isFinite(util)) {
     if (util > 30) {
       actions.push(
-        `Your utilization is about ${util}%. To maximize approvals, bring each card down into the 3–10% range before you apply for new funding.`
+        `Your utilization is about ${util}%. Pay balances down into the 3–10% range before applying for new credit to maximize approvals.`
       );
     } else {
       actions.push(
-        `Your utilization is in a solid range. Keeping each card between 3–10% will help you qualify for higher starting limits and stronger approvals.`
+        `Your utilization is in a solid range. Keeping each card between 3–10% will help you qualify for stronger limits.`
       );
     }
   } else {
     actions.push(
-      `We couldn't confidently read utilization from this PDF, but the rule is simple: keep each card between 3–10% before you submit new applications.`
+      `We couldn't clearly read utilization from this PDF, but the rule is simple: keep each card between 3–10% before submitting new applications.`
     );
   }
 
   if (negatives > 0) {
     actions.push(
-      `You have ${negatives} negative account(s). Removing or repairing these will boost approval odds and reduce automatic denials.`
+      `You have ${negatives} negative account(s). Cleaning these up greatly improves approval odds with lenders.`
     );
   }
 
   if (inquiries > 0) {
     actions.push(
-      `You have ${inquiries} total inquiries. Cleaning up recent, unproductive inquiries before applying will help you avoid score dings and “too many inquiries” denials.`
+      `You have ${inquiries} total inquiries. Removing unnecessary or recent inquiries helps reduce “too many inquiries” denials.`
     );
   }
 
-  // AU logic (remove bad AUs, over-utilized AUs)
+  // Authorized user cleanup
   const allTradelines = [
     ...(bureaus.experian?.tradelines || []),
     ...(bureaus.equifax?.tradelines || []),
@@ -726,17 +727,17 @@ function buildSuggestions(bureaus, uw) {
     if (!tl || typeof tl !== "object") continue;
     if (tl.is_au !== true) continue;
 
-    const bal = numOrZero(tl.balance);
-    const lim = numOrZero(tl.limit) || 1;
+    const bal = tl.balance ? Number(tl.balance) : 0;
+    const lim = tl.limit ? Number(tl.limit) : 1;
     const ratio = (bal / lim) * 100;
-    const creditor = tl.creditor || "an authorized user account";
+    const creditor = tl.creditor || "authorized user account";
     const status = String(tl.status || "").toLowerCase();
 
     if (ratio > 30) {
       au_actions.push(
         `Authorized user account "${creditor}" is around ${ratio.toFixed(
           1
-        )}% utilized. Have the primary cardholder pay this down or remove you as an AU to instantly improve your utilization.`
+        )}% utilized. Have the primary cardholder pay it down or remove you as an AU.`
       );
     }
 
@@ -747,33 +748,29 @@ function buildSuggestions(bureaus, uw) {
       status.includes("delinquent")
     ) {
       au_actions.push(
-        `Authorized user account "${creditor}" is reporting negative history. Ask the primary cardholder to remove you as an AU so the negative history stops reporting under your profile.`
+        `Authorized user account "${creditor}" is reporting negative history. Ask the primary cardholder to remove you as an AU so it stops reporting.`
       );
     }
   }
 
   if (uw.optimization.needs_file_buildout) {
     actions.push(
-      `Your file is “thin.” Adding 1–2 new primary accounts (or carefully selected authorized users with low utilization and perfect history) will make you look much stronger to lenders.`
+      `Your credit file is on the thin side. Adding 1–2 new primary accounts or low-utilization authorized user accounts will strengthen your profile.`
     );
   }
 
-  if (
-    negatives === 0 &&
-    inquiries === 0 &&
-    (typeof util !== "number" || util <= 30)
-  ) {
+  if (negatives === 0 && inquiries === 0 && (typeof util !== "number" || util <= 30)) {
     actions.push(
-      `You’re in a good position to request credit limit increases. Do this only after your balances are paid down, so your bank sees low utilization and a clean recent history.`
+      `You're in a good position to request credit limit increases once balances are paid down.`
     );
   }
 
   const webSummary = (() => {
-    let s = `Your strongest bureau for funding right now is ${primaryKey.toUpperCase()}. `;
+    let s = `Your strongest bureau right now is ${primaryKey.toUpperCase()}. `;
     if (!uw.fundable) {
-      s += `You're close — here’s what to fix next so you can unlock the highest possible approvals:`;
+      s += `You're close — here’s what to improve next to unlock higher approvals:`;
     } else {
-      s += `You’re already fundable based on your current profile. Here’s how to squeeze the maximum limits from banks:`;
+      s += `You're fundable based on your profile. Here’s how to maximize approvals and starting limits:`;
     }
     return s;
   })();
@@ -781,18 +778,19 @@ function buildSuggestions(bureaus, uw) {
   const emailSummary = `
 Your strongest funding bureau is **${primaryKey.toUpperCase()}**.
 
-Here is your at-a-glance snapshot:
-
-- Score (for this bureau): ${score ?? "not available"}
-- Utilization (overall): ${util != null && Number.isFinite(util) ? util + "%" : "not clearly readable from this PDF"}
+Snapshot:
+- Score: ${score ?? "not available"}
+- Utilization: ${
+    util != null && Number.isFinite(util) ? util + "%" : "not clearly readable"
+  }
 - Negative accounts: ${negatives}
 - Total inquiries: ${inquiries}
 - Recent late payments: ${late}
 
-The fastest way to increase your approvals and limits is to:
-1) Bring each active card into the 3–10% utilization window.
-2) Clean up any negative items and unnecessary recent inquiries.
-3) Remove or fix any authorized user accounts that are maxed out or reporting late/negative history.
+Fastest improvements:
+1) Keep all cards in the 3–10% utilization range.
+2) Remove negative items and unnecessary inquiries.
+3) Fix or remove any AU cards that are maxed out or reporting negative history.
 `.trim();
 
   return {
@@ -804,10 +802,11 @@ The fastest way to increase your approvals and limits is to:
 }
 
 // ============================================================================
-// MAIN HANDLER
+// MAIN HANDLER — PDF Upload → Parse → LLM → Underwrite → Suggest → Redirect
 // ============================================================================
 module.exports = async function handler(req, res) {
   try {
+    // CORS preflight
     if (req.method === "OPTIONS") {
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -821,6 +820,7 @@ module.exports = async function handler(req, res) {
       return res.status(405).json({ ok: false, msg: "Method not allowed" });
     }
 
+    // Parse the upload form with formidable
     const form = formidable({
       multiples: false,
       keepExtensions: true,
@@ -837,78 +837,96 @@ module.exports = async function handler(req, res) {
 
     const file = files.file;
     if (!file || !file.filepath) {
-      return res.status(200).json(buildFallbackResult("No file uploaded"));
+      return res.status(200).json(
+        buildFallbackResult("No file detected. Please upload a credit report PDF.")
+      );
     }
 
     const buffer = await fs.promises.readFile(file.filepath);
     const pdf = await pdfParse(buffer);
     const rawText = pdf.text || "";
 
-    // Very light normalization; keep structure for 4o
+    // Light normalization (no OCR)
     const text = rawText.replace(/\s+/g, " ").trim();
 
     if (!text || text.length < 200) {
-      return res
-        .status(200)
-        .json(buildFallbackResult("Not enough text extracted from PDF"));
+      return res.status(200).json(
+        buildFallbackResult(
+          "The PDF text was too short or unclear. Please upload a different credit report PDF."
+        )
+      );
     }
 
     const businessAgeMonths = getNumberField(fields, "businessAgeMonths");
 
+    // ----------------------- LLM extraction -----------------------
     let extracted;
     try {
       extracted = await runCreditTextLLM(text);
 
       if (!extracted || typeof extracted !== "object") {
-        return res
-          .status(200)
-          .json(buildFallbackResult("Analyzer returned invalid JSON"));
+        return res.status(200).json(
+          buildFallbackResult(
+            "The analyzer could not understand this report. Please upload a different credit report PDF."
+          )
+        );
       }
 
       if (!("bureaus" in extracted)) {
-        return res
-          .status(200)
-          .json(buildFallbackResult("Analyzer failed: missing bureaus object"));
+        return res.status(200).json(
+          buildFallbackResult(
+            "Missing bureau data in this report. Please try another credit report PDF."
+          )
+        );
       }
     } catch (err) {
       logError("ANALYZER_CRASH", err);
-      return res
-        .status(200)
-        .json(buildFallbackResult("Analyzer crashed: " + String(err)));
+      return res.status(200).json(
+        buildFallbackResult(
+          "We had trouble reading this file. Please upload a different type of credit report PDF."
+        )
+      );
     }
 
+    // ----------------------- Normalize -----------------------
     const bureaus = {
       experian: normalizeBureau(extracted.bureaus?.experian),
       equifax: normalizeBureau(extracted.bureaus?.equifax),
       transunion: normalizeBureau(extracted.bureaus?.transunion)
     };
 
+    // ----------------------- Underwrite -----------------------
     let uw;
     try {
       uw = computeUnderwrite(bureaus, businessAgeMonths);
     } catch (err) {
-      logError("UNDERWRITE_CRASH", err, JSON.stringify(extracted).slice(0, 500));
+      logError("UNDERWRITE_CRASH", err, JSON.stringify(extracted).slice(0, 800));
       return res
         .status(200)
-        .json(buildFallbackResult("Underwriting engine crashed"));
+        .json(
+          buildFallbackResult(
+            "Underwriting crashed on this file. Please upload a different credit report PDF."
+          )
+        );
     }
 
+    // ----------------------- Suggestions -----------------------
     let suggestions;
     try {
       suggestions = buildSuggestions(bureaus, uw);
     } catch (err) {
       logError("SUGGESTION_ENGINE_CRASH", err);
-      // if suggestions die, still return underwriting
       suggestions = {
         web_summary:
-          "We analyzed your file but could not generate detailed suggestions automatically.",
+          "We analyzed your file but couldn't generate detailed suggestions.",
         email_summary:
-          "Our system analyzed your file but hit an internal error while generating suggestions. You can still review your funding profile on the website.",
+          "The system analyzed your report but couldn't generate full suggestions.",
         actions: [],
         au_actions: []
       };
     }
 
+    // ----------------------- Redirect Logic -----------------------
     const redirect = {
       url: uw.fundable
         ? "https://fundhub.ai/confirmation-page-296844-430611"
@@ -922,6 +940,7 @@ module.exports = async function handler(req, res) {
       }
     };
 
+    // ----------------------- SUCCESS RESPONSE -----------------------
     return res.status(200).json({
       ok: true,
       bureaus,
@@ -929,8 +948,15 @@ module.exports = async function handler(req, res) {
       suggestions,
       redirect
     });
+
   } catch (err) {
     logError("FATAL_HANDLER", err);
-    return res.status(200).json(buildFallbackResult("Fatal analyzer error"));
+    return res
+      .status(200)
+      .json(
+        buildFallbackResult(
+          "A system-level error occurred. Please upload a different credit report PDF."
+        )
+      );
   }
 };
