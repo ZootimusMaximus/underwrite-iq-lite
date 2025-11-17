@@ -179,3 +179,101 @@
     <ul id="tipsList"></ul>
   </div>
 </section>
+<script>
+// -------------------------------------------
+// READ JSON FROM ?data=
+// -------------------------------------------
+function getPayload() {
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get("data");
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(decodeURIComponent(raw));
+  } catch {
+    return null;
+  }
+}
+
+const payload = getPayload();
+
+if (!payload || !payload.underwrite) {
+  console.error("Invalid payload");
+  document.getElementById("scoreVal").textContent = "Data Error";
+} else {
+  const u = payload.underwrite;
+  const m = u.metrics || {};
+
+  // -------------------------------------------
+  // BASIC METRICS
+  // -------------------------------------------
+  const collections = m.negative_accounts || 0;
+  const late = m.late_payment_events || 0;
+  const score = m.score || "--";
+
+  document.getElementById("collectionsVal").textContent =
+    `${collections} item(s) flagged`;
+
+  document.getElementById("lateVal").textContent =
+    `${late} account(s)`;
+
+  document.getElementById("scoreVal").textContent = score;
+
+  // -------------------------------------------
+  // POTENTIAL FUNDING
+  // -------------------------------------------
+  const personal =
+    u.personal?.total_personal_funding ||
+    u.personal?.card_funding ||
+    0;
+
+  const business =
+    u.business?.business_funding ||
+    0;
+
+  const total = personal + business;
+
+  document.getElementById("personalAmt").textContent =
+    "$" + Number(personal).toLocaleString();
+
+  document.getElementById("businessAmt").textContent =
+    "$" + Number(business).toLocaleString();
+
+  document.getElementById("totalLine").textContent =
+    "Total Funding Potential After Repair: $" +
+    Number(total).toLocaleString();
+
+  // -------------------------------------------
+  // QUICK FIX TIPS
+  // -------------------------------------------
+  const tips = document.getElementById("tipsList");
+
+  if (collections > 0) {
+    const li = document.createElement("li");
+    li.textContent = `You have ${collections} collection(s). These must be removed or corrected to unlock full approvals.`;
+    tips.appendChild(li);
+  }
+
+  if (late > 0) {
+    const li = document.createElement("li");
+    li.textContent = `${late} late payment(s) detected — cleaning these can raise your score fast.`;
+    tips.appendChild(li);
+  }
+
+  if ((m.utilization_pct || 0) > 20) {
+    const li = document.createElement("li");
+    li.textContent = `Your utilization is high (${m.utilization_pct}%). Target 3–10% for optimal approvals.`;
+    tips.appendChild(li);
+  }
+
+  if (tips.children.length === 0) {
+    const li = document.createElement("li");
+    li.textContent =
+      "Minor improvements only — your post-repair profile will qualify for strong business funding.";
+    tips.appendChild(li);
+  }
+}
+</script>
+
+</body>
+</html>
