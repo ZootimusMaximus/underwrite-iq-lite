@@ -2,731 +2,511 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>UnderwriteIQ — Batch Flow Tester</title>
+<title>UW IQ – Tester Batch</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <style>
-/* ======================= GLOBAL ======================= */
-@font-face{
-  font-family:"Matrix";
-  src:local("Courier New"),monospace;
-}
-*{box-sizing:border-box;}
-body{
+body {
   margin:0;
-  font-family:Matrix,monospace;
-  background:#020617;
-  color:#e5f9ff;
-  overflow-x:hidden;
+  padding:20px;
+  background:#0f172a;
+  color:#fff;
+  font-family: Inter, sans-serif;
 }
 
-/* Matrix canvas behind everything */
-#matrix{
-  position:fixed;
-  inset:0;
-  width:100vw;
-  height:100vh;
-  z-index:-1;
+h1 {
+  font-size:28px;
+  font-weight:900;
+  margin-bottom:10px;
 }
 
-/* CRT scanlines */
-body::after{
-  content:"";
-  position:fixed;
-  inset:0;
-  pointer-events:none;
-  background:repeating-linear-gradient(
-    to bottom,
-    rgba(0,0,0,0.18) 0px,
-    rgba(0,0,0,0.18) 2px,
-    rgba(0,0,0,0.22) 3px
-  );
-  z-index:9999;
-  mix-blend-mode:multiply;
-  opacity:0.35;
+#controls {
+  margin-bottom:20px;
 }
 
-/* ======================= UI SHELL ======================= */
-#ui{
-  position:relative;
-  z-index:10;
-  padding:24px;
-  max-width:1200px;
-  margin:0 auto;
-}
-h1{
-  margin:0 0 4px;
-  letter-spacing:2px;
-  color:#7dfc8a;
-  font-size:24px;
-}
-h2{
-  margin:10px 0 0;
-  font-size:13px;
-  font-weight:400;
-  opacity:0.8;
-}
-
-/* Dropzone */
-#dropzone{
-  border:1px dashed rgba(56,189,248,.6);
-  padding:18px;
-  text-align:center;
+button {
+  background:#38bdf8;
+  color:#0f172a;
+  font-weight:800;
+  padding:10px 20px;
+  border:none;
+  border-radius:8px;
   cursor:pointer;
-  border-radius:6px;
-  background:rgba(15,23,42,.9);
-  margin:18px 0 18px;
-  font-size:13px;
-}
-#dropzone:hover{
-  background:rgba(15,23,42,1);
-}
-
-/* Panels */
-.panel{
-  margin-bottom:18px;
-  background:rgba(15,23,42,.9);
-  padding:14px;
-  border-radius:6px;
-  border:1px solid rgba(56,189,248,.3);
-}
-.panel h3{
-  margin:0 0 10px;
   font-size:14px;
 }
 
-/* Progress */
-#progress{
-  background:rgba(0,0,0,0.6);
-  padding:8px;
-  border-radius:4px;
-  font-size:12px;
-  max-height:160px;
-  overflow-y:auto;
-  white-space:pre-wrap;
-}
-
-/* File result wrapper */
-.file-result{
-  border-radius:10px;
-  padding:12px;
-  margin-bottom:12px;
-  background:linear-gradient(135deg,rgba(15,23,42,1),rgba(15,23,42,.9));
-  border:1px solid rgba(56,189,248,.3);
-}
-.meta-line{
-  font-size:11px;
-  opacity:0.8;
-  margin-bottom:6px;
-}
-.badge{
-  display:inline-block;
-  padding:2px 8px;
-  border-radius:999px;
-  font-size:10px;
-  letter-spacing:0.04em;
-  text-transform:uppercase;
-  margin-bottom:6px;
-}
-.badge-ok{
-  background:rgba(22,163,74,.2);
-  color:#bbf7d0;
-  border:1px solid rgba(34,197,94,.5);
-}
-.badge-error{
-  background:rgba(239,68,68,.2);
-  color:#fecaca;
-  border:1px solid rgba(248,113,113,.6);
-}
-.badge-fallback{
-  background:rgba(234,179,8,.18);
-  color:#fef9c3;
-  border:1px solid rgba(250,204,21,.5);
-}
-
-/* Raw JSON panel for failures */
-.raw-json{
-  background:#020617;
-  border-radius:6px;
-  padding:8px;
-  font-size:11px;
-  max-height:220px;
-  overflow:auto;
-  white-space:pre-wrap;
-}
-
-/* ======================= FLOW CARDS (Approved / Needs Repair) ======================= */
-.flow-card{
+#results {
+  margin-top:20px;
   display:flex;
   flex-direction:column;
-  gap:10px;
-  border-radius:10px;
-  padding:14px;
-  background:radial-gradient(circle at top left,rgba(56,189,248,.16),transparent 55%),
-             radial-gradient(circle at bottom right,rgba(34,197,94,.16),transparent 55%),
-             rgba(15,23,42,.96);
-  border:1px solid rgba(148,163,184,.5);
-  box-shadow:0 14px 40px rgba(15,23,42,.9);
+  gap:25px;
 }
 
-/* header row */
-.flow-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:10px;
-  border-bottom:1px solid rgba(148,163,184,.5);
-  padding-bottom:6px;
+.result-box {
+  background:#1e293b;
+  border:1px solid #334155;
+  border-radius:12px;
+  padding:12px;
 }
-.flow-title{
-  font-size:14px;
+
+.result-title {
+  font-size:16px;
   font-weight:700;
-}
-.flow-sub{
-  font-size:11px;
-  opacity:0.8;
+  margin-bottom:10px;
 }
 
-/* stat rows */
-.flow-main{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-}
-.block{
-  flex:1 1 180px;
-  border-radius:8px;
-  padding:10px;
-  background:rgba(15,23,42,.96);
-  border:1px solid rgba(51,65,85,.9);
-}
-.block h4{
-  margin:0 0 4px;
-  font-size:11px;
-  letter-spacing:0.04em;
-  text-transform:uppercase;
-  color:rgba(148,163,184,1);
-}
-.block-value{
-  font-size:18px;
-  font-weight:800;
-}
-.block-meta{
-  font-size:11px;
-  opacity:0.8;
-}
-
-/* chips */
-.chip-row{
-  display:flex;
-  flex-wrap:wrap;
-  gap:6px;
-  margin-top:6px;
-}
-.chip{
-  font-size:10px;
-  padding:2px 7px;
-  border-radius:999px;
-  border:1px solid rgba(148,163,184,.7);
-  background:rgba(15,23,42,.9);
-}
-
-/* bullet list */
-.flow-list{
-  margin:0;
-  padding-left:18px;
-  font-size:11px;
-  color:rgba(226,232,240,.9);
-}
-.flow-list li{
-  margin-bottom:4px;
-}
-
-/* CTA */
-.flow-cta{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:10px;
-  margin-top:4px;
-}
-.flow-cta-text{
-  font-size:11px;
-  opacity:0.86;
-}
-.flow-cta-btn{
-  background:linear-gradient(135deg,#5b7cfa,#38bdf8);
-  border-radius:999px;
-  padding:7px 14px;
-  font-size:11px;
-  font-weight:700;
-  border:none;
-  color:#fff;
-  cursor:pointer;
-  box-shadow:0 8px 20px rgba(56,189,248,.35);
-}
-.flow-cta-btn:hover{
-  transform:translateY(-1px);
-  box-shadow:0 12px 26px rgba(56,189,248,.55);
-}
-
-/* approved / denied accents */
-.flow-card.approved .flow-title{
-  color:#bbf7d0;
-}
-.flow-card.needs-repair .flow-title{
-  color:#fee2e2;
-}
-.flow-card.approved .block-value{
-  color:#a7f3d0;
-}
-.flow-card.needs-repair .block-value{
-  color:#fca5a5;
-}
-.flow-card.needs-repair{
-  background:radial-gradient(circle at top left,rgba(248,113,113,.2),transparent 55%),
-             radial-gradient(circle at bottom right,rgba(250,204,21,.18),transparent 55%),
-             rgba(15,23,42,.96);
-}
-
-/* glow pulse for totals */
-.glow{
-  box-shadow:0 0 0 rgba(56,189,248,0);
-  transition:box-shadow 0.5s ease-out;
-}
-.glow-pulse{
-  box-shadow:0 0 26px rgba(56,189,248,0.9);
+iframe {
+  width:100%;
+  height:1600px; /* fixed height */
+  border:1px solid #334155;
+  border-radius:12px;
+  background:#fff;
 }
 </style>
 </head>
+
 <body>
+<h1>Tester Batch — Live Results</h1>
 
-<canvas id="matrix"></canvas>
-
-<div id="ui">
-  <h1>UNDERWRITEIQ — BATCH FLOW TESTER</h1>
-  <h2>Drag 10+ real PDFs here → see EXACT Approved vs Needs Repair flows per file (using /api/lite/parse-report).</h2>
-
-  <div id="dropzone">CLICK OR DRAG CREDIT REPORT PDF(s)</div>
-  <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none" />
-
-  <div class="panel">
-    <h3>Progress Log</h3>
-    <pre id="progress">Waiting…</pre>
-  </div>
-
-  <div class="panel">
-    <h3>Rendered Flows (1 result per PDF)</h3>
-    <div id="results"></div>
-  </div>
-
-  <div class="panel">
-    <h3>Failures / Fallbacks (raw JSON)</h3>
-    <div id="fails"></div>
-  </div>
+<div id="controls">
+  <button id="clearBtn">Clear All</button>
 </div>
 
+<div id="results"></div>
+
 <script>
-/* ======================= MATRIX RAIN ======================= */
-const canvas = document.getElementById("matrix");
-const ctx = canvas.getContext("2d");
+// --------------------------------------------
+// CHANNEL LISTENER
+// --------------------------------------------
+const channel = new BroadcastChannel("uwiq_batch");
+const resultsEl = document.getElementById("results");
 
-function resizeMatrix(){
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-resizeMatrix();
-window.addEventListener("resize", resizeMatrix);
-
-const chars = "アカサタナハマヤラワ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const charset = chars.split("");
-const fontSize = 16;
-let columns = Math.floor(window.innerWidth / fontSize);
-let drops = Array.from({length:columns},()=>1);
-
-function drawMatrix(){
-  ctx.fillStyle = "rgba(0,0,0,0.07)";
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-
-  ctx.fillStyle = "rgba(0,255,65,0.55)";
-  ctx.font = fontSize + "px Matrix";
-
-  drops.forEach((y,i)=>{
-    const text = charset[Math.floor(Math.random()*charset.length)];
-    ctx.fillText(text, i*fontSize, y*fontSize);
-    if(y*fontSize > canvas.height && Math.random()>0.975) drops[i]=0;
-    drops[i]++;
-  });
-}
-setInterval(drawMatrix,50);
-
-/* ======================= BATCH TESTER LOGIC ======================= */
-const dropzone   = document.getElementById("dropzone");
-const fileInput  = document.getElementById("fileInput");
-const progressEl = document.getElementById("progress");
-const resultsEl  = document.getElementById("results");
-const failsEl    = document.getElementById("fails");
-
-dropzone.onclick = ()=>fileInput.click();
-fileInput.onchange = ()=>handleFiles(fileInput.files);
-
-dropzone.addEventListener("dragover",e=>{
-  e.preventDefault();
-});
-dropzone.addEventListener("drop",e=>{
-  e.preventDefault();
-  handleFiles(e.dataTransfer.files);
-});
-
-function log(msg){
-  progressEl.textContent += "\\n" + msg;
-  progressEl.scrollTop = progressEl.scrollHeight;
-}
-
-function formatMoney(n){
-  n = Number(n || 0);
-  if(!Number.isFinite(n)) n = 0;
-  return "$" + Math.round(n).toLocaleString();
-}
-
-function safeNum(v){
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
-/* ======================= FLOW RENDERERS ======================= */
-function renderApprovedCard(file, json){
-  const uw = json.underwrite || {};
-  const metrics = uw.metrics || {};
-  const inquiries = metrics.inquiries || {};
-
-  const personal = safeNum(uw.personal && uw.personal.total_personal_funding);
-  const business = safeNum(uw.business && uw.business.business_funding);
-  const total    = safeNum(uw.totals && uw.totals.total_combined_funding);
-
-  const score = metrics.score ?? "--";
-  const util  = metrics.utilization_pct;
-  const utilText = (util!=null && Number.isFinite(Number(util))) ? `${util}%` : "--%";
-
-  const exInq = safeNum(inquiries.ex);
-  const tuInq = safeNum(inquiries.tu);
-  const eqInq = safeNum(inquiries.eq);
-  const totalInq = exInq + tuInq + eqInq;
-
-  const neg   = safeNum(metrics.negative_accounts);
-  const late  = safeNum(metrics.late_payment_events);
-
-  const primary = (uw.primary_bureau || "primary").toUpperCase();
-
-  const card = document.createElement("div");
-  card.className = "file-result";
-
-  const meta = document.createElement("div");
-  meta.className = "meta-line";
-  meta.textContent = `FILE: ${file.name} — ${(file.size/1024).toFixed(1)} KB`;
-  card.appendChild(meta);
-
-  const badge = document.createElement("span");
-  badge.className = "badge badge-ok";
-  badge.textContent = "APPROVED FLOW";
-  card.appendChild(badge);
-
-  const flow = document.createElement("div");
-  flow.className = "flow-card approved";
-
-  flow.innerHTML = `
-    <div class="flow-header">
-      <div>
-        <div class="flow-title">Fundable — ${primary} is your strongest bureau.</div>
-        <div class="flow-sub">
-          UnderwriteIQ™ recommends moving forward to a Funding Review call.
-        </div>
-      </div>
-      <div class="chip-row">
-        <div class="chip">Score: ${score}</div>
-        <div class="chip">Util: ${utilText}</div>
-        <div class="chip">Inquiries: EX ${exInq} • TU ${tuInq} • EQ ${eqInq}</div>
-      </div>
-    </div>
-
-    <div class="flow-main">
-      <div class="block">
-        <h4>Total Funding Approved</h4>
-        <div class="block-value glow" data-role="total">${formatMoney(total || personal + business)}</div>
-        <div class="block-meta">Combined personal + business approvals.</div>
-      </div>
-
-      <div class="block">
-        <h4>Personal Funding</h4>
-        <div class="block-value" data-role="personal">${formatMoney(personal)}</div>
-        <div class="block-meta">Cards / lines based on strongest bureau.</div>
-      </div>
-
-      <div class="block">
-        <h4>Business Funding</h4>
-        <div class="block-value" data-role="business">${formatMoney(business)}</div>
-        <div class="block-meta">Built on personal profile and business age.</div>
-      </div>
-    </div>
-
-    <div class="flow-main">
-      <div class="block">
-        <h4>Profile Snapshot</h4>
-        <ul class="flow-list">
-          <li>${neg} negative tradeline${neg===1?"":"s"} reporting.</li>
-          <li>${late} recent late payment${late===1?"":"s"}.</li>
-          <li>${totalInq} recent inquiries across all bureaus.</li>
-        </ul>
-      </div>
-
-      <div class="block">
-        <h4>Optimization Moves</h4>
-        <ul class="flow-list">
-          <li>Keep each card between 3–10% utilization before and during funding.</li>
-          <li>Avoid new inquiries until after your funding sequence is complete.</li>
-          <li>Clean old addresses/employers so underwriters see one clear profile.</li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="flow-cta">
-      <div class="flow-cta-text">
-        Next step: review this plan with a closer and stack your approvals safely.
-      </div>
-      <button class="flow-cta-btn" type="button">
-        View Production “Approved” Page
-      </button>
-    </div>
-  `;
-
-  // simple glow pulse on total
-  const totalNode = flow.querySelector('[data-role="total"]');
-  if(totalNode){
-    setTimeout(()=>{
-      totalNode.classList.add("glow-pulse");
-      setTimeout(()=>totalNode.classList.remove("glow-pulse"),550);
-    },250);
-  }
-
-  const btn = flow.querySelector(".flow-cta-btn");
-  if(btn){
-    btn.addEventListener("click",()=>{
-      window.open("https://fundhub.ai/funding-form-748297","_blank");
-    });
-  }
-
-  card.appendChild(flow);
-  resultsEl.appendChild(card);
-}
-
-function renderNeedsRepairCard(file, json){
-  const uw = json.underwrite || {};
-  const metrics = uw.metrics || {};
-  const inquiries = metrics.inquiries || {};
-
-  const score = metrics.score ?? "--";
-  const util  = metrics.utilization_pct;
-  const utilText = (util!=null && Number.isFinite(Number(util))) ? `${util}%` : "--%";
-
-  const exInq = safeNum(inquiries.ex);
-  const tuInq = safeNum(inquiries.tu);
-  const eqInq = safeNum(inquiries.eq);
-  const totalInq = exInq + tuInq + eqInq;
-
-  const neg   = safeNum(metrics.negative_accounts);
-  const late  = safeNum(metrics.late_payment_events);
-
-  const personalPotential = safeNum(uw.personal && uw.personal.total_personal_funding) || 200000;
-  const businessPotential = safeNum(uw.business && uw.business.business_funding) || 200000;
-  const totalPotential    = personalPotential + businessPotential;
-
-  const card = document.createElement("div");
-  card.className = "file-result";
-
-  const meta = document.createElement("div");
-  meta.className = "meta-line";
-  meta.textContent = `FILE: ${file.name} — ${(file.size/1024).toFixed(1)} KB`;
-  card.appendChild(meta);
-
-  const badge = document.createElement("span");
-  badge.className = "badge badge-error";
-  badge.textContent = "NEEDS REPAIR FLOW";
-  card.appendChild(badge);
-
-  const flow = document.createElement("div");
-  flow.className = "flow-card needs-repair";
-
-  flow.innerHTML = `
-    <div class="flow-header">
-      <div>
-        <div class="flow-title">You’re Close — Credit File Needs Cleanup First.</div>
-        <div class="flow-sub">
-          UnderwriteIQ™ found blocks that would kill approvals today. Fix these first, then re-run funding.
-        </div>
-      </div>
-      <div class="chip-row">
-        <div class="chip">Score: ${score}</div>
-        <div class="chip">Util: ${utilText}</div>
-        <div class="chip">Negatives: ${neg}</div>
-        <div class="chip">Inquiries: ${totalInq}</div>
-      </div>
-    </div>
-
-    <div class="flow-main">
-      <div class="block">
-        <h4>Funding Potential After Repair</h4>
-        <div class="block-value glow" data-role="total">${formatMoney(totalPotential)}</div>
-        <div class="block-meta">Estimated combined personal + business once repaired.</div>
-      </div>
-
-      <div class="block">
-        <h4>Personal Potential</h4>
-        <div class="block-value" data-role="personal">${formatMoney(personalPotential)}</div>
-        <div class="block-meta">Cards / lines unlocked after negatives + utilization are fixed.</div>
-      </div>
-
-      <div class="block">
-        <h4>Business Potential</h4>
-        <div class="block-value" data-role="business">${formatMoney(businessPotential)}</div>
-        <div class="block-meta">Business funding built on a clean personal profile.</div>
-      </div>
-    </div>
-
-    <div class="flow-main">
-      <div class="block">
-        <h4>What’s Holding You Back</h4>
-        <ul class="flow-list">
-          <li>${neg} negative tradeline${neg===1?"":"s"} reporting across bureaus.</li>
-          <li>${late} late payment${late===1?"":"s"} hurting your risk profile.</li>
-          <li>${totalInq} recent inquiry${totalInq===1?"":"ies"} triggering “too many pulls” flags.</li>
-        </ul>
-      </div>
-
-      <div class="block">
-        <h4>Quick Fixes (Fastest ROI)</h4>
-        <ul class="flow-list">
-          <li>Dispute / remove collections and late payments that don’t belong.</li>
-          <li>Pay cards down toward 10% utilization (or redistribute balances).</li>
-          <li>Stop new inquiries until your Repair Roadmap is complete.</li>
-          <li>Clean extra addresses/employers so bureaus show one clean profile.</li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="flow-cta">
-      <div class="flow-cta-text">
-        Next step: start repair so we can unlock this funding potential safely.
-      </div>
-      <button class="flow-cta-btn" type="button">
-        View Production “Fix My Credit” Page
-      </button>
-    </div>
-  `;
-
-  const totalNode = flow.querySelector('[data-role="total"]');
-  if(totalNode){
-    setTimeout(()=>{
-      totalNode.classList.add("glow-pulse");
-      setTimeout(()=>totalNode.classList.remove("glow-pulse"),550);
-    },250);
-  }
-
-  const btn = flow.querySelector(".flow-cta-btn");
-  if(btn){
-    btn.addEventListener("click",()=>{
-      window.open("https://fundhub.ai/repair-survey-842022","_blank");
-    });
-  }
-
-  card.appendChild(flow);
-  resultsEl.appendChild(card);
-}
-
-function renderFallbackCard(file, json){
-  const card = document.createElement("div");
-  card.className = "file-result";
-
-  const meta = document.createElement("div");
-  meta.className = "meta-line";
-  meta.textContent = `FILE: ${file.name} — ${(file.size/1024).toFixed(1)} KB`;
-  card.appendChild(meta);
-
-  const badge = document.createElement("span");
-  badge.className = json && json.ok ? "badge badge-fallback" : "badge badge-error";
-  badge.textContent = json && json.ok ? "FALLBACK RESULT" : "ERROR RESULT";
-  card.appendChild(badge);
-
-  const pre = document.createElement("pre");
-  pre.className = "raw-json";
-  pre.textContent = JSON.stringify(json, null, 2);
-  card.appendChild(pre);
-
-  failsEl.appendChild(card);
-}
-
-/* ======================= FILE HANDLING ======================= */
-async function handleFiles(fileList){
-  const files = Array.from(fileList || []);
-  if(!files.length) return;
-
+// Clears all rendered entries
+document.getElementById("clearBtn").onclick = () => {
   resultsEl.innerHTML = "";
-  failsEl.innerHTML = "";
-  progressEl.textContent = "Starting batch…";
+};
 
-  let done = 0;
-  const total = files.length;
+// Listen for each completed LLM parse
+channel.onmessage = (ev) => {
+  if (!ev.data || ev.data.type !== "uwiq_result") return;
 
-  for(const file of files){
-    await processFile(file);
-    done++;
-    log(`Finished ${done}/${total}`);
-  }
+  const { filename, payload } = ev.data;
 
-  log("DONE — all files processed.");
+  const box = document.createElement("div");
+  box.className = "result-box";
+
+  const title = document.createElement("div");
+  title.className = "result-title";
+  title.textContent = filename + " — " + (payload?.underwrite?.fundable ? "APPROVED" : "NEEDS REPAIR");
+
+  const frame = document.createElement("iframe");
+
+  // Determine which UI to load
+  const html = payload?.underwrite?.fundable
+    ? buildApprovedUI(payload)
+    : buildRepairUI(payload);
+
+  // Write into iframe
+  frame.onload = () => {
+    const doc = frame.contentDocument || frame.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+  };
+
+  box.appendChild(title);
+  box.appendChild(frame);
+  resultsEl.appendChild(box);
+};
+
+
+// --------------------------------------------
+// HTML builders — we inject your EXACT UI
+// --------------------------------------------
+function buildApprovedUI(data) {
+  const u = data.underwrite || {};
+  const m = u.metrics || {};
+
+  const personal  = u.personal?.card_funding + u.personal?.loan_funding || 0;
+  const business  = u.business?.business_funding || 0;
+  const total     = u.totals?.total_combined_funding || 0;
+
+  const score     = m.score || "--";
+  const util      = m.utilization_pct || 0;
+  const inqEx     = m.inquiries?.ex || 0;
+  const inqTu     = m.inquiries?.tu || 0;
+  const inqEq     = m.inquiries?.eq || 0;
+
+  // build URL with params for UI
+  const params = new URLSearchParams({
+    personalTotal: personal,
+    businessTotal: business,
+    totalCombined: total,
+    score,
+    util,
+    inqEx,
+    inqTu,
+    inqEq,
+    neg: m.negative_accounts || 0,
+    late: m.late_payment_events || 0
+  }).toString();
+
+  // load direct HTML from your APPROVED page
+  return approvedHTML.replace("{{PARAMS}}", params);
 }
 
-async function processFile(file){
-  log(`Processing: ${file.name}`);
+function buildRepairUI(data) {
+  const m = data.underwrite?.metrics || {};
 
-  const formData = new FormData();
-  formData.append("file", file);
+  const personal  = data.underwrite?.personal?.total_personal_funding || 0;
+  const business  = data.underwrite?.business?.business_funding || 0;
+  const total     = data.underwrite?.totals?.total_combined_funding || 0;
 
-  let json;
-  try{
-    const res = await fetch("/api/lite/parse-report", {
-      method:"POST",
-      body:formData
-    });
+  const score     = m.score || "--";
+  const neg       = m.negative_accounts || 0;
+  const late      = m.late_payment_events || 0;
 
-    const text = await res.text();
-    try{
-      json = JSON.parse(text);
-    }catch(e){
-      json = { ok:false, parseError:true, raw:text.slice(0,400) };
-    }
-  }catch(err){
-    json = { ok:false, networkError:true, message:String(err) };
-  }
+  const params = new URLSearchParams({
+    score,
+    neg,
+    late,
+    personalPotential: personal,
+    businessPotential: business,
+    totalPotential: total
+  }).toString();
 
-  // Decide which flow to render
-  if(!json){
-    renderFallbackCard(file, { ok:false, message:"Empty response" });
-    return;
-  }
-
-  // If we got a clean success + real underwrite
-  if(json.ok && json.underwrite && typeof json.underwrite === "object"){
-    if(json.underwrite.fundable){
-      renderApprovedCard(file, json);
-    }else{
-      renderNeedsRepairCard(file, json);
-    }
-    return;
-  }
-
-  // any fallback / error / weird shape → raw JSON in Failures panel
-  renderFallbackCard(file, json);
+  return repairHTML.replace("{{PARAMS}}", params);
 }
+
+// --------------------------------------------
+// Placeholders for your full UI HTML
+// They get replaced with the real content in PART 2
+// --------------------------------------------
+let approvedHTML = "";
+let repairHTML   = "";
+
+</script>
+
+</body>
+</html>
+approvedHTML = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Approved</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+/* ==== GLOBAL / GHL OVERRIDES ==== */
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow-x: hidden;
+  background:
+    radial-gradient(1200px 600px at 10% 10%, rgba(24,164,255,.22), transparent 60%),
+    radial-gradient(1000px 600px at 80% 20%, rgba(34,211,163,.18), transparent 60%),
+    linear-gradient(180deg,#0f172a 0%, #0b1220 100%) !important;
+  color:#fff !important;
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+}
+
+section, .section, .row, .wrapper, .container,
+[data-element="section"], [data-element="row"] {
+  background:transparent !important;
+}
+
+.hero{
+  min-height:100vh;
+  padding:90px 20px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+.hero h1{
+  font-size:48px;
+  font-weight:900;
+  margin-bottom:10px;
+}
+.hero p.sub{
+  color:rgba(255,255,255,.9);
+  font-size:18px;
+  margin-bottom:32px;
+  max-width:800px;
+}
+
+.range-box{
+  display:inline-block;
+  background:linear-gradient(90deg,#38bdf8,#5b7cfa);
+  padding:16px 34px;
+  border-radius:16px;
+  font-weight:900;
+  font-size:24px;
+  margin-bottom:26px;
+  color:#fff!important;
+  box-shadow:0 10px 30px rgba(56,189,248,.5);
+  transition:box-shadow .4s ease;
+}
+
+.funding-grid{
+  display:flex;
+  flex-wrap:wrap;
+  gap:18px;
+  justify-content:center;
+  margin-bottom:30px;
+}
+.fund-card{
+  background:rgba(15,23,42,.88);
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:14px;
+  padding:18px 26px;
+  min-width:220px;
+  box-shadow:0 10px 28px rgba(0,0,0,.55);
+  transition:box-shadow .4s ease;
+}
+.fund-card h2{
+  margin:0 0 6px;
+  font-size:18px;
+  font-weight:700;
+  color:rgba(255,255,255,.82);
+}
+.fund-card p{
+  margin:0;
+  font-size:22px;
+  font-weight:900;
+  color:#fff;
+}
+
+.cards{
+  display:flex;
+  flex-wrap:wrap;
+  gap:18px;
+  justify-content:center;
+  margin-bottom:36px;
+}
+.card{
+  background:rgba(15,23,42,.80);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:12px;
+  padding:18px 24px;
+  min-width:160px;
+  box-shadow:0 8px 24px rgba(0,0,0,.45);
+}
+.card h3{margin:0;font-size:20px;color:rgba(255,255,255,.7);}
+.card p{margin:6px 0 0;font-size:15px;color:#fff;}
+
+.btn{
+  background:linear-gradient(135deg,#5b7cfa,#38bdf8);
+  padding:16px 38px;
+  border-radius:12px;
+  font-weight:800;
+  font-size:18px;
+  color:#fff!important;
+  text-decoration:none;
+  box-shadow:0 10px 24px rgba(24,164,255,.4);
+  display:inline-block;
+  margin-top:4px;
+}
+.btn:hover{
+  transform:translateY(-2px);
+  box-shadow:0 14px 32px rgba(24,164,255,.55);
+}
+
+.opt-section{
+  margin-top:40px;
+  max-width:760px;
+  text-align:left;
+}
+.opt-section h2{
+  font-size:20px;
+  margin:0 0 10px;
+  font-weight:800;
+}
+.opt-section ul{
+  margin:0;
+  padding-left:20px;
+  font-size:14px;
+  color:rgba(255,255,255,.9);
+}
+.opt-section li{
+  margin-bottom:6px;
+}
+.opt-note{
+  margin-top:10px;
+  font-size:13px;
+  color:rgba(226,232,240,.9);
+}
+
+.footerNote{
+  margin-top:26px;
+  color:rgba(248,250,252,.75);
+  font-size:13px;
+}
+</style>
+
+</head>
+<body>
+
+<section class="hero">
+  <h1>💸 Congratulations — You’re Fundable!</h1>
+  <p class="sub">Underwrite IQ™ reviewed your credit report and calculated your real funding approvals.</p>
+
+  <div class="range-box" id="totalVal">Total Funding Approved: $0</div>
+
+  <div class="funding-grid">
+    <div class="fund-card">
+      <h2>Personal Funding Approved</h2>
+      <p id="personalVal">$0</p>
+    </div>
+    <div class="fund-card">
+      <h2>Business Funding Approved</h2>
+      <p id="businessVal">$0</p>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card"><h3>Score</h3><p id="scoreCardVal">--</p></div>
+    <div class="card"><h3>Utilization</h3><p id="utilCardVal">--%</p></div>
+    <div class="card"><h3>Inquiries</h3><p id="inqCardVal">EX 0 • TU 0 • EQ 0</p></div>
+  </div>
+
+  <a class="btn" href="#">Book Your Funding Review</a>
+
+  <div class="opt-section">
+    <h2>How to Unlock Even More Funding</h2>
+    <ul id="optList"></ul>
+  </div>
+
+  <div class="footerNote">Your complete Funding Plan has been emailed to you.</div>
+</section>
+
+<script>
+location.search = "{{PARAMS}}";
 </script>
 </body>
 </html>
+`;
+repairHTML = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Repair Needed</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body{
+  margin:0;
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+  background:#f8fafc;
+  color:#0f172a;
+}
+.hero{
+  background:linear-gradient(180deg,#ffffff 0%,#ebf8ff 100%);
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:100px 20px;
+}
+h1{
+  font-size:44px;
+  font-weight:900;
+  margin-bottom:12px;
+}
+p.sub{
+  color:#475569;
+  font-size:18px;
+  margin-bottom:32px;
+  max-width:720px;
+}
+.cards{
+  display:flex;
+  flex-wrap:wrap;
+  gap:18px;
+  justify-content:center;
+  margin-bottom:40px;
+}
+.card{
+  background:#fff;
+  border:1px solid #e2e8f0;
+  border-radius:12px;
+  padding:18px 24px;
+  min-width:160px;
+}
+.card h3{ margin:0; font-size:22px;}
+.card p{ margin:6px 0 0; font-size:15px;}
+
+.btn{
+  background:linear-gradient(135deg,#5b7cfa,#38bdf8);
+  color:#fff;
+  text-decoration:none;
+  font-weight:800;
+  padding:16px 38px;
+  border-radius:12px;
+  font-size:18px;
+}
+.fundBox{
+  background:#fff;
+  border-radius:24px;
+  padding:32px 28px;
+  margin-top:40px;
+  max-width:880px;
+  width:100%;
+  border:1px solid #e2e8f0;
+  text-align:center;
+}
+.fixBox{
+  background:#fff;
+  border-radius:24px;
+  padding:26px;
+  margin-top:26px;
+  max-width:880px;
+  width:100%;
+}
+</style>
+
+</head>
+<body>
+
+<section class="hero">
+  <h1>You're Closer Than You Think.</h1>
+  <p class="sub">Underwrite IQ™ found a few items holding you back — here’s what we found.</p>
+
+  <div class="cards">
+    <div class="card"><h3>Collections</h3><p id="collectionsVal">0 items flagged</p></div>
+    <div class="card"><h3>Late Payments</h3><p id="lateVal">0 accounts</p></div>
+    <div class="card"><h3>Score Potential</h3><p id="scoreVal">--</p></div>
+  </div>
+
+  <a class="btn" href="#">Fix My Credit Now</a>
+
+  <div class="fundBox">
+    <h2>Your Funding Potential After Credit Repair</h2>
+    <p>What you can realistically unlock once these are cleaned up.</p>
+
+    <div class="fundGrid">
+      <div class="fundCell"><h4>Personal</h4><div class="amt" id="personalAmt">$0</div></div>
+      <div class="fundCell"><h4>Business</h4><div class="amt" id="businessAmt">$0</div></div>
+    </div>
+
+    <div id="totalLine">Total Funding Potential After Repair: $0</div>
+  </div>
+
+  <div class="fixBox">
+    <h3>Quick Fixes</h3>
+    <ul id="tipsList"></ul>
+  </div>
+</section>
+
+<script>
+location.search = "{{PARAMS}}";
+</script>
+
+</body>
+</html>
+`;
