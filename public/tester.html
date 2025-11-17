@@ -202,7 +202,7 @@ const exportBtn = document.getElementById("exportBtn");
 const summaryA = document.getElementById("summaryA");
 let allResults = [];
 
-/* ⭐ ADDED — Broadcast channel */
+/* Broadcast channel — unified name */
 const channel = new BroadcastChannel("uwiq-batch");
 
 dropzone.onclick = () => fileInput.click();
@@ -304,8 +304,12 @@ async function processFile(file) {
 
   allResults.push(resultObj);
 
-  /* ⭐ ADDED — Broadcast to tester-batch */
-  channel.postMessage(resultObj);
+  // Broadcast to tester-batch in the expected shape
+  channel.postMessage({
+    type: "uwiq_result",
+    filename: file.name,
+    payload: json
+  });
 
   const block = document.createElement("div");
   block.className = "file-result " + (json.ok ? "success" : "fail");
