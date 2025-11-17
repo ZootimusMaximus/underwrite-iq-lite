@@ -57,7 +57,7 @@ button {
 
 iframe {
   width:100%;
-  height:1600px; /* fixed height */
+  height:1600px;
   border:1px solid #334155;
   border-radius:12px;
   background:#fff;
@@ -75,18 +75,20 @@ iframe {
 <div id="results"></div>
 
 <script>
-// --------------------------------------------
-// CHANNEL LISTENER
-// --------------------------------------------
-const channel = new BroadcastChannel("uwiq-batch"); // unified name
+// -----------------------------------------------------
+// FIXED BROADCAST CHANNEL NAME
+// -----------------------------------------------------
+const channel = new BroadcastChannel("uwiq-batch");
+
+// Container
 const resultsEl = document.getElementById("results");
 
-// Clears all rendered entries
+// Clear results
 document.getElementById("clearBtn").onclick = () => {
   resultsEl.innerHTML = "";
 };
 
-// Listen for each completed LLM parse
+// Listen for parsed results
 channel.onmessage = (ev) => {
   if (!ev.data || ev.data.type !== "uwiq_result") return;
 
@@ -102,12 +104,11 @@ channel.onmessage = (ev) => {
 
   const frame = document.createElement("iframe");
 
-  // Determine which UI to load
   const html = payload?.underwrite?.fundable
     ? buildApprovedUI(payload)
     : buildRepairUI(payload);
 
-  // Write into iframe
+  // Prevent glitching: wait for readyState before writing
   frame.onload = () => {
     const doc = frame.contentDocument || frame.contentWindow.document;
     doc.open();
@@ -121,9 +122,9 @@ channel.onmessage = (ev) => {
 };
 
 
-// --------------------------------------------
-// HTML builders — we inject your EXACT UI
-// --------------------------------------------
+// -----------------------------------------------------
+// BUILD HTML TEMPLATES
+// -----------------------------------------------------
 function buildApprovedUI(data) {
   const u = data.underwrite || {};
   const m = u.metrics || {};
@@ -178,7 +179,6 @@ function buildRepairUI(data) {
   return repairHTML.replace("{{PARAMS}}", params);
 }
 
-// placeholders, filled by second <script> tag
 let approvedHTML = "";
 let repairHTML   = "";
 </script>
@@ -192,7 +192,6 @@ approvedHTML = `
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-/* ==== GLOBAL / GHL OVERRIDES ==== */
 html, body {
   height: 100%;
   margin: 0;
@@ -204,11 +203,7 @@ html, body {
   color:#fff !important;
   font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
 }
-
-section, .section, .row, .wrapper, .container,
-[data-element="section"], [data-element="row"] {
-  background:transparent !important;
-}
+section,[data-element="section"],[data-element="row"]{ background:transparent !important; }
 
 .hero{
   min-height:100vh;
@@ -219,11 +214,7 @@ section, .section, .row, .wrapper, .container,
   justify-content:center;
   text-align:center;
 }
-.hero h1{
-  font-size:48px;
-  font-weight:900;
-  margin-bottom:10px;
-}
+.hero h1{ font-size:48px;font-weight:900;margin-bottom:10px; }
 .hero p.sub{
   color:rgba(255,255,255,.9);
   font-size:18px;
@@ -257,8 +248,17 @@ section, .section, .row, .wrapper, .container,
   padding:18px 26px;
   min-width:220px;
 }
-.fund-card h2{ margin:0 0 6px; font-size:18px; font-weight:700; }
-.fund-card p{ margin:0; font-size:22px; font-weight:900; }
+.fund-card h2{
+  margin:0 0 6px;
+  font-size:18px;
+  font-weight:700;
+  color:rgba(255,255,255,.82);
+}
+.fund-card p{
+  margin:0;
+  font-size:22px;
+  font-weight:900;
+}
 
 .cards{
   display:flex;
@@ -274,8 +274,8 @@ section, .section, .row, .wrapper, .container,
   padding:18px 24px;
   min-width:160px;
 }
-.card h3{ margin:0; font-size:20px; }
-.card p{ margin:6px 0 0; font-size:15px; }
+.card h3{margin:0;font-size:20px;color:rgba(255,255,255,.7);}
+.card p{margin:6px 0 0;font-size:15px;}
 
 .btn{
   background:linear-gradient(135deg,#5b7cfa,#38bdf8);
@@ -295,8 +295,17 @@ section, .section, .row, .wrapper, .container,
   max-width:760px;
   text-align:left;
 }
-.opt-section h2{ font-size:20px; margin:0 0 10px; font-weight:800; }
-.opt-section ul{ margin:0; padding-left:20px; font-size:14px; }
+.opt-section h2{
+  font-size:20px;
+  margin:0 0 10px;
+  font-weight:800;
+}
+.opt-section ul{
+  margin:0;
+  padding-left:20px;
+  font-size:14px;
+  color:rgba(255,255,255,.9);
+}
 .opt-section li{ margin-bottom:6px; }
 
 .footerNote{
@@ -305,8 +314,8 @@ section, .section, .row, .wrapper, .container,
   font-size:13px;
 }
 </style>
-</head>
 
+</head>
 <body>
 
 <section class="hero">
@@ -435,7 +444,6 @@ p.sub{
 </style>
 
 </head>
-
 <body>
 
 <section class="hero">
