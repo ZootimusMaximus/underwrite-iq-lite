@@ -76,19 +76,18 @@ iframe {
 
 <script>
 // -----------------------------------------------------
-// FIXED BROADCAST CHANNEL NAME
+// LISTEN TO tester.html VIA BroadcastChannel
 // -----------------------------------------------------
 const channel = new BroadcastChannel("uwiq-batch");
-
-// Container
 const resultsEl = document.getElementById("results");
 
-// Clear results
+// clear UI
 document.getElementById("clearBtn").onclick = () => {
   resultsEl.innerHTML = "";
 };
 
-// Listen for parsed results
+// expected payload from tester.html:
+// channel.postMessage({ type: "uwiq_result", filename: file.name, payload: json });
 channel.onmessage = (ev) => {
   if (!ev.data || ev.data.type !== "uwiq_result") return;
 
@@ -108,7 +107,6 @@ channel.onmessage = (ev) => {
     ? buildApprovedUI(payload)
     : buildRepairUI(payload);
 
-  // Prevent glitching: wait for readyState before writing
   frame.onload = () => {
     const doc = frame.contentDocument || frame.contentWindow.document;
     doc.open();
@@ -120,7 +118,6 @@ channel.onmessage = (ev) => {
   box.appendChild(frame);
   resultsEl.appendChild(box);
 };
-
 
 // -----------------------------------------------------
 // BUILD HTML TEMPLATES
@@ -182,6 +179,7 @@ function buildRepairUI(data) {
 let approvedHTML = "";
 let repairHTML   = "";
 </script>
+
 <script>
 approvedHTML = `
 <!DOCTYPE html>
@@ -190,7 +188,6 @@ approvedHTML = `
 <meta charset="UTF-8">
 <title>Approved</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
 html, body {
   height: 100%;
@@ -204,7 +201,6 @@ html, body {
   font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
 }
 section,[data-element="section"],[data-element="row"]{ background:transparent !important; }
-
 .hero{
   min-height:100vh;
   padding:90px 20px;
@@ -221,7 +217,6 @@ section,[data-element="section"],[data-element="row"]{ background:transparent !i
   margin-bottom:32px;
   max-width:800px;
 }
-
 .range-box{
   display:inline-block;
   background:linear-gradient(90deg,#38bdf8,#5b7cfa);
@@ -233,7 +228,6 @@ section,[data-element="section"],[data-element="row"]{ background:transparent !i
   color:#fff!important;
   box-shadow:0 10px 30px rgba(56,189,248,.5);
 }
-
 .funding-grid{
   display:flex;
   flex-wrap:wrap;
@@ -259,7 +253,6 @@ section,[data-element="section"],[data-element="row"]{ background:transparent !i
   font-size:22px;
   font-weight:900;
 }
-
 .cards{
   display:flex;
   flex-wrap:wrap;
@@ -276,7 +269,6 @@ section,[data-element="section"],[data-element="row"]{ background:transparent !i
 }
 .card h3{margin:0;font-size:20px;color:rgba(255,255,255,.7);}
 .card p{margin:6px 0 0;font-size:15px;}
-
 .btn{
   background:linear-gradient(135deg,#5b7cfa,#38bdf8);
   padding:16px 38px;
@@ -289,7 +281,6 @@ section,[data-element="section"],[data-element="row"]{ background:transparent !i
   display:inline-block;
   margin-top:4px;
 }
-
 .opt-section{
   margin-top:40px;
   max-width:760px;
@@ -307,23 +298,18 @@ section,[data-element="section"],[data-element="row"]{ background:transparent !i
   color:rgba(255,255,255,.9);
 }
 .opt-section li{ margin-bottom:6px; }
-
 .footerNote{
   margin-top:26px;
   color:rgba(248,250,252,.75);
   font-size:13px;
 }
 </style>
-
 </head>
 <body>
-
 <section class="hero">
   <h1>💸 Congratulations — You’re Fundable!</h1>
   <p class="sub">Underwrite IQ™ reviewed your credit report and calculated your real funding approvals.</p>
-
   <div class="range-box" id="totalVal">Total Funding Approved: $0</div>
-
   <div class="funding-grid">
     <div class="fund-card">
       <h2>Personal Funding Approved</h2>
@@ -334,27 +320,21 @@ section,[data-element="section"],[data-element="row"]{ background:transparent !i
       <p id="businessVal">$0</p>
     </div>
   </div>
-
   <div class="cards">
     <div class="card"><h3>Score</h3><p id="scoreCardVal">--</p></div>
     <div class="card"><h3>Utilization</h3><p id="utilCardVal">--%</p></div>
     <div class="card"><h3>Inquiries</h3><p id="inqCardVal">EX 0 • TU 0 • EQ 0</p></div>
   </div>
-
   <a class="btn" href="#">Book Your Funding Review</a>
-
   <div class="opt-section">
     <h2>How to Unlock Even More Funding</h2>
     <ul id="optList"></ul>
   </div>
-
   <div class="footerNote">Your complete Funding Plan has been emailed to you.</div>
 </section>
-
 <script>
 location.search = "{{PARAMS}}";
 </script>
-
 </body>
 </html>
 `;
@@ -366,7 +346,6 @@ repairHTML = `
 <meta charset="UTF-8">
 <title>Repair Needed</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
 body{
   margin:0;
@@ -411,7 +390,6 @@ p.sub{
 }
 .card h3{ margin:0; font-size:22px; }
 .card p{ margin:6px 0 0; font-size:15px; }
-
 .btn{
   background:linear-gradient(135deg,#5b7cfa,#38bdf8);
   color:#fff;
@@ -421,7 +399,6 @@ p.sub{
   border-radius:12px;
   font-size:18px;
 }
-
 .fundBox{
   background:#fff;
   border-radius:24px;
@@ -432,7 +409,6 @@ p.sub{
   border:1px solid #e2e8f0;
   text-align:center;
 }
-
 .fixBox{
   background:#fff;
   border-radius:24px;
@@ -442,44 +418,34 @@ p.sub{
   width:100%;
 }
 </style>
-
 </head>
 <body>
-
 <section class="hero">
   <h1>You're Closer Than You Think.</h1>
   <p class="sub">Underwrite IQ™ found a few items holding you back — here’s what we found.</p>
-
   <div class="cards">
     <div class="card"><h3>Collections</h3><p id="collectionsVal">0 items flagged</p></div>
     <div class="card"><h3>Late Payments</h3><p id="lateVal">0 accounts</p></div>
     <div class="card"><h3>Score Potential</h3><p id="scoreVal">--</p></div>
   </div>
-
   <a class="btn" href="#">Fix My Credit Now</a>
-
   <div class="fundBox">
     <h2>Your Funding Potential After Credit Repair</h2>
     <p>What you can realistically unlock once these are cleaned up.</p>
-
     <div class="fundGrid">
       <div class="fundCell"><h4>Personal</h4><div class="amt" id="personalAmt">$0</div></div>
       <div class="fundCell"><h4>Business</h4><div class="amt" id="businessAmt">$0</div></div>
     </div>
-
     <div id="totalLine">Total Funding Potential After Repair: $0</div>
   </div>
-
   <div class="fixBox">
     <h3>Quick Fixes</h3>
     <ul id="tipsList"></ul>
   </div>
 </section>
-
 <script>
 location.search = "{{PARAMS}}";
 </script>
-
 </body>
 </html>
 `;
