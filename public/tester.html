@@ -5,7 +5,6 @@
 <title>Internal System Monitor — PRO</title>
 
 <style>
-/* ======================= GLOBAL ======================= */
 @font-face {
   font-family: "Matrix";
   src: local("Courier New"), monospace;
@@ -19,7 +18,7 @@ body {
   overflow-x: hidden;
 }
 
-/* Background Matrix canvas */
+/* Matrix background */
 #matrix {
   position: fixed;
   top: 0;
@@ -29,7 +28,7 @@ body {
   z-index: -1;
 }
 
-/* CRT Scanlines */
+/* Scanlines */
 body::after {
   content: "";
   position: fixed;
@@ -37,16 +36,16 @@ body::after {
   pointer-events: none;
   background: repeating-linear-gradient(
     to bottom,
-    rgba(0,0,0,0.2) 0px,
-    rgba(0,0,0,0.2) 2px,
-    rgba(0,0,0,0.24) 3px
+    rgba(0,0,0,0.17) 0px,
+    rgba(0,0,0,0.17) 2px,
+    rgba(0,0,0,0.20) 3px
   );
   z-index: 9999;
   mix-blend-mode: multiply;
   opacity: 0.35;
 }
 
-/* ======================= UI ======================= */
+/* UI */
 #ui {
   position: relative;
   z-index: 10;
@@ -92,6 +91,7 @@ pre {
   font-size: 12px;
 }
 
+/* File result blocks */
 .file-result {
   padding: 8px;
   margin-bottom: 10px;
@@ -100,7 +100,7 @@ pre {
 }
 
 .success { border-color: rgba(0,255,65,0.6); }
-.fail    { border-color: rgba(255,60,60,0.6); }
+.fail    { border-color: rgba(255,50,50,0.6); }
 
 .meta-line {
   font-size: 11px;
@@ -121,12 +121,10 @@ pre {
 
 <body>
 
-<!-- MATRIX CANVAS -->
+<!-- Matrix background -->
 <canvas id="matrix"></canvas>
 
-<!-- ======================= UI ======================= -->
 <div id="ui">
-
   <h1>Internal System Monitor — PRO</h1>
 
   <div id="dropzone">CLICK OR DRAG PDF(s)</div>
@@ -138,8 +136,8 @@ pre {
   </div>
 
   <div class="panel">
-    <h3>Layer A — Website Summary Preview</h3>
-    <pre id="summaryA">Upload a report to preview the on-page summary…</pre>
+    <h3>Layer A — Website Summary (PRO Engine)</h3>
+    <pre id="summaryA">Upload a report to preview the summary…</pre>
   </div>
 
   <div class="panel">
@@ -155,9 +153,8 @@ pre {
   <button id="exportBtn">Export JSON</button>
 </div>
 
-<!-- ======================= JS ======================= -->
 <script>
-/* ======================= MATRIX RAIN ======================= */
+/* ======================= MATRIX ======================= */
 const canvas = document.getElementById("matrix");
 const ctx = canvas.getContext("2d");
 
@@ -177,33 +174,30 @@ let drops = Array.from({ length: columns }, () => 1);
 function drawMatrix() {
   ctx.fillStyle = "rgba(0,0,0,0.07)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-
   ctx.fillStyle = "rgba(0,255,65,0.55)";
   ctx.font = fontSize + "px Matrix";
 
   drops.forEach((y, i) => {
     const text = charset[Math.floor(Math.random() * charset.length)];
     ctx.fillText(text, i * fontSize, y * fontSize);
-
     if (y * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
     drops[i]++;
   });
 }
 setInterval(drawMatrix, 50);
 
-/* ======================= TESTER LOGIC ======================= */
+/* ======================= TESTER ======================= */
 
 const dropzone = document.getElementById("dropzone");
 const fileInput = document.getElementById("fileInput");
+const progress = document.getElementById("progress");
 const resultsDiv = document.getElementById("results");
 const failsDiv = document.getElementById("fails");
-const progress = document.getElementById("progress");
 const summaryA = document.getElementById("summaryA");
 const exportBtn = document.getElementById("exportBtn");
 
 let allResults = [];
 
-// ========= File Input Handlers =========
 dropzone.onclick = () => fileInput.click();
 fileInput.onchange = () => handleFiles(fileInput.files);
 
@@ -213,86 +207,61 @@ dropzone.addEventListener("drop", e => {
   handleFiles(e.dataTransfer.files);
 });
 
-// ========= Build Layer A Summary =========
+/* Build Layer A summary for PRO underwriting */
 function buildLayerASummary(json) {
   if (!json || !json.ok || !json.underwrite) {
-    return "We analyzed your file, but the analyzer returned a fallback result.";
+    return "The analyzer could not parse this report. Try a different PDF format.";
   }
 
   const uw = json.underwrite;
-  const metrics = uw.metrics || {};
-  const inquiries = metrics.inquiries?.total || 0;
+  const m = uw.metrics;
 
-  const bureauKey = uw.primary_bureau;
-  const bureau = bureauKey ? bureauKey.toUpperCase() : "YOUR STRONGEST BUREAU";
+  const bureau = uw.primary_bureau?.toUpperCase() || "UNKNOWN";
+  const score = m.score;
+  const util = m.utilization_pct;
+  const negatives = m.negative_accounts || 0;
+  const inquiries = m.inquiries?.total || 0;
+  const totalFunding = uw.totals?.total_combined_funding || uw.lite_banner_funding;
 
-  const score = metrics.score;
-  const util = metrics.utilization_pct;
-  const negatives = metrics.negative_accounts ?? 0;
-
-  const totalFunding =
-    uw.totals?.total_combined_funding ||
-    uw.lite_banner_funding ||
-    null;
-
-  const out = [];
+  const parts = [];
 
   if (typeof score === "number") {
-    out.push(
-      `We scanned your profile and your strongest funding bureau is ${bureau} with a score around ${score}.`
-    );
+    parts.push(`Your strongest bureau is ${bureau} with a score of about ${score}.`);
   } else {
-    out.push(
-      `We scanned your profile and identified ${bureau} as your strongest bureau.`
-    );
+    parts.push(`Your strongest bureau is ${bureau}.`);
   }
 
   if (typeof util === "number") {
-    out.push(
-      `Your utilization is about ${util}%. Aim for 3–10% per card to maximize approvals.`
-    );
+    parts.push(`Your utilization is about ${util}%. Keep each card in the 3–10% range for max approvals.`);
   } else {
-    out.push(
-      `We couldn’t cleanly read utilization from this PDF, but target 3–10% per card.`
-    );
+    parts.push(`We couldn't read utilization cleanly from this PDF, but aim for 3–10% per card.`);
   }
 
   if (negatives > 0 || inquiries > 0) {
-    const negPart = negatives > 0 ? `${negatives} negative accounts` : null;
-    const inqPart =
-      inquiries > 0 ? `${inquiries} inquir${inquiries === 1 ? "y" : "ies"}` : null;
-
-    out.push(
-      `Right now, ${[negPart, inqPart].filter(Boolean).join(" and ")} are holding you back.`
-    );
+    const items = [];
+    if (negatives > 0) items.push(`${negatives} negative account${negatives > 1 ? "s" : ""}`);
+    if (inquiries > 0) items.push(`${inquiries} recent inquiries`);
+    parts.push(`These items are suppressing your approvals: ${items.join(" and ")}.`);
   } else {
-    out.push(`You have a clean file with no inquiry or negative drag.`);
+    parts.push(`No major negatives or inquiry drag detected.`);
   }
 
-  if (uw.fundable && totalFunding > 0) {
-    out.push(
-      `With clean sequencing, you can target roughly $${Math.round(
-        totalFunding
-      ).toLocaleString()} in combined limits.`
-    );
+  if (uw.fundable && totalFunding) {
+    parts.push(`Estimated funding potential: $${Math.round(totalFunding).toLocaleString()}.`);
   } else {
-    out.push(`You’re close — fix the basics and you’ll move into approval range.`);
+    parts.push(`Fix the highlighted issues to move into funding range.`);
   }
 
-  out.push(`We’ll show you exactly what to optimize next.`);
-
-  return out.join(" ");
+  return parts.join(" ");
 }
 
-// ========= Main File Handling =========
 async function handleFiles(files) {
   if (!files || !files.length) return;
 
   allResults = [];
   resultsDiv.innerHTML = "";
   failsDiv.innerHTML = "";
-  progress.innerText = "Starting…";
-  summaryA.innerText = "Waiting for first successful result…";
+  summaryA.textContent = "Waiting for first successful result…";
 
   const total = files.length;
   let done = 0;
@@ -300,16 +269,13 @@ async function handleFiles(files) {
   for (const file of files) {
     await processFile(file);
     done++;
-    progress.innerText = `Processed ${done} / ${total} (${(
-      (done / total) *
-      100
-    ).toFixed(1)}%)`;
+    const pct = ((done / total) * 100).toFixed(1);
+    progress.innerText = `Processed ${done}/${total} (${pct}%)`;
   }
 
-  progress.innerText = `DONE – ${total} files processed.`;
+  progress.innerText = `DONE — ${total} files tested`;
 }
 
-// ========= Send each PDF to UnderwriteIQ PRO =========
 async function processFile(file) {
   const formData = new FormData();
   formData.append("file", file);
@@ -325,16 +291,13 @@ async function processFile(file) {
     json = { ok: false, error: true, message: err.toString() };
   }
 
-  allResults.push({
-    filename: file.name,
-    size: file.size,
-    result: json
-  });
+  allResults.push({ filename: file.name, size: file.size, result: json });
 
   const div = document.createElement("div");
   div.className = "file-result " + (json.ok ? "success" : "fail");
 
   const sizeKb = (file.size / 1024).toFixed(1);
+
   div.innerHTML = `
     <div class="meta-line">
       FILE: ${file.name} — ${sizeKb} KB
@@ -342,7 +305,7 @@ async function processFile(file) {
     <pre>${JSON.stringify(json, null, 2)}</pre>
   `;
 
-  if (json.ok && json.underwrite) {
+  if (json.ok) {
     resultsDiv.appendChild(div);
     summaryA.textContent = buildLayerASummary(json);
   } else {
@@ -350,7 +313,6 @@ async function processFile(file) {
   }
 }
 
-// ========= Export JSON Button =========
 exportBtn.onclick = () => {
   const blob = new Blob([JSON.stringify(allResults, null, 2)], {
     type: "application/json"
@@ -358,7 +320,7 @@ exportBtn.onclick = () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "uwiq-pro-results.json";
+  a.download = "uwiq-results.json";
   a.click();
   URL.revokeObjectURL(url);
 };
