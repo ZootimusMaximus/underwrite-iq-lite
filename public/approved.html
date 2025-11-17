@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Approved — Underwrite IQ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+  html, body {
+    height: 100%;
+    margin: 0;
+    overflow-x: hidden;
+    background:
+      radial-gradient(1200px 600px at 10% 10%, rgba(24,164,255,.22), transparent 60%),
+      radial-gradient(1000px 600px at 80% 20%, rgba(34,211,163,.18), transparent 60%),
+      linear-gradient(180deg,#0f172a 0%, #0b1220 100%) !important;
+    color:#fff !important;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+
+  section {
+    background: transparent !important;
+  }
+
+  .hero {
+    min-height: 100vh;
+    padding: 90px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .hero h1 {
+    font-size: 48px;
+    font-weight: 900;
+    margin-bottom: 10px;
+  }
+
+  .hero p.sub {
+    color: rgba(255,255,255,.9);
+    font-size: 18px;
+    margin-bottom: 32px;
+    max-width: 800px;
+  }
+
+  .range-box {
+    display: inline-block;
+    background: linear-gradient(90deg,#38bdf8,#5b7cfa);
+    padding: 16px 34px;
+    border-radius: 16px;
+    font-weight: 900;
+    font-size: 24px;
+    margin-bottom: 26px;
+    color: #fff!important;
+    box-shadow: 0 10px 30px rgba(56,189,248,.5);
+  }
+
+  .funding-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    justify-content: center;
+    margin-bottom: 30px;
+  }
+
+  .fund-card {
+    background: rgba(15,23,42,.88);
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 14px;
+    padding: 18px 26px;
+    min-width: 220px;
+  }
+
+  .fund-card h2 {
+    margin: 0 0 6px;
+    font-size: 18px;
+    font-weight: 700;
+    color: rgba(255,255,255,.82);
+  }
+
+  .fund-card p {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 900;
+  }
+
+  .cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    justify-content: center;
+    margin-bottom: 36px;
+  }
+
+  .card {
+    background: rgba(15,23,42,.80);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px;
+    padding: 18px 24px;
+    min-width: 160px;
+  }
+
+  .card h3 {
+    margin: 0;
+    font-size: 20px;
+    color: rgba(255,255,255,.7);
+  }
+
+  .card p {
+    margin: 6px 0 0;
+    font-size: 15px;
+  }
+
+  .btn {
+    background: linear-gradient(135deg,#5b7cfa,#38bdf8);
+    padding: 16px 38px;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 18px;
+    color: #fff!important;
+    text-decoration: none;
+    box-shadow: 0 10px 24px rgba(24,164,255,.4);
+    display: inline-block;
+    margin-top: 4px;
+  }
+
+  .opt-section {
+    margin-top: 40px;
+    max-width: 760px;
+    text-align: left;
+  }
+
+  .opt-section h2 {
+    font-size: 20px;
+    margin: 0 0 10px;
+    font-weight: 800;
+  }
+
+  .opt-section ul {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 14px;
+    color: rgba(255,255,255,.9);
+  }
+
+  .opt-section li {
+    margin-bottom: 6px;
+  }
+
+  .footerNote {
+    margin-top: 26px;
+    color: rgba(248,250,252,.75);
+    font-size: 13px;
+  }
+</style>
+</head>
+
+<body>
+
+<section class="hero">
+  <h1>💸 Congratulations — You’re Fundable!</h1>
+  <p class="sub">Underwrite IQ™ reviewed your credit report and calculated your real funding approvals.</p>
+
+  <div class="range-box" id="totalVal">$0 Total Approved</div>
+
+  <div class="funding-grid">
+    <div class="fund-card">
+      <h2>Personal Funding Approved</h2>
+      <p id="personalVal">$0</p>
+    </div>
+    <div class="fund-card">
+      <h2>Business Funding Approved</h2>
+      <p id="businessVal">$0</p>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h3>Score</h3>
+      <p id="scoreCardVal">--</p>
+    </div>
+    <div class="card">
+      <h3>Utilization</h3>
+      <p id="utilCardVal">--%</p>
+    </div>
+    <div class="card">
+      <h3>Inquiries</h3>
+      <p id="inqCardVal">EX 0 • TU 0 • EQ 0</p>
+    </div>
+  </div>
+
+  <a class="btn" href="#">Book Your Funding Review</a>
+
+  <div class="opt-section">
+    <h2>How to Unlock Even More Funding</h2>
+    <ul id="optList"></ul>
+  </div>
+
+  <div class="footerNote">Your complete Funding Plan has been emailed to you.</div>
+</section>
+<script>
+// -------------------------------------------
+// READ JSON FROM ?data=
+// -------------------------------------------
+function getPayload() {
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get("data");
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(decodeURIComponent(raw));
+  } catch {
+    return null;
+  }
+}
+
+const payload = getPayload();
+if (!payload || !payload.underwrite) {
+  document.getElementById("totalVal").textContent = "Data Error";
+  console.error("Invalid payload");
+} else {
+  const u = payload.underwrite;
+  const m = u.metrics || {};
+
+  // -------------------------------------------
+  // FUNDING VALUES
+  // -------------------------------------------
+  const personal =
+    (u.personal?.card_funding || 0) +
+    (u.personal?.loan_funding || 0);
+
+  const business = u.business?.business_funding || 0;
+  const total = u.totals?.total_combined_funding || 0;
+
+  document.getElementById("personalVal").textContent =
+    "$" + Number(personal).toLocaleString();
+
+  document.getElementById("businessVal").textContent =
+    "$" + Number(business).toLocaleString();
+
+  document.getElementById("totalVal").textContent =
+    "$" + Number(total).toLocaleString() + " Total Approved";
+
+  // -------------------------------------------
+  // METRICS
+  // -------------------------------------------
+  document.getElementById("scoreCardVal").textContent =
+    m.score || "--";
+
+  document.getElementById("utilCardVal").textContent =
+    (m.utilization_pct ?? "--") + "%";
+
+  document.getElementById("inqCardVal").textContent =
+    `EX ${m.inquiries?.ex || 0} • TU ${m.inquiries?.tu || 0} • EQ ${m.inquiries?.eq || 0}`;
+
+  // -------------------------------------------
+  // OPTIMIZATION SUGGESTIONS
+  // -------------------------------------------
+  const list = document.getElementById("optList");
+  const negative = m.negative_accounts || 0;
+  const late = m.late_payment_events || 0;
+  const util = m.utilization_pct || 0;
+
+  if (negative > 0) {
+    const li = document.createElement("li");
+    li.textContent = `${negative} negative account(s) lowering approvals`;
+    list.appendChild(li);
+  }
+
+  if (late > 0) {
+    const li = document.createElement("li");
+    li.textContent = `${late} recent late payment(s) hurting score`;
+    list.appendChild(li);
+  }
+
+  if (util > 20) {
+    const li = document.createElement("li");
+    li.textContent = `High utilization (${util}%) — target is 3–10%`;
+    list.appendChild(li);
+  }
+
+  if (list.children.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = "Your profile is strong — minimal optimization needed.";
+    list.appendChild(li);
+  }
+}
+</script>
+
+</body>
+</html>
