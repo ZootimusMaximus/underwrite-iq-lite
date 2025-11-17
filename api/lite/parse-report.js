@@ -1,14 +1,12 @@
 // ==================================================================================
-// UnderwriteIQ LITE — TEXT + LLM Parser (UNIFIED PRO VERSION)
+// UnderwriteIQ LITE — TEXT + LLM Parser (PRO VERSION)
 // Per-bureau extraction + underwriting + suggestion scaffold
-// GPT-4.1 + JSON auto-repair + annualcreditreport.com PDFs
 // ==================================================================================
 
 const fs = require("fs");
 const formidable = require("formidable");
 const pdfParse = require("pdf-parse");
 
-// Vercel API config
 module.exports.config = {
   api: { bodyParser: false, sizeLimit: "30mb" }
 };
@@ -45,15 +43,35 @@ function buildFallbackResult(reason = "Analyzer failed") {
 }
 
 // -----------------------------------------------
+// SMALL HELPERS
+// -----------------------------------------------
+function toNumberOrNull(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string") {
+    const trimmed = v.trim().toLowerCase();
+    if (trimmed === "" || trimmed === "null" || trimmed === "none" || trimmed === "n/a") {
+      return null;
+    }
+  }
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toNumberOrZero(v) {
+  const n = toNumberOrNull(v);
+  return n == null ? 0 : n;
+}
+
+// -----------------------------------------------
 // SYSTEM PROMPT (PRO · PER BUREAU · COMPACT JSON)
 // -----------------------------------------------
 const LLM_PROMPT = `
 You are UnderwriteIQ.
-Extract data PER BUREAU from a consumer credit report PDF (including annualcreditreport.com style reports).
+Extract data PER BUREAU from a consumer credit report.
 
-Return ONLY STRICT, COMPACT VALID JSON. NO EXTRA TEXT. NO MARKDOWN. NO COMMENTS.
+Return ONLY COMPACT VALID JSON. NO EXTRA TEXT. NO MARKDOWN.
 
-Schema:
+Output:
 
 {
   "bureaus": {
@@ -127,16 +145,16 @@ Schema:
 }
 
 Rules:
-- Work directly from the report text, including annualcreditreport.com layout.
-- If a bureau is completely missing, still include its key with nulls/empty arrays.
+- Match each tradeline to the correct bureau.
+- If a bureau is missing, set that bureau to null or empty arrays.
 - If unsure, use null.
 - Do NOT invent or guess creditor names.
 - Do NOT include any explanation, commentary, or markdown.
-- Output ONLY a single JSON object, nothing before or after.
+- Output ONLY JSON, nothing else.
 `;
 
 // =====================================================
-// LLM OUTPUT NORMALIZER
+// PART 1 — LLM OUTPUT NORMALIZER
 // =====================================================
 function normalizeLLMOutput(str) {
   return String(str || "")
@@ -148,7 +166,7 @@ function normalizeLLMOutput(str) {
 }
 
 // =====================================================
-// JSON STRING EXTRACTOR (Responses API + legacy)
+// PART 2 — JSON STRING EXTRACTOR (Responses / Chat)
 // =====================================================
 function extractJsonStringFromResponse(json) {
   // 1. Direct output_text (Responses API)
@@ -165,13 +183,13 @@ function extractJsonStringFromResponse(json) {
           (block.type === "output_text" || block.type === "summary_text") &&
           typeof block.text === "string"
         ) {
-          if (block.text.trim()) return block.text.trim();
+          return block.text.trim();
         }
       }
     }
   }
 
-  // 3. Legacy chat.completions format (just in case)
+  // 3. Legacy chat.completions format
   if (
     json.choices &&
     json.choices[0] &&
@@ -185,95 +203,92 @@ function extractJsonStringFromResponse(json) {
 }
 
 // =====================================================
-// JSON REPAIR PARSER (MULTI-LINE + HEURISTIC FIXES)
+// PART 3 — JSON REPAIR PARSER (MULTI-OBJECT SAFE)
 // =====================================================
 function tryParseJsonWithRepair(raw) {
   if (!raw || typeof raw !== "string") {
     throw new Error("No raw JSON text to parse.");
   }
 
-  let cleaned = normalizeLLMOutput(raw);
+  const cleaned = normalizeLLMOutput(raw);
 
-  // Handle rare case of two JSON objects stuck together: {...}{...}
-  const lastBrace = cleaned.lastIndexOf("{");
-  if (lastBrace > 0) {
-    // Take from last top-level object if multiple were concatenated
-    cleaned = cleaned.slice(lastBrace);
+  // Find all balanced {...} regions outside of strings
+  const candidates = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+
+    if (inString) {
+      if (escape) {
+        escape = false;
+      } else if (ch === "\\") {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+    } else {
+      if (ch === '"') {
+        inString = true;
+      } else if (ch === "{") {
+        if (depth === 0) start = i;
+        depth++;
+      } else if (ch === "}") {
+        depth--;
+        if (depth === 0 && start !== -1) {
+          candidates.push(cleaned.slice(start, i + 1));
+          start = -1;
+        }
+      }
+    }
   }
 
-  const first = cleaned.indexOf("{");
-  const last = cleaned.lastIndexOf("}");
-  if (first === -1 || last === -1 || last <= first) {
+  if (!candidates.length) {
     throw new Error("Could not locate JSON object in model output.");
   }
 
-  let fixed = cleaned.substring(first, last + 1);
+  // Try candidates from largest to smallest (prefer the most detailed)
+  candidates.sort((a, b) => b.length - a.length);
 
-  // ---- Heuristic repairs (minimal but effective) ----
+  for (const candidate of candidates) {
+    let fixed = candidate;
 
-  // 1. Fix trailing commas before } or ]
-  fixed = fixed.replace(/,\s*([}\]])/g, "$1");
+    // 1. Fix trailing commas before } or ]
+    fixed = fixed.replace(/,\s*([}\]])/g, "$1");
 
-  // 2. Quote unquoted keys: { key: ... } => { "key": ... }
-  fixed = fixed.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
+    // 2. Quote unquoted keys: { key: ... } => { "key": ... }
+    fixed = fixed.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
 
-  // 3. Quote date-like values (YYYY-MM / YYYY-MM-DD) that are bare
-  fixed = fixed.replace(/:\s*(\d{4}-\d{2}(?:-\d{2})?)(\s*[},])/g, ':"$1"$2');
+    // 3. Fix unquoted string values (simple heuristic)
+    fixed = fixed.replace(
+      /:\s*([A-Za-z][A-Za-z0-9 _\-]*)\s*(,|\})/g,
+      (m, val, end) => {
+        // Skip if already quoted or numeric
+        if (val.startsWith('"') || /^[0-9.\-]+$/.test(val)) return `:${val}${end}`;
+        return `:"${val}"${end}`;
+      }
+    );
 
-  // 4. Convert = to : if the model ever uses key = value
-  fixed = fixed.replace(/=\s*/g, ": ");
+    // 4. Quote YYYY-MM / YYYY-MM-DD date-like values if unquoted
+    fixed = fixed.replace(/:\s*(\d{4}-\d{2}(?:-\d{2})?)/g, ':"$1"');
 
-  // 5. Unify "null" (string) to null where obvious (simple pass; full coercion later)
-  fixed = fixed.replace(/:\s*"null"(\s*[},])/g, ": null$1");
-
-  try {
-    return JSON.parse(fixed);
-  } catch (err) {
-    console.error("JSON REPAIR FAILED. Preview:", fixed.slice(0, 200));
-    throw new Error("JSON parse failed (after repair): " + err.message);
+    try {
+      return JSON.parse(fixed);
+    } catch (err) {
+      // Try next candidate
+      continue;
+    }
   }
+
+  throw new Error("JSON parse failed (after repair) for all candidates.");
 }
 
-// =====================================================
-// PRIMITIVE SANITIZERS
-// =====================================================
-function toNumberOrNull(v) {
-  if (v === null || v === undefined) return null;
-  if (v === "null") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-function toBoolOrNull(v) {
-  if (v === null || v === undefined) return null;
-  if (typeof v === "boolean") return v;
-  if (typeof v === "string") {
-    const s = v.toLowerCase().trim();
-    if (s === "true") return true;
-    if (s === "false") return false;
-  }
-  return null;
-}
-
-function toStringOrNull(v) {
-  if (v === null || v === undefined) return null;
-  if (typeof v === "string") {
-    const t = v.trim();
-    return t.length ? t : null;
-  }
-  return String(v);
-}
-
-function toStringArray(arr) {
-  if (!Array.isArray(arr)) return [];
-  return arr
-    .map((x) => (typeof x === "string" ? x.trim() : String(x || "")))
-    .filter((s) => s.length > 0);
-}
-
-// =====================================================
+// -----------------------------------------------
 // PER-BUREAU NORMALIZER
-// =====================================================
+// -----------------------------------------------
 function normalizeBureau(b) {
   if (!b || typeof b !== "object") {
     return {
@@ -290,17 +305,25 @@ function normalizeBureau(b) {
   }
 
   const rawTradelines = Array.isArray(b.tradelines) ? b.tradelines : [];
+
   const tradelines = rawTradelines.map((tl) => {
     if (!tl || typeof tl !== "object") return null;
+    const isAu =
+      tl.is_au === true ||
+      tl.is_au === "true" ||
+      tl.is_au === "TRUE" ||
+      tl.is_au === "Yes" ||
+      tl.is_au === "yes";
+
     return {
-      creditor: toStringOrNull(tl.creditor),
-      type: toStringOrNull(tl.type),
-      status: toStringOrNull(tl.status),
+      creditor: tl.creditor || null,
+      type: tl.type || null,
+      status: tl.status || null,
       balance: toNumberOrNull(tl.balance),
       limit: toNumberOrNull(tl.limit),
-      opened: toStringOrNull(tl.opened),
-      closed: toStringOrNull(tl.closed),
-      is_au: toBoolOrNull(tl.is_au)
+      opened: tl.opened || null,
+      closed: tl.closed || null,
+      is_au: isAu
     };
   }).filter(Boolean);
 
@@ -310,33 +333,76 @@ function normalizeBureau(b) {
     inquiries: toNumberOrNull(b.inquiries),
     negatives: toNumberOrNull(b.negatives),
     late_payment_events: toNumberOrNull(b.late_payment_events),
-    names: toStringArray(b.names),
-    addresses: toStringArray(b.addresses),
-    employers: toStringArray(b.employers),
+    names: Array.isArray(b.names) ? b.names : [],
+    addresses: Array.isArray(b.addresses) ? b.addresses : [],
+    employers: Array.isArray(b.employers) ? b.employers : [],
     tradelines
   };
 }
 
 // -----------------------------------------------
-// Single LLM Call — Responses API (GPT-4.1)
+// MERGE BUREAU OBJECTS ACROSS CHUNKS
 // -----------------------------------------------
-async function callOpenAIOnce(text) {
+function mergeSingleBureau(base, next) {
+  if (!base) return next;
+  if (!next) return base;
+
+  const result = { ...base };
+
+  function pickNumeric(field, strategy = "max") {
+    const a = toNumberOrNull(base[field]);
+    const b = toNumberOrNull(next[field]);
+    if (a == null && b == null) return null;
+    if (a == null) return b;
+    if (b == null) return a;
+    if (strategy === "max") return Math.max(a, b);
+    if (strategy === "sum") return a + b;
+    return b;
+  }
+
+  result.score = pickNumeric("score", "max");
+  result.utilization_pct = pickNumeric("utilization_pct", "max");
+  result.inquiries = pickNumeric("inquiries", "sum");
+  result.negatives = pickNumeric("negatives", "sum");
+  result.late_payment_events = pickNumeric("late_payment_events", "sum");
+
+  result.names = Array.from(new Set([...(base.names || []), ...(next.names || [])]));
+  result.addresses = Array.from(new Set([...(base.addresses || []), ...(next.addresses || [])]));
+  result.employers = Array.from(new Set([...(base.employers || []), ...(next.employers || [])]));
+
+  const baseTls = Array.isArray(base.tradelines) ? base.tradelines : [];
+  const nextTls = Array.isArray(next.tradelines) ? next.tradelines : [];
+  result.tradelines = [...baseTls, ...nextTls];
+
+  return result;
+}
+
+function mergeBureausObjects(a, b) {
+  if (!a && !b) return null;
+  const safeA = a || {};
+  const safeB = b || {};
+
+  return {
+    experian: mergeSingleBureau(safeA.experian || null, safeB.experian || null),
+    equifax: mergeSingleBureau(safeA.equifax || null, safeB.equifax || null),
+    transunion: mergeSingleBureau(safeA.transunion || null, safeB.transunion || null)
+  };
+}
+
+// -----------------------------------------------
+// Single LLM Call — Responses API (GPT-4 family)
+// -----------------------------------------------
+async function callOpenAIOnce(textChunk) {
   const key = process.env.UNDERWRITE_IQ_VISION_KEY;
   if (!key) throw new Error("Missing UNDERWRITE_IQ_VISION_KEY");
 
   const payload = {
-    model: "gpt-4.1",
+    model: "gpt-4.1-mini",
     input: [
       { role: "system", content: LLM_PROMPT },
       {
         role: "user",
-        content: [
-          {
-            type: "input_text",
-            // Allow up to ~50k chars to handle big annualcreditreport PDFs
-            text: text.slice(0, 50000)
-          }
-        ]
+        content: [{ type: "input_text", text: textChunk }]
       }
     ],
     temperature: 0,
@@ -368,36 +434,71 @@ async function callOpenAIOnce(text) {
     throw new Error("LLM returned no output_text.");
   }
 
-  const cleanedRaw = normalizeLLMOutput(raw);
-  return tryParseJsonWithRepair(cleanedRaw);
+  return tryParseJsonWithRepair(raw);
 }
 
 // -----------------------------------------------
-// LLM Pipeline with Retry
+// Chunk helper for large PDFs
 // -----------------------------------------------
-async function runCreditTextLLM(text) {
+function chunkText(text, maxChars = 15000) {
+  const chunks = [];
+  for (let i = 0; i < text.length; i += maxChars) {
+    chunks.push(text.slice(i, i + maxChars));
+  }
+  return chunks;
+}
+
+// -----------------------------------------------
+// LLM Pipeline with Retry + Chunk Merge
+// -----------------------------------------------
+async function runCreditTextLLM(fullText) {
+  const chunks = chunkText(fullText, 15000);
+  let mergedExtraction = null;
   let lastError = null;
 
-  for (let i = 1; i <= 3; i++) {
-    try {
-      return await callOpenAIOnce(text);
-    } catch (err) {
-      lastError = err;
-      console.error(`UnderwriteIQ LLM attempt ${i} failed:`, String(err));
+  for (const chunk of chunks) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const out = await callOpenAIOnce(chunk);
 
-      if (
-        String(err).includes("LLM HTTP error") ||
-        String(err).includes("LLM refusal") ||
-        String(err).includes("Missing UNDERWRITE_IQ_VISION_KEY")
-      ) {
-        break;
+        if (!out || typeof out !== "object" || !out.bureaus) {
+          throw new Error("LLM returned invalid JSON shape");
+        }
+
+        const normalizedChunkBureaus = {
+          experian: normalizeBureau(out.bureaus.experian),
+          equifax: normalizeBureau(out.bureaus.equifax),
+          transunion: normalizeBureau(out.bureaus.transunion)
+        };
+
+        mergedExtraction = mergedExtraction
+          ? mergeBureausObjects(mergedExtraction, normalizedChunkBureaus)
+          : normalizedChunkBureaus;
+
+        break; // successful, break retry loop
+      } catch (err) {
+        lastError = err;
+        console.error("UnderwriteIQ LLM chunk attempt failed:", String(err));
+
+        const msg = String(err || "");
+        if (
+          msg.includes("Missing UNDERWRITE_IQ_VISION_KEY") ||
+          msg.includes("LLM refusal") ||
+          msg.includes("context_length_exceeded")
+        ) {
+          throw err;
+        }
+
+        await new Promise((r) => setTimeout(r, 200 * attempt));
       }
-
-      await new Promise((r) => setTimeout(r, 150 * i));
     }
   }
 
-  throw new Error("LLM failed after 3 attempts: " + String(lastError));
+  if (!mergedExtraction) {
+    throw new Error("LLM failed after retries: " + String(lastError));
+  }
+
+  return mergedExtraction;
 }
 
 // -----------------------------------------------
@@ -406,8 +507,7 @@ async function runCreditTextLLM(text) {
 function getNumberField(fields, key) {
   if (!fields || fields[key] == null) return null;
   const raw = Array.isArray(fields[key]) ? fields[key][0] : fields[key];
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
+  return toNumberOrNull(raw);
 }
 
 function monthsSince(dateStr) {
@@ -435,16 +535,16 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
   const eq = normalizeBureau(safeBureaus.equifax);
   const tu = normalizeBureau(safeBureaus.transunion);
 
-  const exInq = toNumberOrNull(ex.inquiries) || 0;
-  const eqInq = toNumberOrNull(eq.inquiries) || 0;
-  const tuInq = toNumberOrNull(tu.inquiries) || 0;
+  const exInq = toNumberOrZero(ex.inquiries);
+  const eqInq = toNumberOrZero(eq.inquiries);
+  const tuInq = toNumberOrZero(tu.inquiries);
   const totalInq = exInq + eqInq + tuInq;
 
   function buildBureauSummary(key, label, b) {
-    const score = toNumberOrNull(b.score) || 0;
-    const util = toNumberOrNull(b.utilization_pct) || 0;
-    const neg = toNumberOrNull(b.negatives) || 0;
-    const lates = toNumberOrNull(b.late_payment_events) || 0;
+    const score = toNumberOrZero(b.score);
+    const util = toNumberOrZero(b.utilization_pct);
+    const neg = toNumberOrZero(b.negatives);
+    const lates = toNumberOrZero(b.late_payment_events);
     const tradelines = Array.isArray(b.tradelines) ? b.tradelines : [];
 
     let highestRevolvingLimit = 0;
@@ -457,8 +557,8 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     for (const tl of tradelines) {
       const type = String(tl.type || "").toLowerCase();
       const status = String(tl.status || "").toLowerCase();
-      const limit = toNumberOrNull(tl.limit) || 0;
-      const balance = toNumberOrNull(tl.balance) || 0;
+      const limit = toNumberOrZero(tl.limit);
+      const balance = toNumberOrZero(tl.balance);
       const ageMonths = monthsSince(tl.opened);
 
       const isDerog =
@@ -514,7 +614,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
       util,
       neg,
       lates,
-      inquiries: toNumberOrNull(b.inquiries) || 0,
+      inquiries: toNumberOrZero(b.inquiries),
       tradelines,
       highestRevolvingLimit,
       highestInstallmentAmount,
@@ -539,7 +639,6 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     buildBureauSummary("transunion", "TransUnion", tu)
   ];
 
-  // Primary bureau: highest score (ties fall back to first non-zero)
   let primary = bureauSummaries[0];
   for (const b of bureauSummaries) {
     if (b.score > primary.score) {
@@ -564,7 +663,6 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     0
   );
 
-  // If only ONE bureau is fundable, scale down by 1/3 (bank sees 3 bureaus)
   let scale = 1;
   if (fundableCount === 1) {
     scale = 1 / 3;
@@ -709,118 +807,118 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
 // ============================================================================
 function buildSuggestions(bureaus, uw) {
   const primaryKey = uw.primary_bureau;
-  const p = uw.metrics || {};
+  const p = uw.metrics;
 
-  const score = toNumberOrNull(p.score);
-  const util = toNumberOrNull(p.utilization_pct);
-  const negatives = toNumberOrNull(p.negative_accounts) || 0;
-  const inquiries = toNumberOrNull(p.inquiries && p.inquiries.total) || 0;
-  const late = toNumberOrNull(p.late_payment_events) || 0;
+  const score = p.score;
+  const util = p.utilization_pct;
+  const negatives = p.negative_accounts;
+  const inquiries = p.inquiries.total;
+  const late = p.late_payment_events;
 
   const actions = [];
   const au_actions = [];
 
-  // Utilization guidance
+  // Utilization guidance (only if we have a real number)
   if (typeof util === "number" && Number.isFinite(util)) {
     if (util > 30) {
       actions.push(
-        `Your utilization is about ${util}%. To maximize approvals, bring each card down to the 3–10% range before applying for new credit or funding.`
+        `Your utilization is about ${util}%. To maximize approvals, bring each card down to the 3–10% range before applying.`
       );
     } else {
       actions.push(
-        `Your utilization is in a solid range. Keeping each card between 3–10% will help you qualify for higher limits and better approvals.`
+        `Your utilization is in a solid range. Keeping each card between 3–10% will help you qualify for higher limits.`
       );
     }
   } else {
     actions.push(
-      `We couldn't precisely read your utilization from this PDF, but the rule is simple: keep each card between 3–10% before you apply for new funding.`
+      `We couldn't accurately read utilization from this PDF, but the goal is simple: keep each card between 3–10% before you apply for new funding.`
     );
   }
 
-  if (negatives > 0) {
+  if (typeof negatives === "number" && negatives > 0) {
     actions.push(
-      `You have about ${negatives} negative account(s). Removing or repairing these will increase your approval odds and potential limits.`
+      `You have ${negatives} negative accounts. Removing or repairing these increases approval odds.`
     );
   }
 
-  if (inquiries > 0) {
+  if (typeof inquiries === "number" && inquiries > 0) {
     actions.push(
-      `You have about ${inquiries} total inquiries. Reducing recent hard inquiries before applying can meaningfully boost approvals.`
+      `You have ${inquiries} total inquiries. Reducing inquiries before applying boosts approval chances.`
     );
   }
 
-  // AU logic
   const allBureaus = [
-    (bureaus.experian && bureaus.experian.tradelines) || [],
-    (bureaus.equifax && bureaus.equifax.tradelines) || [],
-    (bureaus.transunion && bureaus.transunion.tradelines) || []
+    bureaus.experian.tradelines,
+    bureaus.equifax.tradelines,
+    bureaus.transunion.tradelines
   ];
 
   const flattened = allBureaus.flat().filter((tl) => tl && typeof tl === "object");
 
   flattened.forEach((tl) => {
     if (tl.is_au === true) {
-      const bal = toNumberOrNull(tl.balance) || 0;
-      const lim = toNumberOrNull(tl.limit) || 1;
+      const bal = toNumberOrZero(tl.balance);
+      const lim = toNumberOrZero(tl.limit) || 1;
       const ratio = (bal / lim) * 100;
 
       if (ratio > 30) {
         au_actions.push(
-          `Authorized user account "${tl.creditor || "Unknown AU"}" is about ${ratio.toFixed(
+          `Authorized user account "${tl.creditor}" is about ${ratio.toFixed(
             1
-          )}% utilized. Have the primary cardholder pay this down or remove you as an AU to instantly improve your utilization.`
+          )}% utilized. Removing it improves your utilization instantly.`
         );
       }
 
       const st = String(tl.status || "").toLowerCase();
       if (st.includes("charge") || st.includes("collection") || st.includes("derog")) {
         au_actions.push(
-          `Authorized user account "${tl.creditor || "Unknown AU"}" is reporting negative. Ask the primary cardholder to remove you as an authorized user immediately.`
+          `Authorized user account "${tl.creditor}" is reporting negative. Ask the primary cardholder to remove you from this card.`
         );
       }
     }
   });
 
-  if (uw.optimization && uw.optimization.needs_file_buildout) {
+  if (uw.optimization.needs_file_buildout) {
     actions.push(
-      `Your file is considered thin. Adding 1–2 new primary accounts (or carefully chosen authorized users) will help you look stronger to lenders.`
+      `Your file is thin. Adding 1–2 primary accounts (or strategic authorized users) will boost credibility.`
     );
   }
 
-  if (negatives === 0 && inquiries === 0 && typeof util === "number" && util <= 30) {
+  if (
+    typeof negatives === "number" &&
+    typeof inquiries === "number" &&
+    typeof util === "number" &&
+    negatives === 0 &&
+    inquiries === 0 &&
+    util <= 30
+  ) {
     actions.push(
-      "You are positioned for a credit limit increase. Consider requesting CLIs once your utilization is in the 3–10% range on each card."
+      "You are positioned for a credit limit increase. Consider requesting CLIs after your utilization is reduced into the 3–10% range."
     );
   }
 
   const webSummary = (() => {
-    let s = `Your strongest bureau is ${String(primaryKey || "").toUpperCase() || "UNKNOWN"}. `;
+    let s = `Your strongest bureau is ${primaryKey.toUpperCase()}. `;
     if (!uw.fundable) {
       s += `You're close — here’s what to fix next for maximum funding:`;
     } else {
-      s += `You're fundable right now. Here’s how to maximize your approvals and limits:`;
+      s += `You're fundable right now. Here’s how to maximize your approvals:`;
     }
     return s;
   })();
 
   const emailSummary = `
-Your strongest funding bureau is **${String(primaryKey || "").toUpperCase() || "UNKNOWN"}**.
+Your strongest funding bureau is **${primaryKey.toUpperCase()}**.
 
 To maximize the amount of credit you can receive, focus on the following:
 
-Score: ${score != null ? score : "N/A"}
-Utilization: ${util != null ? util + "%" : "N/A"}
+Score: ${score}
+Utilization: ${util}%
 Negatives: ${negatives}
 Inquiries: ${inquiries}
 Late Payments: ${late}
 
-We recommend:
-- Bringing each revolving card down into the 3–10% utilization range.
-- Reducing recent hard inquiries where possible before applying.
-- Removing or repairing any negative accounts.
-- Cleaning up any high-utilization or negative authorized user accounts.
-
-Once these steps are handled, your approval odds and potential funding amounts increase significantly.
+We recommend cleaning up utilization, inquiries, and any negative items before requesting new credit or applying for funding.
 `.trim();
 
   return {
@@ -836,7 +934,6 @@ Once these steps are handled, your approval odds and potential funding amounts i
 // ============================================================================
 module.exports = async function handler(req, res) {
   try {
-    // CORS + preflight
     if (req.method === "OPTIONS") {
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -850,7 +947,6 @@ module.exports = async function handler(req, res) {
       return res.status(405).json({ ok: false, msg: "Method not allowed" });
     }
 
-    // Parse multipart form
     const form = formidable({
       multiples: false,
       keepExtensions: true,
@@ -866,7 +962,7 @@ module.exports = async function handler(req, res) {
     );
 
     const file = files.file;
-    if (!file || !file.filepath) {
+    if (!file?.filepath) {
       return res.status(200).json(buildFallbackResult("No file uploaded"));
     }
 
@@ -874,43 +970,35 @@ module.exports = async function handler(req, res) {
     const pdf = await pdfParse(buffer);
     const text = (pdf.text || "").replace(/\s+/g, " ").trim();
 
-    // Minimal text guard — protects against images-only or garbage PDFs
     if (!text || text.length < 200) {
       return res.status(200).json(buildFallbackResult("Not enough text extracted"));
     }
 
     const businessAgeMonths = getNumberField(fields, "businessAgeMonths");
 
-    let extracted;
+    let bureaus;
     try {
-      // Slightly higher guard before LLM (prevents super tiny junk)
-      if (!text || text.trim().length < 400) {
+      if (!text || text.trim().length < 500) {
         return res.status(200).json(buildFallbackResult("Not enough text extracted."));
       }
 
-      extracted = await runCreditTextLLM(text);
+      const extracted = await runCreditTextLLM(text);
 
       if (!extracted || typeof extracted !== "object") {
         return res.status(200).json(buildFallbackResult("Analyzer returned invalid JSON"));
       }
 
-      if (!("bureaus" in extracted)) {
-        return res
-          .status(200)
-          .json(buildFallbackResult("Analyzer failed: missing bureaus object"));
-      }
+      bureaus = {
+        experian: normalizeBureau(extracted.experian || extracted?.bureaus?.experian),
+        equifax: normalizeBureau(extracted.equifax || extracted?.bureaus?.equifax),
+        transunion: normalizeBureau(extracted.transunion || extracted?.bureaus?.transunion)
+      };
     } catch (err) {
       console.error("Analyzer crash:", err);
       return res
         .status(200)
         .json(buildFallbackResult("Analyzer crashed: " + String(err)));
     }
-
-    const bureaus = {
-      experian: normalizeBureau(extracted.bureaus && extracted.bureaus.experian),
-      equifax: normalizeBureau(extracted.bureaus && extracted.bureaus.equifax),
-      transunion: normalizeBureau(extracted.bureaus && extracted.bureaus.transunion)
-    };
 
     let uw;
     try {
@@ -931,9 +1019,9 @@ module.exports = async function handler(req, res) {
       query: {
         bureau: uw.primary_bureau,
         funding: uw.lite_banner_funding,
-        personal: uw.personal && uw.personal.total_personal_funding,
-        business: uw.business && uw.business.business_funding,
-        total: uw.totals && uw.totals.total_combined_funding
+        personal: uw.personal?.total_personal_funding,
+        business: uw.business?.business_funding,
+        total: uw.totals?.total_combined_funding
       }
     };
 
