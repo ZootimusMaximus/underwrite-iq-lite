@@ -202,6 +202,9 @@ const exportBtn = document.getElementById("exportBtn");
 const summaryA = document.getElementById("summaryA");
 let allResults = [];
 
+/* ⭐ ADDED — Broadcast channel */
+const channel = new BroadcastChannel("uwiq-batch");
+
 dropzone.onclick = () => fileInput.click();
 fileInput.onchange = () => handleFiles(fileInput.files);
 
@@ -292,7 +295,17 @@ async function processFile(file) {
     json = { ok:false, error:true, message: err.toString() };
   }
 
-  allResults.push({ file: file.name, size: file.size, result: json });
+  const resultObj = { 
+    file: file.name, 
+    size: file.size, 
+    result: json,
+    layerASummary: buildLayerASummary(json)
+  };
+
+  allResults.push(resultObj);
+
+  /* ⭐ ADDED — Broadcast to tester-batch */
+  channel.postMessage(resultObj);
 
   const block = document.createElement("div");
   block.className = "file-result " + (json.ok ? "success" : "fail");
