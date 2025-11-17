@@ -1,18 +1,18 @@
 // ==================================================================================
-// UnderwriteIQ — FULL PRO VERSION (Patch v7.2)
+// UnderwriteIQ — FULL PRO VERSION (Patch v8.0 — GPT-4.1 VISION, PDF DIRECT)
 // Includes:
-// - GPT-4.1 model (vision-capable, used in text mode)
-// - AnnualCreditReport handling
+// - GPT-4.1 model (vision-capable, using PDF input_file)
+// - No pdf-parse: model reads the raw PDF directly
 // - Score sanitizer
 // - Bureau availability logic
 // - Massive JSON repair engine
 // - Stronger type classifier
 // - Error logging subsystem
+// - User-facing fallbacks = "try a different credit report PDF"
 // ==================================================================================
 
 const fs = require("fs");
 const formidable = require("formidable");
-const pdfParse = require("pdf-parse");
 
 // Vercel API Config — handles large PDFs + file upload
 module.exports.config = {
@@ -47,7 +47,7 @@ function buildFallbackResult(reason = "Analyzer failed") {
       score: null,
       risk_band: "unknown",
       note:
-        "We couldn't read this credit report file clearly. Please try uploading a different credit report PDF (Experian, Equifax, TransUnion, or AnnualCreditReport.com)."
+        "We couldn't clearly read this credit report file. Please try uploading a different credit report PDF (Experian, Equifax, TransUnion, or AnnualCreditReport.com)."
     },
     issues: [],
     dispute_groups: [],
@@ -162,7 +162,7 @@ function extractJsonStringFromResponse(json) {
     }
   }
 
-  // Chat Completions format
+  // Chat Completions format (legacy)
   if (
     json.choices &&
     json.choices[0] &&
@@ -264,11 +264,15 @@ function sanitizeScore(score) {
 }
 
 // ============================================================================
-// GPT-4.1 CALL — core LLM call
+// GPT-4.1 CALL — core LLM call (PDF via input_file)
 // ============================================================================
-async function callOpenAIOnce(text) {
+async function callOpenAIOnce(pdfBuffer, filename) {
   const key = process.env.UNDERWRITE_IQ_VISION_KEY;
   if (!key) throw new Error("Missing UNDERWRITE_IQ_VISION_KEY");
+
+  const base64 = pdfBuffer.toString("base64");
+  const dataUrl = `data:application/pdf;base64,${base64}`;
+  const safeFilename = filename || "credit-report.pdf";
 
   const payload = {
     model: "gpt-4.1",
@@ -279,7 +283,13 @@ async function callOpenAIOnce(text) {
         content: [
           {
             type: "input_text",
-            text: text.slice(0, 18000) // safety cap
+            text:
+              "Extract per-bureau consumer credit report data from this PDF exactly following the schema in the system prompt."
+          },
+          {
+            type: "input_file",
+            filename: safeFilename,
+            file_data: dataUrl
           }
         ]
       }
@@ -315,12 +325,12 @@ async function callOpenAIOnce(text) {
 // ============================================================================
 // RETRY WRAPPER — 3 attempts with backoff
 // ============================================================================
-async function runCreditTextLLM(text) {
+async function runCreditPdfLLM(pdfBuffer, filename) {
   let lastError = null;
 
   for (let i = 1; i <= 3; i++) {
     try {
-      return await callOpenAIOnce(text);
+      return await callOpenAIOnce(pdfBuffer, filename);
     } catch (err) {
       lastError = err;
       logError("LLM_ATTEMPT_" + i, err);
@@ -361,9 +371,6 @@ function monthsSince(dateStr) {
   );
 }
 
-// ============================================================================
-// END OF PART 1
-// ============================================================================
 // ============================================================================
 // PRO UNDERWRITING ENGINE (Per Bureau + Aggregate)
 // ============================================================================
@@ -537,7 +544,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
 
   // Reduce expectations if only one bureau is fundable
   let scale = 1;
-  if (fundableCount === 1) scale = 1/3;
+  if (fundableCount === 1) scale = 1 / 3;
 
   const cardFunding = totalCardFundingBase * scale;
   const loanFunding = totalLoanFundingBase * scale;
@@ -802,7 +809,7 @@ Fastest improvements:
 }
 
 // ============================================================================
-// MAIN HANDLER — PDF Upload → Parse → LLM → Underwrite → Suggest → Redirect
+// MAIN HANDLER — PDF Upload → GPT-4.1 VISION (PDF) → Underwrite → Suggest → Redirect
 // ============================================================================
 module.exports = async function handler(req, res) {
   try {
@@ -843,16 +850,12 @@ module.exports = async function handler(req, res) {
     }
 
     const buffer = await fs.promises.readFile(file.filepath);
-    const pdf = await pdfParse(buffer);
-    const rawText = pdf.text || "";
 
-    // Light normalization (no OCR)
-    const text = rawText.replace(/\s+/g, " ").trim();
-
-    if (!text || text.length < 200) {
+    // quick sanity check: extremely tiny PDFs are likely junk
+    if (!buffer || buffer.length < 1000) {
       return res.status(200).json(
         buildFallbackResult(
-          "The PDF text was too short or unclear. Please upload a different credit report PDF."
+          "This file is too small to be a full credit report. Please upload a different credit report PDF."
         )
       );
     }
@@ -862,7 +865,7 @@ module.exports = async function handler(req, res) {
     // ----------------------- LLM extraction -----------------------
     let extracted;
     try {
-      extracted = await runCreditTextLLM(text);
+      extracted = await runCreditPdfLLM(buffer, file.originalFilename || file.newFilename);
 
       if (!extracted || typeof extracted !== "object") {
         return res.status(200).json(
@@ -901,13 +904,11 @@ module.exports = async function handler(req, res) {
       uw = computeUnderwrite(bureaus, businessAgeMonths);
     } catch (err) {
       logError("UNDERWRITE_CRASH", err, JSON.stringify(extracted).slice(0, 800));
-      return res
-        .status(200)
-        .json(
-          buildFallbackResult(
-            "Underwriting crashed on this file. Please upload a different credit report PDF."
-          )
-        );
+      return res.status(200).json(
+        buildFallbackResult(
+          "Underwriting crashed on this file. Please upload a different credit report PDF."
+        )
+      );
     }
 
     // ----------------------- Suggestions -----------------------
