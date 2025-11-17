@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Internal System Monitor</title>
+<title>Internal System Monitor — PRO</title>
 
 <style>
 /* ======================= GLOBAL ======================= */
@@ -19,7 +19,7 @@ body {
   overflow-x: hidden;
 }
 
-/* Matrix canvas behind everything */
+/* Background Matrix canvas */
 #matrix {
   position: fixed;
   top: 0;
@@ -29,7 +29,7 @@ body {
   z-index: -1;
 }
 
-/* CRT scanlines */
+/* CRT Scanlines */
 body::after {
   content: "";
   position: fixed;
@@ -37,9 +37,9 @@ body::after {
   pointer-events: none;
   background: repeating-linear-gradient(
     to bottom,
-    rgba(0,0,0,0.17) 0px,
-    rgba(0,0,0,0.17) 2px,
-    rgba(0,0,0,0.20) 3px
+    rgba(0,0,0,0.2) 0px,
+    rgba(0,0,0,0.2) 2px,
+    rgba(0,0,0,0.24) 3px
   );
   z-index: 9999;
   mix-blend-mode: multiply;
@@ -92,7 +92,6 @@ pre {
   font-size: 12px;
 }
 
-/* File result blocks */
 .file-result {
   padding: 8px;
   margin-bottom: 10px;
@@ -128,7 +127,7 @@ pre {
 <!-- ======================= UI ======================= -->
 <div id="ui">
 
-  <h1>Internal System Monitor</h1>
+  <h1>Internal System Monitor — PRO</h1>
 
   <div id="dropzone">CLICK OR DRAG PDF(s)</div>
   <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
@@ -144,18 +143,19 @@ pre {
   </div>
 
   <div class="panel">
-    <h3>Success</h3>
+    <h3>Successful Parses</h3>
     <div id="results"></div>
   </div>
 
   <div class="panel">
-    <h3>Failed</h3>
+    <h3>Failed Parses</h3>
     <div id="fails"></div>
   </div>
 
   <button id="exportBtn">Export JSON</button>
 </div>
 
+<!-- ======================= JS ======================= -->
 <script>
 /* ======================= MATRIX RAIN ======================= */
 const canvas = document.getElementById("matrix");
@@ -195,116 +195,96 @@ setInterval(drawMatrix, 50);
 
 const dropzone = document.getElementById("dropzone");
 const fileInput = document.getElementById("fileInput");
-const progress = document.getElementById("progress");
 const resultsDiv = document.getElementById("results");
 const failsDiv = document.getElementById("fails");
-const exportBtn = document.getElementById("exportBtn");
+const progress = document.getElementById("progress");
 const summaryA = document.getElementById("summaryA");
+const exportBtn = document.getElementById("exportBtn");
 
 let allResults = [];
 
+// ========= File Input Handlers =========
 dropzone.onclick = () => fileInput.click();
 fileInput.onchange = () => handleFiles(fileInput.files);
 
-dropzone.addEventListener("dragover", e => {
-  e.preventDefault();
-});
+dropzone.addEventListener("dragover", e => e.preventDefault());
 dropzone.addEventListener("drop", e => {
   e.preventDefault();
   handleFiles(e.dataTransfer.files);
 });
 
-// ---------- Layer A formatter (website copy) ----------
+// ========= Build Layer A Summary =========
 function buildLayerASummary(json) {
   if (!json || !json.ok || !json.underwrite) {
-    return "We analyzed your file, but the analyzer returned a fallback result. This would show the manual-review message on the website.";
+    return "We analyzed your file, but the analyzer returned a fallback result.";
   }
 
   const uw = json.underwrite;
   const metrics = uw.metrics || {};
-  const inquiries = (metrics.inquiries && metrics.inquiries.total) || 0;
+  const inquiries = metrics.inquiries?.total || 0;
 
-  const bureauKey = uw.primary_bureau || "your strongest bureau";
-  const bureau =
-    typeof bureauKey === "string"
-      ? bureauKey.toUpperCase()
-      : "YOUR STRONGEST BUREAU";
+  const bureauKey = uw.primary_bureau;
+  const bureau = bureauKey ? bureauKey.toUpperCase() : "YOUR STRONGEST BUREAU";
 
   const score = metrics.score;
   const util = metrics.utilization_pct;
   const negatives = metrics.negative_accounts ?? 0;
 
   const totalFunding =
-    (uw.totals && uw.totals.total_combined_funding) ||
+    uw.totals?.total_combined_funding ||
     uw.lite_banner_funding ||
     null;
 
-  const sentences = [];
+  const out = [];
 
-  // 1) Opening: what we did + strongest bureau
-  if (typeof score === "number" && Number.isFinite(score)) {
-    sentences.push(
-      `We scanned your full credit profile and your strongest funding bureau is ${bureau} with a score around ${score}.`
+  if (typeof score === "number") {
+    out.push(
+      `We scanned your profile and your strongest funding bureau is ${bureau} with a score around ${score}.`
     );
   } else {
-    sentences.push(
-      `We scanned your full credit profile and identified ${bureau} as your strongest funding bureau.`
+    out.push(
+      `We scanned your profile and identified ${bureau} as your strongest bureau.`
     );
   }
 
-  // 2) Utilization
-  if (typeof util === "number" && Number.isFinite(util)) {
-    sentences.push(
-      `Your overall utilization is about ${util}%. To maximize approvals, each card should land in the 3–10% range before you apply for new funding.`
+  if (typeof util === "number") {
+    out.push(
+      `Your utilization is about ${util}%. Aim for 3–10% per card to maximize approvals.`
     );
   } else {
-    sentences.push(
-      `We couldn’t cleanly read utilization from this PDF, but the target is simple: keep each card in the 3–10% range before applying.`
+    out.push(
+      `We couldn’t cleanly read utilization from this PDF, but target 3–10% per card.`
     );
   }
 
-  // 3) Negatives + inquiries
   if (negatives > 0 || inquiries > 0) {
-    const negPart =
-      negatives > 0
-        ? `${negatives} negative account${negatives > 1 ? "s" : ""}`
-        : null;
+    const negPart = negatives > 0 ? `${negatives} negative accounts` : null;
     const inqPart =
-      inquiries > 0 ? `${inquiries} recent inquir${inquiries === 1 ? "y" : "ies"}` : null;
+      inquiries > 0 ? `${inquiries} inquir${inquiries === 1 ? "y" : "ies"}` : null;
 
-    let combo = [];
-    if (negPart) combo.push(negPart);
-    if (inqPart) combo.push(inqPart);
-
-    sentences.push(
-      `Right now, ${combo.join(" and ")} are suppressing your approvals. Cleaning these up is the fastest way to unlock better limits.`
+    out.push(
+      `Right now, ${[negPart, inqPart].filter(Boolean).join(" and ")} are holding you back.`
     );
   } else {
-    sentences.push(
-      `You have a clean file with no major negatives or inquiry drag, which is ideal for high-limit approvals.`
-    );
+    out.push(`You have a clean file with no inquiry or negative drag.`);
   }
 
-  // 4) Funding potential
-  if (uw.fundable && totalFunding && totalFunding > 0) {
-    const formatted = Math.round(totalFunding).toLocaleString();
-    sentences.push(
-      `Based on this profile, it’s realistic to target roughly $${formatted} in combined personal and business limits once you sequence applications correctly.`
+  if (uw.fundable && totalFunding > 0) {
+    out.push(
+      `With clean sequencing, you can target roughly $${Math.round(
+        totalFunding
+      ).toLocaleString()} in combined limits.`
     );
   } else {
-    sentences.push(
-      `You’re close to fundable — if you follow the clean-up steps we outline, you can move into approval range and then stack funding in a structured sequence.`
-    );
+    out.push(`You’re close — fix the basics and you’ll move into approval range.`);
   }
 
-  // 5) CTA-ish line
-  sentences.push(
-    `On the next steps we’ll show you exactly what to fix first so you can move into maximum funding range as quickly as possible.`
-  );
+  out.push(`We’ll show you exactly what to optimize next.`);
 
-  return sentences.join(" ");
+  return out.join(" ");
 }
 
+// ========= Main File Handling =========
 async function handleFiles(files) {
   if (!files || !files.length) return;
 
@@ -312,7 +292,7 @@ async function handleFiles(files) {
   resultsDiv.innerHTML = "";
   failsDiv.innerHTML = "";
   progress.innerText = "Starting…";
-  summaryA.textContent = "Waiting for first successful result…";
+  summaryA.innerText = "Waiting for first successful result…";
 
   const total = files.length;
   let done = 0;
@@ -320,20 +300,23 @@ async function handleFiles(files) {
   for (const file of files) {
     await processFile(file);
     done++;
-    const pct = ((done / total) * 100).toFixed(1);
-    progress.innerText = `Processed ${done} / ${total} (${pct}%)`;
+    progress.innerText = `Processed ${done} / ${total} (${(
+      (done / total) *
+      100
+    ).toFixed(1)}%)`;
   }
 
-  progress.innerText = `DONE – ${total} files tested`;
+  progress.innerText = `DONE – ${total} files processed.`;
 }
 
+// ========= Send each PDF to UnderwriteIQ PRO =========
 async function processFile(file) {
   const formData = new FormData();
   formData.append("file", file);
 
   let json;
   try {
-    const res = await fetch("/api/lite/parse-report", {
+    const res = await fetch("/api/parse-report", {
       method: "POST",
       body: formData
     });
@@ -342,14 +325,16 @@ async function processFile(file) {
     json = { ok: false, error: true, message: err.toString() };
   }
 
-  // Track all
-  allResults.push({ filename: file.name, size: file.size, result: json });
+  allResults.push({
+    filename: file.name,
+    size: file.size,
+    result: json
+  });
 
   const div = document.createElement("div");
   div.className = "file-result " + (json.ok ? "success" : "fail");
 
   const sizeKb = (file.size / 1024).toFixed(1);
-
   div.innerHTML = `
     <div class="meta-line">
       FILE: ${file.name} — ${sizeKb} KB
@@ -357,15 +342,15 @@ async function processFile(file) {
     <pre>${JSON.stringify(json, null, 2)}</pre>
   `;
 
-  if (json.ok) {
+  if (json.ok && json.underwrite) {
     resultsDiv.appendChild(div);
-    // Update Layer A summary for the most recent successful file
     summaryA.textContent = buildLayerASummary(json);
   } else {
     failsDiv.appendChild(div);
   }
 }
 
+// ========= Export JSON Button =========
 exportBtn.onclick = () => {
   const blob = new Blob([JSON.stringify(allResults, null, 2)], {
     type: "application/json"
@@ -373,7 +358,7 @@ exportBtn.onclick = () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "uwiq-results.json";
+  a.download = "uwiq-pro-results.json";
   a.click();
   URL.revokeObjectURL(url);
 };
