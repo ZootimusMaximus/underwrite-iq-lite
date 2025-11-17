@@ -292,7 +292,7 @@ async function processFile(file) {
 
   let json;
   try {
-    const res = await fetch("/api/parse-report", {
+    const res = await fetch("/api/lite/parse-report", {
       method: "POST",
       body: formData
     });
