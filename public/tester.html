@@ -5,6 +5,7 @@
 <title>Internal System Monitor — PRO</title>
 
 <style>
+/* ======================= GLOBAL ======================= */
 @font-face {
   font-family: "Matrix";
   src: local("Courier New"), monospace;
@@ -18,7 +19,7 @@ body {
   overflow-x: hidden;
 }
 
-/* Matrix background */
+/* Matrix canvas behind everything */
 #matrix {
   position: fixed;
   top: 0;
@@ -28,7 +29,7 @@ body {
   z-index: -1;
 }
 
-/* Scanlines */
+/* CRT scanlines */
 body::after {
   content: "";
   position: fixed;
@@ -45,7 +46,7 @@ body::after {
   opacity: 0.35;
 }
 
-/* UI */
+/* ======================= UI ======================= */
 #ui {
   position: relative;
   z-index: 10;
@@ -100,7 +101,7 @@ pre {
 }
 
 .success { border-color: rgba(0,255,65,0.6); }
-.fail    { border-color: rgba(255,50,50,0.6); }
+.fail    { border-color: rgba(255,60,60,0.6); }
 
 .meta-line {
   font-size: 11px;
@@ -121,10 +122,12 @@ pre {
 
 <body>
 
-<!-- Matrix background -->
+<!-- MATRIX CANVAS -->
 <canvas id="matrix"></canvas>
 
+<!-- ======================= UI ======================= -->
 <div id="ui">
+
   <h1>Internal System Monitor — PRO</h1>
 
   <div id="dropzone">CLICK OR DRAG PDF(s)</div>
@@ -136,17 +139,17 @@ pre {
   </div>
 
   <div class="panel">
-    <h3>Layer A — Website Summary (PRO Engine)</h3>
-    <pre id="summaryA">Upload a report to preview the summary…</pre>
+    <h3>Layer A — Website Summary Preview</h3>
+    <pre id="summaryA">Upload a report to preview the on-page summary…</pre>
   </div>
 
   <div class="panel">
-    <h3>Successful Parses</h3>
+    <h3>Success</h3>
     <div id="results"></div>
   </div>
 
   <div class="panel">
-    <h3>Failed Parses</h3>
+    <h3>Failed</h3>
     <div id="fails"></div>
   </div>
 
@@ -154,7 +157,7 @@ pre {
 </div>
 
 <script>
-/* ======================= MATRIX ======================= */
+/* ======================= MATRIX RAIN ======================= */
 const canvas = document.getElementById("matrix");
 const ctx = canvas.getContext("2d");
 
@@ -174,93 +177,100 @@ let drops = Array.from({ length: columns }, () => 1);
 function drawMatrix() {
   ctx.fillStyle = "rgba(0,0,0,0.07)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
   ctx.fillStyle = "rgba(0,255,65,0.55)";
   ctx.font = fontSize + "px Matrix";
 
   drops.forEach((y, i) => {
     const text = charset[Math.floor(Math.random() * charset.length)];
     ctx.fillText(text, i * fontSize, y * fontSize);
+
     if (y * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
     drops[i]++;
   });
 }
 setInterval(drawMatrix, 50);
 
-/* ======================= TESTER ======================= */
-
+/* ======================= TESTER LOGIC ======================= */
 const dropzone = document.getElementById("dropzone");
 const fileInput = document.getElementById("fileInput");
 const progress = document.getElementById("progress");
 const resultsDiv = document.getElementById("results");
 const failsDiv = document.getElementById("fails");
-const summaryA = document.getElementById("summaryA");
 const exportBtn = document.getElementById("exportBtn");
+const summaryA = document.getElementById("summaryA");
 
 let allResults = [];
 
 dropzone.onclick = () => fileInput.click();
 fileInput.onchange = () => handleFiles(fileInput.files);
 
-dropzone.addEventListener("dragover", e => e.preventDefault());
+dropzone.addEventListener("dragover", e => {
+  e.preventDefault();
+});
 dropzone.addEventListener("drop", e => {
   e.preventDefault();
   handleFiles(e.dataTransfer.files);
 });
 
-/* Build Layer A summary for PRO underwriting */
+// ---------- Layer A summary builder ----------
 function buildLayerASummary(json) {
   if (!json || !json.ok || !json.underwrite) {
-    return "The analyzer could not parse this report. Try a different PDF format.";
+    return "The analyzer returned a fallback message. This usually means the PDF format was non-standard.";
   }
 
   const uw = json.underwrite;
-  const m = uw.metrics;
+  const metrics = uw.metrics || {};
+  const inquiries = (metrics.inquiries && metrics.inquiries.total) || 0;
 
-  const bureau = uw.primary_bureau?.toUpperCase() || "UNKNOWN";
-  const score = m.score;
-  const util = m.utilization_pct;
-  const negatives = m.negative_accounts || 0;
-  const inquiries = m.inquiries?.total || 0;
-  const totalFunding = uw.totals?.total_combined_funding || uw.lite_banner_funding;
+  const bureau = (uw.primary_bureau || "PRIMARY").toUpperCase();
+  const score = metrics.score;
+  const util = metrics.utilization_pct;
+  const negatives = metrics.negative_accounts ?? 0;
+  const totalFunding = uw.totals?.total_combined_funding || uw.lite_banner_funding || null;
 
-  const parts = [];
+  const lines = [];
 
-  if (typeof score === "number") {
-    parts.push(`Your strongest bureau is ${bureau} with a score of about ${score}.`);
+  if (typeof score === "number" && Number.isFinite(score)) {
+    lines.push(`Your strongest bureau is ${bureau} with a score around ${score}.`);
   } else {
-    parts.push(`Your strongest bureau is ${bureau}.`);
+    lines.push(`Your strongest bureau is ${bureau}.`);
   }
 
-  if (typeof util === "number") {
-    parts.push(`Your utilization is about ${util}%. Keep each card in the 3–10% range for max approvals.`);
+  if (typeof util === "number" && Number.isFinite(util)) {
+    lines.push(`Your utilization is about ${util}%. Target 3–10% for best approvals.`);
   } else {
-    parts.push(`We couldn't read utilization cleanly from this PDF, but aim for 3–10% per card.`);
+    lines.push(`Utilization unreadable — aim for 3–10% before applying.`);
   }
 
   if (negatives > 0 || inquiries > 0) {
-    const items = [];
-    if (negatives > 0) items.push(`${negatives} negative account${negatives > 1 ? "s" : ""}`);
-    if (inquiries > 0) items.push(`${inquiries} recent inquiries`);
-    parts.push(`These items are suppressing your approvals: ${items.join(" and ")}.`);
+    let parts = [];
+    if (negatives > 0) parts.push(`${negatives} negatives`);
+    if (inquiries > 0) parts.push(`${inquiries} inquiries`);
+    lines.push(`${parts.join(" and ")} are holding back approvals.`);
   } else {
-    parts.push(`No major negatives or inquiry drag detected.`);
+    lines.push(`Clean file — ideal for high-limit approvals.`);
   }
 
-  if (uw.fundable && totalFunding) {
-    parts.push(`Estimated funding potential: $${Math.round(totalFunding).toLocaleString()}.`);
+  if (uw.fundable && totalFunding && totalFunding > 0) {
+    lines.push(`Potential funding: ~$${Math.round(totalFunding).toLocaleString()}.`);
   } else {
-    parts.push(`Fix the highlighted issues to move into funding range.`);
+    lines.push(`You're close — clean-up steps unlock stronger approvals.`);
   }
 
-  return parts.join(" ");
+  lines.push(`Next: we show the specific cleanup steps.`);
+
+  return lines.join(" ");
 }
 
+// ---------- Handle all files ----------
 async function handleFiles(files) {
   if (!files || !files.length) return;
 
   allResults = [];
   resultsDiv.innerHTML = "";
   failsDiv.innerHTML = "";
+  progress.innerText = "Starting…";
   summaryA.textContent = "Waiting for first successful result…";
 
   const total = files.length;
@@ -269,13 +279,13 @@ async function handleFiles(files) {
   for (const file of files) {
     await processFile(file);
     done++;
-    const pct = ((done / total) * 100).toFixed(1);
-    progress.innerText = `Processed ${done}/${total} (${pct}%)`;
+    progress.innerText = `Processed ${done} / ${total}`;
   }
 
   progress.innerText = `DONE — ${total} files tested`;
 }
 
+// ---------- Process one file ----------
 async function processFile(file) {
   const formData = new FormData();
   formData.append("file", file);
@@ -313,6 +323,7 @@ async function processFile(file) {
   }
 }
 
+// ---------- Export JSON ----------
 exportBtn.onclick = () => {
   const blob = new Blob([JSON.stringify(allResults, null, 2)], {
     type: "application/json"
@@ -320,7 +331,7 @@ exportBtn.onclick = () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "uwiq-results.json";
+  a.download = "uwiq-pro-results.json";
   a.click();
   URL.revokeObjectURL(url);
 };
