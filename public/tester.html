@@ -90,6 +90,7 @@ pre {
   max-height: 260px;
   overflow-y: auto;
   font-size: 12px;
+  white-space: pre-wrap;
 }
 
 /* File result blocks */
@@ -140,7 +141,7 @@ pre {
 
   <div class="panel">
     <h3>Layer A — Website Summary Preview</h3>
-    <pre id="summaryA">Upload a report to preview the on-page summary…</pre>
+    <pre id="summaryA">Upload a report to preview summary…</pre>
   </div>
 
   <div class="panel">
@@ -199,7 +200,6 @@ const resultsDiv = document.getElementById("results");
 const failsDiv = document.getElementById("fails");
 const exportBtn = document.getElementById("exportBtn");
 const summaryA = document.getElementById("summaryA");
-
 let allResults = [];
 
 dropzone.onclick = () => fileInput.click();
@@ -211,65 +211,66 @@ dropzone.addEventListener("drop", e => {
   handleFiles(e.dataTransfer.files);
 });
 
-/* LAYER A SUMMARY */
+// ---------- Layer A summary ----------
 function buildLayerASummary(json) {
-  if (!json || !json.ok || !json.underwrite) {
-    return "The analyzer returned fallback. PDF likely non-standard.";
-  }
+  if (!json || !json.ok || !json.underwrite)
+    return "Analyzer fallback. PDF was non-standard or unreadable.";
 
   const uw = json.underwrite;
   const m = uw.metrics;
-  const b = uw.primary_bureau.toUpperCase();
+  const inquiries = m.inquiries.total;
+  const bureau = (uw.primary_bureau || "PRIMARY").toUpperCase();
+  const score = m.score;
+  const util = m.utilization_pct;
+  const negatives = m.negative_accounts;
+  const funding = uw.totals.total_combined_funding || uw.lite_banner_funding;
 
-  const parts = [];
+  const s = [];
 
-  parts.push(`Strongest bureau: ${b}.`);
-  if (m.score) parts.push(`Score approx ${m.score}.`);
-  parts.push(
-    m.utilization_pct != null
-      ? `Utilization ${m.utilization_pct}%.`
-      : `Utilization unreadable.`
-  );
-  parts.push(
-    m.negative_accounts > 0 || m.inquiries.total > 0
-      ? `${m.negative_accounts} negatives, ${m.inquiries.total} inquiries slowing approvals.`
-      : `Clean profile.`
-  );
+  if (score) s.push(`Strongest bureau: ${bureau} (${score} score).`);
+  else s.push(`Strongest bureau: ${bureau}.`);
+
+  if (util != null) s.push(`Utilization: ${util}%. Target 3–10%.`);
+  else s.push(`Utilization unreadable, target 3–10%.`);
+
+  if (negatives > 0 || inquiries > 0) {
+    const parts = [];
+    if (negatives > 0) parts.push(`${negatives} negatives`);
+    if (inquiries > 0) parts.push(`${inquiries} inquiries`);
+    s.push(`${parts.join(" and ")} are hurting approvals.`);
+  } else {
+    s.push(`Clean file — strong approvals expected.`);
+  }
 
   if (uw.fundable)
-    parts.push(
-      `Funding potential ~$${Math.round(
-        uw.totals.total_combined_funding
-      ).toLocaleString()}.`
-    );
-  else parts.push(`You're close – cleanup unlocks higher approvals.`);
+    s.push(`Est. Funding: ~$${Math.round(funding).toLocaleString()}.`);
+  else
+    s.push(`Close to fundable — cleanup steps unlock full approvals.`);
 
-  return parts.join(" ");
+  return s.join(" ");
 }
 
-/* MAIN HANDLER */
+// ---------- Handle all files ----------
 async function handleFiles(files) {
-  if (!files?.length) return;
-
-  allResults = [];
   resultsDiv.innerHTML = "";
   failsDiv.innerHTML = "";
-  progress.innerText = "Starting…";
+  allResults = [];
+  progress.textContent = "Starting…";
   summaryA.textContent = "Waiting…";
 
   const total = files.length;
-  let done = 0;
+  let count = 0;
 
-  for (const file of files) {
-    await processFile(file);
-    done++;
-    progress.innerText = `Processed ${done} / ${total}`;
+  for (const f of files) {
+    await processFile(f);
+    count++;
+    progress.textContent = `Processed ${count}/${total}`;
   }
 
-  progress.innerText = `DONE — ${total} files`;
+  progress.textContent = `DONE — ${total} files`;
 }
 
-/* PROCESS ONE FILE — FIXED POST */
+// ---------- Process one file (100% POST, JSON-safe) ----------
 async function processFile(file) {
   const form = new FormData();
   form.append("file", file);
@@ -281,32 +282,37 @@ async function processFile(file) {
       body: form
     });
 
-    json = await res.json();
+    const text = await res.text();
+
+    try { json = JSON.parse(text); }
+    catch {
+      json = { ok: false, error: true, message: text.slice(0,200) };
+    }
   } catch (err) {
-    json = { ok: false, error: true, message: err.toString() };
+    json = { ok:false, error:true, message: err.toString() };
   }
 
-  allResults.push({ filename: file.name, size: file.size, result: json });
+  allResults.push({ file: file.name, size: file.size, result: json });
 
-  const div = document.createElement("div");
-  div.className = "file-result " + (json.ok ? "success" : "fail");
+  const block = document.createElement("div");
+  block.className = "file-result " + (json.ok ? "success" : "fail");
 
-  div.innerHTML = `
+  block.innerHTML = `
     <div class="meta-line">
-      FILE: ${file.name} — ${(file.size/1024).toFixed(1)} KB
+      FILE: ${file.name} (${(file.size/1024).toFixed(1)} KB)
     </div>
     <pre>${JSON.stringify(json, null, 2)}</pre>
   `;
 
   if (json.ok) {
-    resultsDiv.appendChild(div);
+    resultsDiv.appendChild(block);
     summaryA.textContent = buildLayerASummary(json);
   } else {
-    failsDiv.appendChild(div);
+    failsDiv.appendChild(block);
   }
 }
 
-/* EXPORT */
+// ---------- Export ----------
 exportBtn.onclick = () => {
   const blob = new Blob([JSON.stringify(allResults, null, 2)], {
     type: "application/json"
