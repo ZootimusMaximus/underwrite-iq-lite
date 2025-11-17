@@ -205,73 +205,57 @@ let allResults = [];
 dropzone.onclick = () => fileInput.click();
 fileInput.onchange = () => handleFiles(fileInput.files);
 
-dropzone.addEventListener("dragover", e => {
-  e.preventDefault();
-});
+dropzone.addEventListener("dragover", e => e.preventDefault());
 dropzone.addEventListener("drop", e => {
   e.preventDefault();
   handleFiles(e.dataTransfer.files);
 });
 
-// ---------- Layer A summary builder ----------
+/* LAYER A SUMMARY */
 function buildLayerASummary(json) {
   if (!json || !json.ok || !json.underwrite) {
-    return "The analyzer returned a fallback message. This usually means the PDF format was non-standard.";
+    return "The analyzer returned fallback. PDF likely non-standard.";
   }
 
   const uw = json.underwrite;
-  const metrics = uw.metrics || {};
-  const inquiries = (metrics.inquiries && metrics.inquiries.total) || 0;
+  const m = uw.metrics;
+  const b = uw.primary_bureau.toUpperCase();
 
-  const bureau = (uw.primary_bureau || "PRIMARY").toUpperCase();
-  const score = metrics.score;
-  const util = metrics.utilization_pct;
-  const negatives = metrics.negative_accounts ?? 0;
-  const totalFunding = uw.totals?.total_combined_funding || uw.lite_banner_funding || null;
+  const parts = [];
 
-  const lines = [];
+  parts.push(`Strongest bureau: ${b}.`);
+  if (m.score) parts.push(`Score approx ${m.score}.`);
+  parts.push(
+    m.utilization_pct != null
+      ? `Utilization ${m.utilization_pct}%.`
+      : `Utilization unreadable.`
+  );
+  parts.push(
+    m.negative_accounts > 0 || m.inquiries.total > 0
+      ? `${m.negative_accounts} negatives, ${m.inquiries.total} inquiries slowing approvals.`
+      : `Clean profile.`
+  );
 
-  if (typeof score === "number" && Number.isFinite(score)) {
-    lines.push(`Your strongest bureau is ${bureau} with a score around ${score}.`);
-  } else {
-    lines.push(`Your strongest bureau is ${bureau}.`);
-  }
+  if (uw.fundable)
+    parts.push(
+      `Funding potential ~$${Math.round(
+        uw.totals.total_combined_funding
+      ).toLocaleString()}.`
+    );
+  else parts.push(`You're close – cleanup unlocks higher approvals.`);
 
-  if (typeof util === "number" && Number.isFinite(util)) {
-    lines.push(`Your utilization is about ${util}%. Target 3–10% for best approvals.`);
-  } else {
-    lines.push(`Utilization unreadable — aim for 3–10% before applying.`);
-  }
-
-  if (negatives > 0 || inquiries > 0) {
-    let parts = [];
-    if (negatives > 0) parts.push(`${negatives} negatives`);
-    if (inquiries > 0) parts.push(`${inquiries} inquiries`);
-    lines.push(`${parts.join(" and ")} are holding back approvals.`);
-  } else {
-    lines.push(`Clean file — ideal for high-limit approvals.`);
-  }
-
-  if (uw.fundable && totalFunding && totalFunding > 0) {
-    lines.push(`Potential funding: ~$${Math.round(totalFunding).toLocaleString()}.`);
-  } else {
-    lines.push(`You're close — clean-up steps unlock stronger approvals.`);
-  }
-
-  lines.push(`Next: we show the specific cleanup steps.`);
-
-  return lines.join(" ");
+  return parts.join(" ");
 }
 
-// ---------- Handle all files ----------
+/* MAIN HANDLER */
 async function handleFiles(files) {
-  if (!files || !files.length) return;
+  if (!files?.length) return;
 
   allResults = [];
   resultsDiv.innerHTML = "";
   failsDiv.innerHTML = "";
   progress.innerText = "Starting…";
-  summaryA.textContent = "Waiting for first successful result…";
+  summaryA.textContent = "Waiting…";
 
   const total = files.length;
   let done = 0;
@@ -282,20 +266,21 @@ async function handleFiles(files) {
     progress.innerText = `Processed ${done} / ${total}`;
   }
 
-  progress.innerText = `DONE — ${total} files tested`;
+  progress.innerText = `DONE — ${total} files`;
 }
 
-// ---------- Process one file ----------
+/* PROCESS ONE FILE — FIXED POST */
 async function processFile(file) {
-  const formData = new FormData();
-  formData.append("file", file);
+  const form = new FormData();
+  form.append("file", file);
 
   let json;
   try {
-    const res = await fetch("/api/lite/parse-report", {
+    const res = await fetch("/api/parse-report", {
       method: "POST",
-      body: formData
+      body: form
     });
+
     json = await res.json();
   } catch (err) {
     json = { ok: false, error: true, message: err.toString() };
@@ -306,11 +291,9 @@ async function processFile(file) {
   const div = document.createElement("div");
   div.className = "file-result " + (json.ok ? "success" : "fail");
 
-  const sizeKb = (file.size / 1024).toFixed(1);
-
   div.innerHTML = `
     <div class="meta-line">
-      FILE: ${file.name} — ${sizeKb} KB
+      FILE: ${file.name} — ${(file.size/1024).toFixed(1)} KB
     </div>
     <pre>${JSON.stringify(json, null, 2)}</pre>
   `;
@@ -323,7 +306,7 @@ async function processFile(file) {
   }
 }
 
-// ---------- Export JSON ----------
+/* EXPORT */
 exportBtn.onclick = () => {
   const blob = new Blob([JSON.stringify(allResults, null, 2)], {
     type: "application/json"
