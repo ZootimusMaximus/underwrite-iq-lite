@@ -1,5 +1,5 @@
 // ==================================================================================
-// UnderwriteIQ — FULL PRO VERSION (Patch v8.0 — GPT-4.1 VISION, PDF DIRECT)
+// UnderwriteIQ — FULL PRO VERSION (Perfection Pipeline v1 — GPT-4.1 VISION, PDF DIRECT)
 // Includes:
 // - GPT-4.1 model (vision-capable, using PDF input_file)
 // - No pdf-parse: model reads the raw PDF directly
@@ -811,7 +811,8 @@ Fastest improvements:
 // ============================================================================
 // MAIN HANDLER — PDF Upload → GPT-4.1 VISION (PDF) → Underwrite → Suggest → Redirect
 // ============================================================================
-module.exports = async function handler(req, res) {
+// *** Perfection Pipeline v1: fixed export shape for Vercel ***
+module.exports = async (req, res) => {
   try {
     // CORS preflight
     if (req.method === "OPTIONS") {
