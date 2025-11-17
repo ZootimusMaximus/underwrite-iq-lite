@@ -190,7 +190,9 @@ function drawMatrix() {
     drops[i]++;
   });
 }
-setInterval(drawMatrix, 50);
+
+// Reduced interval (fix glitching)
+setInterval(drawMatrix, 120);
 
 /* ======================= TESTER LOGIC ======================= */
 const dropzone = document.getElementById("dropzone");
@@ -202,7 +204,6 @@ const exportBtn = document.getElementById("exportBtn");
 const summaryA = document.getElementById("summaryA");
 let allResults = [];
 
-/* Broadcast channel — unified name */
 const channel = new BroadcastChannel("uwiq-batch");
 
 dropzone.onclick = () => fileInput.click();
@@ -221,7 +222,12 @@ function buildLayerASummary(json) {
 
   const uw = json.underwrite;
   const m = uw.metrics;
-  const inquiries = m.inquiries.total;
+
+  const inquiries =
+    (m.inquiries?.ex || 0) +
+    (m.inquiries?.tu || 0) +
+    (m.inquiries?.eq || 0);
+
   const bureau = (uw.primary_bureau || "PRIMARY").toUpperCase();
   const score = m.score;
   const util = m.utilization_pct;
@@ -304,13 +310,14 @@ async function processFile(file) {
 
   allResults.push(resultObj);
 
-  // Broadcast to tester-batch in the expected shape
+  // ---------- FIXED: guaranteed correct payload shape ----------
   channel.postMessage({
     type: "uwiq_result",
     filename: file.name,
-    payload: json
+    payload: json.underwrite ? json : { underwrite: {} }
   });
 
+  // ---------- UI ----------
   const block = document.createElement("div");
   block.className = "file-result " + (json.ok ? "success" : "fail");
 
