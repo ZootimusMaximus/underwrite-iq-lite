@@ -1,24 +1,20 @@
 /* ============================================================
-   UWiq Web Logic — Frontend Display Engine
+   UWiq Web Logic — Frontend Display Engine (FINAL v3)
    ------------------------------------------------------------
-   Contains ALL logic for:
-   - Approved vs Repair decision
-   - Funding calculations
-   - Per-card utilization analysis
-   - Inquiry analysis
-   - Negative account + late payment analysis
-   - Thin-file logic
-   - Authorized user logic
-   - Comparable credit logic
-   - Business/LLC logic (using parser funding formula)
-   - Address stability logic
-   - English summaries for ISP Tester
+   Fully rewritten to match new FundHub underwriting UX:
+   • Zero duplicated suggestions
+   • No $0 funding projections — uses human fallback text
+   • Smart inquiry logic (1 line max + optional bureau note)
+   • Zero revolving history → special advisory mode
+   • Smart LLC logic with fallback if no revolving
+   • AU logic: only show if harmful
+   • Address stability: max 2 lines
    ============================================================ */
 
 window.UWiq = {
 
   /* ------------------------------------------------------------
-     1. Normalize parser JSON into a safe format
+     1. Normalize parser JSON
      ------------------------------------------------------------ */
   normalize(data) {
     if (!data || !data.ok || !data.underwrite) {
@@ -28,50 +24,30 @@ window.UWiq = {
     const u = data.underwrite;
     const m = u.metrics || {};
 
-    const rawCards = Array.isArray(u.cards) ? u.cards : [];
-    const rawAus   = Array.isArray(u.authorized_users) ? u.authorized_users : [];
-
-    // Treat any card marked as AU as part of AU list too
-    const ausFromCards = rawCards.filter(
-      c => c.is_au === true || c.is_au === 1 || c.role === "AU"
-    );
-    const mergedAus = rawAus.concat(ausFromCards);
-
     return {
       valid: true,
       fundable: !!u.fundable,
 
-      // Scores & metrics
       score: m.score || null,
       util: m.utilization_pct ?? null,
       negatives: m.negative_accounts || 0,
       lates: m.late_payment_events || 0,
 
-      // Inquiries
-      inquiries: m.inquiries || { ex: 0, tu: 0, eq: 0, total: 0 },
+      inquiries: m.inquiries || { ex:0, tu:0, eq:0, total:0 },
 
-      // Credit accounts (raw)
-      cards: rawCards,                                   // for per-card + primary/AU logic
-      loans: Array.isArray(u.loans) ? u.loans : [],      // installment / secured loans
+      cards: u.cards || [],
+      loans: u.loans || [],
+      aus: u.authorized_users || [],
+      addresses: u.addresses || [],
 
-      // AU accounts
-      aus: mergedAus,
-
-      // Address list
-      addresses: Array.isArray(u.addresses) ? u.addresses : [],
-
-      // Business info
       hasBusiness: !!u.has_business,
       businessAgeMonths: u.business_age_months || 0,
 
-      // Comparable credit (may be missing)
       highestLimit: u.highest_limit || 0,
       highestLimitAgeMonths: u.highest_limit_age_months || 0,
 
-      // Thin file signal
       thin: !!u.thin_file,
 
-      // FUNDING blocks (current)
       personalFunding:
         (u.personal?.card_funding || 0) +
         (u.personal?.loan_funding || 0),
@@ -79,7 +55,6 @@ window.UWiq = {
       businessFunding: u.business?.business_funding || 0,
       totalFunding: u.totals?.total_combined_funding || 0,
 
-      // REPAIR potential (max after cleanup, from parser)
       personalPotential: u.personal?.total_personal_funding || 0,
       businessPotential: u.business?.business_funding || 0,
       totalPotential: u.totals?.total_combined_funding || 0
@@ -87,7 +62,7 @@ window.UWiq = {
   },
 
   /* ------------------------------------------------------------
-     2. Approved vs Repair classification
+     2. Approved vs Repair
      ------------------------------------------------------------ */
   classify(n) {
     if (!n.valid) return { mode: "invalid", reason: n.reason };
@@ -95,49 +70,51 @@ window.UWiq = {
   },
 
   /* ------------------------------------------------------------
-     3. Per-Card Utilization Suggestions
+     3. Inquiry logic (one line max + optional bureau note)
+     ------------------------------------------------------------ */
+  buildInquirySuggestion(n) {
+    const t = n.inquiries.total || 0;
+    if (t === 0) return null;
+
+    const suggestions = [];
+
+    // Main inquiry line
+    suggestions.push(
+      `You have ${t} inquiry${t === 1 ? "" : "ies"}. Removing them will increase approval odds.`
+    );
+
+    // Bureau-specific outlier
+    const { ex, tu, eq } = n.inquiries;
+    const bureauCounts = { Experian: ex, TransUnion: tu, Equifax: eq };
+    const max = Math.max(ex, tu, eq);
+
+    if (max >= 3 && max >= t * 0.5) {
+      const bureau = Object.keys(bureauCounts).find(b => bureauCounts[b] === max);
+      suggestions.push(`Most of your inquiries are on ${bureau}. Removing those first will help.`);
+    }
+
+    return suggestions;
+  },
+
+  /* ------------------------------------------------------------
+     4. Per-card utilization logic
      ------------------------------------------------------------ */
   buildUtilizationSuggestions(n) {
     const tips = [];
     if (!Array.isArray(n.cards)) return tips;
 
     n.cards.forEach(card => {
-      const name = card.name || card.creditor || "One of your cards";
-      const limit = card.limit || card.high_credit || 0;
-      const balance = card.balance || 0;
-      const util =
-        card.utilization ??
-        card.util ??
-        (limit > 0 ? Math.round((balance / limit) * 100) : 0);
-      const isAU = !!(card.is_au === true || card.is_au === 1 || card.role === "AU");
+      const name = card.name || "One of your cards";
+      const util = card.utilization ?? card.util ?? 0;
+      const isAU = !!card.is_au;
 
-      // Only bother if utilization is above "tuned" range
-      if (util >= 15) {
-        // Amount needed to get down to ~3%
-        if (limit > 0) {
-          const targetBalance = limit * 0.03;
-          const payDown = balance - targetBalance;
-          if (payDown > 10) {
-            tips.push(
-              `${name} is at ${util}%. Paying down about $${Math.round(payDown)
-                .toLocaleString()} brings it near 3% utilization.`
-            );
-          } else {
-            tips.push(
-              `${name} is at ${util}%. Try to keep this card in the single-digit utilization range.`
-            );
-          }
-        } else {
-          tips.push(
-            `${name} is at ${util}%. Aim for single-digit utilization if possible.`
-          );
-        }
-      }
+      if (util >= 50) tips.push(`${name} is at ${util}%. Bring this down toward ~3%.`);
+      else if (util >= 30) tips.push(`${name} is at ${util}%. Lowering balances here will help.`);
+      else if (util >= 15) tips.push(`${name} is at ${util}%. You can optimize this further.`);
 
       if (isAU && util >= 30) {
         tips.push(
-          `${name} is an authorized-user card with high utilization (${util}%). ` +
-          `Ask the owner to reduce it, or consider removing yourself so it doesn’t drag your score down.`
+          `${name} is an authorized user account with high utilization. Consider asking the owner to lower it or removing yourself.`
         );
       }
     });
@@ -146,43 +123,20 @@ window.UWiq = {
   },
 
   /* ------------------------------------------------------------
-     4. Inquiry Suggestions
-     ------------------------------------------------------------ */
-  buildInquirySuggestions(n) {
-    const t = n.inquiries.total || 0;
-    const tips = [];
-
-    if (t > 0) {
-      tips.push(`You have ${t} recent inquiries. Removing them increases approval odds.`);
-    }
-    if (n.inquiries.ex > 2) {
-      tips.push(`Experian inquiries are highest — prioritize removing Experian first.`);
-    }
-    if (n.inquiries.tu > 2) {
-      tips.push(`TransUnion inquiries are high — removing TU inquiries will help approvals.`);
-    }
-    if (n.inquiries.eq > 2) {
-      tips.push(`Equifax inquiries are elevated — cleaning these up strengthens approvals.`);
-    }
-
-    return tips;
-  },
-
-  /* ------------------------------------------------------------
-     5. Negative & Late Payment Suggestions
+     5. Derogatory + late payments
      ------------------------------------------------------------ */
   buildDerogatorySuggestions(n) {
     const tips = [];
 
     if (n.negatives > 0) {
       tips.push(
-        `You have ${n.negatives} negative account(s). Removing these is the #1 way to unlock funding approvals.`
+        `You have ${n.negatives} negative account${n.negatives === 1 ? "" : "s"}. Removing these will dramatically increase approval potential.`
       );
     }
 
     if (n.lates > 0) {
       tips.push(
-        `${n.lates} account(s) have late payments. Removing lates gives a major score and approval boost.`
+        `${n.lates} account${n.lates === 1 ? "" : "s"} have late payments. Cleaning these up gives a major score boost.`
       );
     }
 
@@ -190,94 +144,47 @@ window.UWiq = {
   },
 
   /* ------------------------------------------------------------
-     6. Thin File / Missing History Suggestions
+     6. Thin file + no revolving logic
      ------------------------------------------------------------ */
   buildThinFileSuggestions(n) {
     const tips = [];
 
-    const hasCards = Array.isArray(n.cards) && n.cards.length > 0;
-    const hasLoans = Array.isArray(n.loans) && n.loans.length > 0;
+    const hasCards = n.cards && n.cards.length > 0;
 
-    // High utilization flag = either overall util high OR any card very high
-    let highUtil = false;
-    if (n.util !== null && n.util >= 40) highUtil = true;
-
-    if (Array.isArray(n.cards)) {
-      for (const card of n.cards) {
-        const limit = card.limit || card.high_credit || 0;
-        const balance = card.balance || 0;
-        const util =
-          card.utilization ??
-          card.util ??
-          (limit > 0 ? Math.round((balance / limit) * 100) : 0);
-        if (util >= 40) {
-          highUtil = true;
-          break;
-        }
-      }
-    }
-
-    // If parser tagged thin file explicitly
-    if (n.thin) {
-      if (highUtil) {
-        tips.push(
-          "Your file is thin and balances are high. Focus on paying balances down first, then add 2–3 small secured cards and a small secured loan once utilization is low."
-        );
-      } else {
-        tips.push(
-          "Your credit history is thin. Add 2–3 small secured credit cards and 1 small secured loan to build depth."
-        );
-      }
-      return tips;
-    }
-
-    // Not thin but missing pieces
+    // If absolutely no revolving history
     if (!hasCards) {
-      if (highUtil) {
-        tips.push(
-          "You don’t have any credit card history in your name. Once balances are cleaned up, adding 2–3 small-limit or secured cards will help build a stronger profile."
-        );
-      } else {
-        tips.push(
-          "You don’t have any credit card history in your name — consider opening 2–3 small-limit or secured cards."
-        );
-      }
+      tips.push(
+        "You currently have no active credit card history. Adding 2–3 starter or secured credit cards will build the foundation needed for strong approvals."
+      );
+      return tips; // Important: do NOT add other credit mix logic
     }
 
-    // Only suggest a secured loan if they don’t already have loans
-    if (!hasLoans) {
+    // Non-thin file mix logic
+    if (n.thin) {
       tips.push(
-        "Add a small secured loan to round out your credit mix and show installment history."
+        "Your credit file is thin. Adding at least one secured loan helps build depth."
       );
+    }
+
+    const hasLoans = n.loans && n.loans.length > 0;
+    if (!hasLoans) {
+      tips.push("Adding a small secured loan will help diversify your credit mix.");
     }
 
     return tips;
   },
 
   /* ------------------------------------------------------------
-     7. Authorized User (AU) Suggestions
+     7. AU cleanup
      ------------------------------------------------------------ */
   buildAUSuggestions(n) {
     const tips = [];
     if (!Array.isArray(n.aus)) return tips;
 
     n.aus.forEach(au => {
-      const name = au.name || au.creditor || "An authorized-user account";
-      const limit = au.limit || au.high_credit || 0;
-      const balance = au.balance || 0;
-      const util =
-        au.utilization ??
-        (limit > 0 ? Math.round((balance / limit) * 100) : 0);
-
       if (au.is_negative) {
         tips.push(
-          `${name} is negative — remove yourself as an authorized user so it stops dragging your file down.`
-        );
-      }
-
-      if (util >= 30) {
-        tips.push(
-          `${name} has high utilization (${util}%). Ask the owner to lower the balance or remove you from the card.`
+          `${au.name || "An authorized user account"} is reporting negative. Removing yourself may improve your profile.`
         );
       }
     });
@@ -286,76 +193,51 @@ window.UWiq = {
   },
 
   /* ------------------------------------------------------------
-     8. Comparable Credit / High-Limit Strategy
+     8. Comparable credit logic (skip if no revolving)
      ------------------------------------------------------------ */
   buildComparableCreditSuggestions(n) {
     const tips = [];
-    const cards = Array.isArray(n.cards) ? n.cards : [];
 
-    // Only look at PRIMARY cards (no AU)
-    const primaryCards = cards.filter(
-      c => !(c.is_au === true || c.is_au === 1 || c.role === "AU")
-    );
+    // Only if revolving exists
+    if (!n.cards || n.cards.length === 0) return tips;
 
-    // If they have no primary revolving history, we say nothing here
-    if (primaryCards.length === 0) {
-      return tips;
-    }
-
-    const highestPrimaryLimit = primaryCards.reduce((max, c) => {
-      const lim = c.limit || c.high_credit || 0;
-      return lim > max ? lim : max;
-    }, 0);
-
-    if (highestPrimaryLimit < 20000) {
+    if (n.highestLimit < 20000) {
       tips.push(
-        "Over time, aim to build at least one primary credit card with a $20,000+ limit (6+ months old). " +
-        "That becomes strong comparable credit for larger approvals."
+        "Building at least one $20,000+ credit line (6+ months old) strengthens comparable credit and increases upper-limit approvals."
       );
     }
 
     return tips;
   },
+
   /* ------------------------------------------------------------
-     9. Business Funding Logic (Using PARSER formula directly)
+     9. Business LLC logic (never show $0)
      ------------------------------------------------------------ */
-  getParserBusinessEstimate(n) {
-    // Use parser’s direct business funding potential
-    if (n.businessPotential && n.businessPotential > 0) {
-      return n.businessPotential;
-    }
-
-    // If fundable today and parser exposed businessFunding
-    if (n.businessFunding && n.businessFunding > 0) {
-      return n.businessFunding;
-    }
-
-    return 0;
-  },
-
-  buildBusinessSuggestions(n) {
+  buildBusinessSuggestions(n, mode) {
     const tips = [];
-    const est = this.getParserBusinessEstimate(n);
 
-    // No business exists yet
+    const revolvingExists = n.cards && n.cards.length > 0;
+
     if (!n.hasBusiness) {
-      if (!n.fundable) {
+      if (!revolvingExists) {
         tips.push(
-          `While going through repair, forming a new LLC can unlock **$${est.toLocaleString()}** in business funding ` +
-          `based on your personal profile once cleanup is complete.`
+          "While you build your personal credit, forming an LLC can position you for business credit opportunities in the future."
+        );
+      } else if (mode === "approved") {
+        tips.push(
+          "Forming an LLC can open additional business credit opportunities as you continue building history."
         );
       } else {
         tips.push(
-          `Forming a new LLC now can open **$${est.toLocaleString()}** in immediate business credit opportunities.`
+          "While completing credit repair, forming an LLC now positions you for strong business funding once cleanup is complete."
         );
       }
       return tips;
     }
 
-    // Has business but too young
     if (n.businessAgeMonths < 6) {
       tips.push(
-        "Your business is still new — as it seasons for a few more months, your business funding options increase."
+        "As your LLC seasons past the 6-month mark, business approvals increase significantly."
       );
     }
 
@@ -363,120 +245,147 @@ window.UWiq = {
   },
 
   /* ------------------------------------------------------------
-     10. Address Stability (ALWAYS INCLUDED)
+     10. Address stability (max 2 lines)
      ------------------------------------------------------------ */
   buildAddressSuggestions(n) {
     const tips = [];
 
+    // Always show baseline advice
     tips.push(
-      "Make sure your current home address is updated with all three bureaus. " +
-      "A mismatched or outdated address can trigger auto-denials and slow credit repair."
+      "Ensure your current home address is updated with all three bureaus. A mismatched address can cause auto-denials."
     );
 
-    if (Array.isArray(n.addresses)) {
-      if (n.addresses.length > 2) {
-        tips.push(
-          "You have several old addresses still appearing — cleaning these up improves identity verification and approval odds."
-        );
-      }
+    if (!Array.isArray(n.addresses)) return tips;
 
-      const primary = n.addresses.find(a => a.is_primary);
-      if (primary && primary.is_old) {
-        tips.push(
-          "Your primary address appears outdated — update your state ID and ensure your current address matches across all bureaus."
-        );
-      }
+    if (n.addresses.length > 3) {
+      tips.push("You have multiple old addresses listed — cleaning these up improves verification.");
     }
 
-    return tips;
+    const primary = n.addresses.find(a => a.is_primary);
+    if (primary && primary.is_old) {
+      tips.push(
+        "Your primary address appears outdated — update your state ID and make sure all bureaus match."
+      );
+    }
+
+    return tips.slice(0, 2); // max two lines
   },
 
   /* ------------------------------------------------------------
-     11. Combined Suggestions Pipeline (FULL ENGINE)
+     11. Combine all suggestions (deduped, clean, human)
      ------------------------------------------------------------ */
   buildCombinedSuggestions(n, mode) {
     let tips = [];
 
-    // Always include per-card utilization (per-account granularity)
+    // 1. Utilization
     tips.push(...this.buildUtilizationSuggestions(n));
 
-    // Negatives + lates
+    // 2. Derogatories (negatives + lates)
     tips.push(...this.buildDerogatorySuggestions(n));
 
-    // Inquiries
-    tips.push(...this.buildInquirySuggestions(n));
+    // 3. Inquiries (only once)
+    const inquiryLine = this.buildInquirySuggestion(n);
+    if (inquiryLine) tips.push(...inquiryLine);
 
-    // Thin file / mix
+    // 4. Thin file / missing history
     tips.push(...this.buildThinFileSuggestions(n));
 
-    // Authorized users
+    // 5. Authorized user
     tips.push(...this.buildAUSuggestions(n));
 
-    // Comparable credit (only if primary revolving exists)
+    // 6. Comparable credit (only if they have revolving)
     tips.push(...this.buildComparableCreditSuggestions(n));
 
-    // Business logic (with parser-backed funding estimate)
-    tips.push(...this.buildBusinessSuggestions(n));
+    // 7. Business suggestions (LLC logic)
+    tips.push(...this.buildBusinessSuggestions(n, mode));
 
-    // Always include address stability
+    // 8. Address stability (always add)
     tips.push(...this.buildAddressSuggestions(n));
 
-    // Human fallback if nothing triggered
-    if (tips.length === 0) {
-      tips.push("Everything looks strong — minimal improvements needed.");
+    // Dedupe
+    const clean = [...new Set(tips)];
+
+    // Fallback
+    if (clean.length === 0) {
+      clean.push("Everything looks strong — minimal improvements needed.");
     }
 
-    return tips;
+    return clean;
   },
 
   /* ------------------------------------------------------------
-     12. Summary Builders (Approved + Repair)
+     12. Summary (Approved)
      ------------------------------------------------------------ */
   buildApprovedSummary(n) {
-    const s = [];
+    const out = [];
 
-    s.push("🟢 Approved — your profile meets underwriting thresholds.");
+    out.push("🟢 Approved — your profile meets underwriting thresholds.");
 
-    if (n.score) s.push(`- Score: ${n.score}`);
-    if (n.util !== null) s.push(`- Utilization: ${n.util}% (ideal is ~3% per card)`);
+    if (n.score) out.push(`- Score: ${n.score}`);
+    if (n.util !== null)
+      out.push(`- Utilization: ${n.util}% (ideal is ~3% per card)`);
 
-    s.push(
+    out.push(
       `- Inquiries: EX ${n.inquiries.ex} • TU ${n.inquiries.tu} • EQ ${n.inquiries.eq}`
     );
 
     if (n.negatives > 0) {
-      s.push(`- ${n.negatives} negative account(s) — still fundable.`);
+      out.push(`- ${n.negatives} negative account${n.negatives === 1 ? "" : "s"} — still fundable.`);
     }
 
-    s.push("");
-    s.push("Estimated Funding:");
-    s.push(`- Personal: $${n.personalFunding.toLocaleString()}`);
-    s.push(`- Business: $${n.businessFunding.toLocaleString()}`);
-    s.push(`- Total: $${n.totalFunding.toLocaleString()}`);
+    out.push("");
+    out.push("Estimated Funding:");
 
-    return s.join("\n");
-  },
+    const p = n.personalFunding;
+    const b = n.businessFunding;
+    const t = n.totalFunding;
 
-  buildRepairSummary(n) {
-    const s = [];
+    if (t > 0) {
+      out.push(`- Personal: $${p.toLocaleString()}`);
+      out.push(`- Business: $${b.toLocaleString()}`);
+      out.push(`- Total: $${t.toLocaleString()}`);
+    } else {
+      out.push("- Funding estimates will appear once credit mix is stronger.");
+    }
 
-    s.push("🔧 Repair Needed — these items are blocking approvals right now:");
-    s.push(`- Score: ${n.score || "--"}`);
-    s.push(`- Negatives: ${n.negatives}`);
-    s.push(`- Late Payments: ${n.lates}`);
-    if (n.util !== null) s.push(`- Utilization: ${n.util}% (goal is ~3% per card)`);
-
-    s.push("");
-    s.push("Funding Potential After Cleanup:");
-    s.push(`- Personal: $${n.personalPotential.toLocaleString()}`);
-    s.push(`- Business: $${n.businessPotential.toLocaleString()}`);
-    s.push(`- Total: $${n.totalPotential.toLocaleString()}`);
-
-    return s.join("\n");
+    return out.join("\n");
   },
 
   /* ------------------------------------------------------------
-     13. English Output Builder
+     13. Summary (Repair)
+     ------------------------------------------------------------ */
+  buildRepairSummary(n) {
+    const out = [];
+
+    out.push("🔧 Repair Needed — these items are blocking approvals right now:");
+
+    out.push(`- Score: ${n.score ?? "--"}`);
+    out.push(`- Negatives: ${n.negatives}`);
+    out.push(`- Late Payments: ${n.lates}`);
+
+    if (n.util !== null)
+      out.push(`- Utilization: ${n.util}% (goal is ~3% per card)`);
+
+    out.push("");
+    out.push("Funding Potential After Cleanup:");
+
+    const p = n.personalPotential;
+    const b = n.businessPotential;
+    const t = n.totalPotential;
+
+    if (t > 0) {
+      out.push(`- Personal: $${p.toLocaleString()}`);
+      out.push(`- Business: $${b.toLocaleString()}`);
+      out.push(`- Total: $${t.toLocaleString()}`);
+    } else {
+      out.push("- Once cleanup is complete, funding opportunities will open up.");
+    }
+
+    return out.join("\n");
+  },
+
+  /* ------------------------------------------------------------
+     14. Build display block
      ------------------------------------------------------------ */
   buildDisplayBlock(n, classification) {
     const out = [];
@@ -490,14 +399,18 @@ window.UWiq = {
     if (classification.mode === "approved") {
       out.push(this.buildApprovedSummary(n));
       out.push("\n\nOptimization Tips:");
-      this.buildCombinedSuggestions(n, "approved").forEach(t => out.push("- " + t));
+      this.buildCombinedSuggestions(n, "approved").forEach(t =>
+        out.push("- " + t)
+      );
       return out.join("\n");
     }
 
     if (classification.mode === "repair") {
       out.push(this.buildRepairSummary(n));
       out.push("\n\nPriority Fixes:");
-      this.buildCombinedSuggestions(n, "repair").forEach(t => out.push("- " + t));
+      this.buildCombinedSuggestions(n, "repair").forEach(t =>
+        out.push("- " + t)
+      );
       return out.join("\n");
     }
 
@@ -505,7 +418,7 @@ window.UWiq = {
   },
 
   /* ------------------------------------------------------------
-     14. MAIN EXPORT (Used by ISP Tester)
+     15. MAIN EXPORT
      ------------------------------------------------------------ */
   buildDisplay(rawJson) {
     const n = this.normalize(rawJson);
@@ -520,4 +433,6 @@ window.UWiq = {
   }
 };
 
-/* End of UWiq Web Logic */
+/* ===========================
+   END OF UWiq Logic Engine
+   =========================== */
