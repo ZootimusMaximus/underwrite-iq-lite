@@ -2,100 +2,245 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>UnderwriteIQ — Internal System Monitor</title>
+<title>Internal System Monitor — PRO</title>
 
 <style>
-  body {
-    margin: 0;
-    background: #000;
-    color: #7dfc8a;
-    font-family: monospace;
-    padding: 20px;
-  }
+/* ======================= GLOBAL ======================= */
+@font-face {
+  font-family: "Matrix";
+  src: local("Courier New"), monospace;
+}
 
-  h1 {
-    color: #6fffa3;
-    margin-bottom: 16px;
-  }
+body {
+  margin: 0;
+  font-family: Matrix, monospace;
+  background: #000;
+  color: #7dfc8a;
+  overflow-x: hidden;
+}
 
-  #dropzone {
-    border: 1px dashed rgba(0,255,65,0.4);
-    padding: 30px;
-    text-align: center;
-    border-radius: 6px;
-    cursor: pointer;
-    margin-bottom: 20px;
-  }
+/* Matrix background */
+#matrix {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+}
 
-  .panel {
-    background: rgba(0,0,0,0.6);
-    border: 1px solid rgba(0,255,65,0.25);
-    padding: 14px;
-    border-radius: 6px;
-    margin-bottom: 20px;
-  }
+/* CRT scanlines */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0.17) 0px,
+    rgba(0,0,0,0.17) 2px,
+    rgba(0,0,0,0.20) 3px
+  );
+  z-index: 9999;
+  mix-blend-mode: multiply;
+  opacity: 0.35;
+}
 
-  pre {
-    white-space: pre-wrap;
-    padding: 10px;
-    background: rgba(0,0,0,0.4);
-    border-radius: 6px;
-    color: #b4ffbf;
-    font-size: 14px;
-  }
+/* ======================= UI ======================= */
+#ui {
+  position: relative;
+  z-index: 10;
+  padding: 25px;
+}
+
+h1 {
+  color: #6fffa3;
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+}
+
+/* Dropzone */
+#dropzone {
+  border: 1px dashed rgba(0,255,65,0.4);
+  padding: 30px;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.4);
+  margin-bottom: 20px;
+}
+
+/* Panels */
+.panel {
+  margin-bottom: 20px;
+  background: rgba(0,0,0,0.55);
+  padding: 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,255,65,0.25);
+}
+
+.panel h3 {
+  margin: 0 0 10px 0;
+}
+
+pre {
+  background: rgba(0,0,0,0.5);
+  padding: 10px;
+  border-radius: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+/* File result blocks */
+.file-result {
+  padding: 8px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,255,65,0.3);
+}
+
+.success { border-color: rgba(0,255,65,0.6); }
+.fail    { border-color: rgba(255,60,60,0.6); }
+
+.meta-line {
+  font-size: 11px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+#exportBtn {
+  padding: 8px 14px;
+  border: 1px solid #6fffa3;
+  background: black;
+  color: #6fffa3;
+  cursor: pointer;
+  border-radius: 4px;
+}
 </style>
 </head>
 
 <body>
 
-<h1>UnderwriteIQ — Internal System Monitor</h1>
+<!-- MATRIX CANVAS -->
+<canvas id="matrix"></canvas>
 
-<div id="dropzone">CLICK OR DRAG PDF(s)</div>
-<input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
+<!-- ======================= UI ======================= -->
+<div id="ui">
 
-<div class="panel">
-  <h3>Progress</h3>
-  <pre id="progress">Waiting…</pre>
+  <h1>Internal System Monitor — PRO</h1>
+
+  <div id="dropzone">CLICK OR DRAG PDF(s)</div>
+  <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
+
+  <div class="panel">
+    <h3>Progress</h3>
+    <pre id="progress">Waiting…</pre>
+  </div>
+
+  <div class="panel">
+    <h3>Latest UnderwriteIQ Summary</h3>
+    <pre id="summaryA">Upload a report to preview summary…</pre>
+  </div>
+
+  <div class="panel">
+    <h3>Success</h3>
+    <div id="results"></div>
+  </div>
+
+  <div class="panel">
+    <h3>Failed</h3>
+    <div id="fails"></div>
+  </div>
+
+  <button id="exportBtn">Export JSON</button>
 </div>
 
-<div class="panel">
-  <h3>UnderwriteIQ Summary Output</h3>
-  <pre id="summaryOutput">Upload a report…</pre>
-</div>
-
+<!-- LOGIC ENGINE -->
 <script src="uwiq-web-logic.js"></script>
-<script>
-/* ============================================================
-   TESTER — PART 1 LOGIC HOOKUP
-   ============================================================ */
 
+<script>
+/* ======================= MATRIX RAIN ======================= */
+const canvas = document.getElementById("matrix");
+const ctx = canvas.getContext("2d");
+
+function resizeMatrix() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeMatrix();
+window.addEventListener("resize", resizeMatrix);
+
+const chars = "アカサタナハマヤラワ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const charset = chars.split("");
+const fontSize = 16;
+let columns = Math.floor(canvas.width / fontSize);
+let drops = Array.from({ length: columns }, () => 1);
+
+function drawMatrix() {
+  ctx.fillStyle = "rgba(0,0,0,0.07)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "rgba(0,255,65,0.55)";
+  ctx.font = fontSize + "px Matrix";
+
+  drops.forEach((y, i) => {
+    const text = charset[Math.floor(Math.random() * charset.length)];
+    ctx.fillText(text, i * fontSize, y * fontSize);
+
+    if (y * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
+  });
+}
+
+// Slightly slower to reduce glitching
+setInterval(drawMatrix, 120);
+
+/* ======================= TESTER LOGIC ======================= */
 const dropzone = document.getElementById("dropzone");
 const fileInput = document.getElementById("fileInput");
 const progress = document.getElementById("progress");
-const summaryOutput = document.getElementById("summaryOutput");
+const resultsDiv = document.getElementById("results");
+const failsDiv = document.getElementById("fails");
+const exportBtn = document.getElementById("exportBtn");
+const summaryA = document.getElementById("summaryA");
+
+let allResults = [];
 
 dropzone.onclick = () => fileInput.click();
+
 dropzone.addEventListener("dragover", e => e.preventDefault());
 dropzone.addEventListener("drop", e => {
   e.preventDefault();
   handleFiles(e.dataTransfer.files);
 });
+
 fileInput.onchange = () => handleFiles(fileInput.files);
 
+// ---------- Handle all files ----------
 async function handleFiles(files) {
-  progress.textContent = "Processing...";
-  let idx = 0;
+  resultsDiv.innerHTML = "";
+  failsDiv.innerHTML = "";
+  allResults = [];
+
+  progress.textContent = "Starting…";
+  summaryA.textContent = "Waiting…";
+
+  const total = files.length;
+  let count = 0;
 
   for (const f of files) {
-    idx++;
-    progress.textContent = `Processing ${idx}/${files.length}: ${f.name}`;
-    await processOne(f);
+    await processFile(f);
+    count++;
+    progress.textContent = `Processed ${count}/${total}`;
   }
 
-  progress.textContent = `DONE — ${files.length} file(s) processed`;
+  progress.textContent = `DONE — ${total} files`;
 }
 
-async function processOne(file) {
+// ---------- Process one file ----------
+async function processFile(file) {
   const form = new FormData();
   form.append("file", file);
 
@@ -110,19 +255,55 @@ async function processOne(file) {
     try {
       json = JSON.parse(text);
     } catch {
-      json = { ok: false, msg: "Parse error", raw: text };
+      json = { ok: false, error: true, message: text.slice(0, 200) };
     }
-
   } catch (err) {
-    json = { ok: false, msg: err.toString() };
+    json = { ok: false, error: true, message: err.toString() };
   }
 
-  // Pass into the logic engine
-  const result = UWiq.buildDisplay(json);
+  // Use UWiq logic engine to build the English summary
+  const display = window.UWiq.buildDisplay(json);
 
-  // Show English summary
-  summaryOutput.textContent = result.summaryText;
+  const resultObj = {
+    file: file.name,
+    size: file.size,
+    raw: json,
+    display
+  };
+
+  allResults.push(resultObj);
+
+  const block = document.createElement("div");
+  block.className = "file-result " + (json.ok ? "success" : "fail");
+
+  block.innerHTML = `
+    <div class="meta-line">
+      FILE: ${file.name} (${(file.size/1024).toFixed(1)} KB)
+    </div>
+    <pre>${display.summaryText}</pre>
+  `;
+
+  if (json.ok) {
+    resultsDiv.appendChild(block);
+    summaryA.textContent = display.summaryText;
+  } else {
+    failsDiv.appendChild(block);
+  }
 }
+
+// ---------- Export ----------
+exportBtn.onclick = () => {
+  const blob = new Blob([JSON.stringify(allResults, null, 2)], {
+    type: "application/json"
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "uwiq-pro-results.json";
+  a.click();
+  URL.revokeObjectURL(url);
+};
 </script>
+
 </body>
 </html>
