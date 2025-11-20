@@ -1,63 +1,284 @@
 /* ============================================================
-   UWiq Web Logic — Frontend Display Engine (FINAL v3)
+   UWiq Web Logic — Frontend Display Engine (v4 · 5.1-Compatible)
    ------------------------------------------------------------
-   Fully rewritten to match new FundHub underwriting UX:
-   • Zero duplicated suggestions
-   • No $0 funding projections — uses human fallback text
-   • Smart inquiry logic (1 line max + optional bureau note)
-   • Zero revolving history → special advisory mode
-   • Smart LLC logic with fallback if no revolving
-   • AU logic: only show if harmful
-   • Address stability: max 2 lines
+   Updated to match new UnderwriteIQ 5.1 backend response:
+
+   Backend shape (parse-report):
+   {
+     ok: true,
+     bureaus: { experian, equifax, transunion },
+     underwrite: {
+       fundable,
+       primary_bureau,
+       metrics: {
+         score,
+         utilization_pct,
+         negative_accounts,
+         late_payment_events,
+         inquiries: { ex, tu, eq, total }
+       },
+       per_bureau: {...},
+       personal: {
+         highest_revolving_limit,
+         highest_installment_amount,
+         can_card_stack,
+         can_loan_stack,
+         can_dual_stack,
+         card_funding,
+         loan_funding,
+         total_personal_funding
+       },
+       business: {
+         business_age_months,
+         can_business_fund,
+         business_multiplier,
+         business_funding
+       },
+       totals: {
+         total_personal_funding,
+         total_business_funding,
+         total_combined_funding
+       },
+       optimization: {
+         needs_util_reduction,
+         target_util_pct,
+         needs_new_primary_revolving,
+         needs_inquiry_cleanup,
+         needs_negative_cleanup,
+         needs_file_buildout,
+         thin_file,
+         file_all_negative
+       },
+       lite_banner_funding
+     },
+     suggestions: { web_summary, email_summary, actions, au_actions },
+     redirect: {...}
+   }
+
+   This frontend:
+   • Derives cards/loans/AUs from bureau tradelines
+   • Uses new metrics + optimization flags
+   • Keeps your “Approved / Repair” UX & summaries
+   • Keeps inquiry / AU / address / business logic
    ============================================================ */
 
 window.UWiq = {
+  /* ------------------------------------------------------------
+     0. Internal helpers
+     ------------------------------------------------------------ */
+  _toNumber(value, fallback = 0) {
+    if (value === null || value === undefined) return fallback;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  },
+
+  _isNegativeStatus(status) {
+    const s = String(status || "").toLowerCase();
+    return (
+      s.includes("chargeoff") ||
+      s.includes("charge-off") ||
+      s.includes("collection") ||
+      s.includes("derog") ||
+      s.includes("repossession") ||
+      s.includes("foreclosure") ||
+      s.includes("120") ||
+      s.includes("90") ||
+      s.includes("60") ||
+      s.includes("late")
+    );
+  },
+
+  _collectTradelines(bureau) {
+    if (!bureau || !Array.isArray(bureau.tradelines)) return [];
+    return bureau.tradelines;
+  },
+
+  _dedupeStrings(arr) {
+    const set = new Set();
+    const out = [];
+    for (const v of arr || []) {
+      const s = String(v || "").trim();
+      if (!s) continue;
+      if (!set.has(s)) {
+        set.add(s);
+        out.push(s);
+      }
+    }
+    return out;
+  },
 
   /* ------------------------------------------------------------
-     1. Normalize parser JSON
+     1. Normalize parser JSON → compact object "n"
      ------------------------------------------------------------ */
   normalize(data) {
     if (!data || !data.ok || !data.underwrite) {
       return { valid: false, reason: "Invalid or unreadable report." };
     }
 
-    const u = data.underwrite;
-    const m = u.metrics || {};
+    const uw = data.underwrite || {};
+    const m = uw.metrics || {};
+    const bureaus = data.bureaus || {};
+    const ex = bureaus.experian || {};
+    const eq = bureaus.equifax || {};
+    const tu = bureaus.transunion || {};
+
+    // --- Collect all tradelines from all bureaus ---
+    const allTradelines = [
+      ...this._collectTradelines(ex),
+      ...this._collectTradelines(eq),
+      ...this._collectTradelines(tu)
+    ];
+
+    const cards = [];
+    const loans = [];
+    const aus = [];
+
+    let highestLimit = 0;
+
+    allTradelines.forEach((tl) => {
+      if (!tl || typeof tl !== "object") return;
+
+      const type = String(tl.type || "").toLowerCase();
+      const creditor = tl.creditor || "Credit account";
+      const limit = this._toNumber(tl.limit, 0);
+      const balance = this._toNumber(tl.balance, 0);
+      const isAU = tl.is_au === true;
+      const status = tl.status || "";
+      const isNegative = this._isNegativeStatus(status);
+
+      const util = limit > 0 ? Math.round((balance / limit) * 100) : 0;
+
+      // track highest limit
+      if (type === "revolving" && limit > highestLimit) {
+        highestLimit = limit;
+      }
+
+      // build card model for revolving
+      if (type === "revolving") {
+        cards.push({
+          name: creditor,
+          utilization: util,
+          is_au: isAU,
+          balance,
+          limit,
+          status,
+          is_negative: isNegative
+        });
+      }
+
+      // build loan model
+      if (["installment", "auto", "mortgage"].includes(type)) {
+        loans.push({
+          name: creditor,
+          type,
+          balance,
+          limit,
+          status,
+          is_negative: isNegative
+        });
+      }
+
+      // AU model
+      if (isAU) {
+        aus.push({
+          name: creditor,
+          utilization: util,
+          status,
+          is_negative: isNegative
+        });
+      }
+    });
+
+    // --- Addresses (simple, safe) ---
+    const rawAddresses = [
+      ...(Array.isArray(ex.addresses) ? ex.addresses : []),
+      ...(Array.isArray(eq.addresses) ? eq.addresses : []),
+      ...(Array.isArray(tu.addresses) ? tu.addresses : [])
+    ];
+    const dedupedAddresses = this._dedupeStrings(rawAddresses);
+    const addresses = dedupedAddresses.map((addr, idx) => ({
+      label: addr,
+      is_primary: idx === 0,
+      is_old: false // we don't have age data on frontend
+    }));
+
+    // --- Business info ---
+    const business = uw.business || {};
+    const totals = uw.totals || {};
+    const personal = uw.personal || {};
+    const optimization = uw.optimization || {};
+
+    const hasBusiness =
+      business.business_age_months != null &&
+      Number(business.business_age_months) > 0;
+
+    const businessAgeMonths = this._toNumber(
+      business.business_age_months,
+      0
+    );
+
+    // Funding numbers
+    const personalFunding =
+      this._toNumber(personal.card_funding, 0) +
+      this._toNumber(personal.loan_funding, 0);
+
+    const businessFunding = this._toNumber(
+      business.business_funding,
+      0
+    );
+
+    const totalFunding = this._toNumber(
+      totals.total_combined_funding,
+      personalFunding + businessFunding
+    );
+
+    // Potentials: using totals from backend (same shape)
+    const personalPotential = this._toNumber(
+      personal.total_personal_funding,
+      personalFunding
+    );
+    const businessPotential = this._toNumber(
+      business.business_funding,
+      businessFunding
+    );
+    const totalPotential = this._toNumber(
+      totals.total_combined_funding,
+      personalPotential + businessPotential
+    );
 
     return {
       valid: true,
-      fundable: !!u.fundable,
+      fundable: !!uw.fundable,
 
+      // Core metrics
       score: m.score || null,
       util: m.utilization_pct ?? null,
       negatives: m.negative_accounts || 0,
       lates: m.late_payment_events || 0,
 
-      inquiries: m.inquiries || { ex:0, tu:0, eq:0, total:0 },
+      // Inquiries (already combined per backend)
+      inquiries: m.inquiries || { ex: 0, tu: 0, eq: 0, total: 0 },
 
-      cards: u.cards || [],
-      loans: u.loans || [],
-      aus: u.authorized_users || [],
-      addresses: u.addresses || [],
+      // Derived lists
+      cards,
+      loans,
+      aus,
+      addresses,
 
-      hasBusiness: !!u.has_business,
-      businessAgeMonths: u.business_age_months || 0,
+      // Business + file profile
+      hasBusiness,
+      businessAgeMonths,
+      highestLimit: highestLimit || this._toNumber(personal.highest_revolving_limit, 0),
+      highestLimitAgeMonths: 0, // not available on frontend
+      thin: !!optimization.thin_file,
 
-      highestLimit: u.highest_limit || 0,
-      highestLimitAgeMonths: u.highest_limit_age_months || 0,
-
-      thin: !!u.thin_file,
-
-      personalFunding:
-        (u.personal?.card_funding || 0) +
-        (u.personal?.loan_funding || 0),
-
-      businessFunding: u.business?.business_funding || 0,
-      totalFunding: u.totals?.total_combined_funding || 0,
-
-      personalPotential: u.personal?.total_personal_funding || 0,
-      businessPotential: u.business?.business_funding || 0,
-      totalPotential: u.totals?.total_combined_funding || 0
+      // Funding (current + potential)
+      personalFunding,
+      businessFunding,
+      totalFunding,
+      personalPotential,
+      businessPotential,
+      totalPotential
     };
   },
 
@@ -85,12 +306,18 @@ window.UWiq = {
 
     // Bureau-specific outlier
     const { ex, tu, eq } = n.inquiries;
-    const bureauCounts = { Experian: ex, TransUnion: tu, Equifax: eq };
-    const max = Math.max(ex, tu, eq);
+    const bureauCounts = { Experian: ex || 0, TransUnion: tu || 0, Equifax: eq || 0 };
+    const max = Math.max(ex || 0, tu || 0, eq || 0);
 
     if (max >= 3 && max >= t * 0.5) {
-      const bureau = Object.keys(bureauCounts).find(b => bureauCounts[b] === max);
-      suggestions.push(`Most of your inquiries are on ${bureau}. Removing those first will help.`);
+      const bureau = Object.keys(bureauCounts).find(
+        (b) => bureauCounts[b] === max
+      );
+      if (bureau) {
+        suggestions.push(
+          `Most of your inquiries are on ${bureau}. Removing those first will help.`
+        );
+      }
     }
 
     return suggestions;
@@ -103,14 +330,16 @@ window.UWiq = {
     const tips = [];
     if (!Array.isArray(n.cards)) return tips;
 
-    n.cards.forEach(card => {
+    n.cards.forEach((card) => {
       const name = card.name || "One of your cards";
       const util = card.utilization ?? card.util ?? 0;
       const isAU = !!card.is_au;
 
       if (util >= 50) tips.push(`${name} is at ${util}%. Bring this down toward ~3%.`);
-      else if (util >= 30) tips.push(`${name} is at ${util}%. Lowering balances here will help.`);
-      else if (util >= 15) tips.push(`${name} is at ${util}%. You can optimize this further.`);
+      else if (util >= 30)
+        tips.push(`${name} is at ${util}%. Lowering balances here will help.`);
+      else if (util >= 15)
+        tips.push(`${name} is at ${util}%. You can optimize this further.`);
 
       if (isAU && util >= 30) {
         tips.push(
@@ -181,7 +410,7 @@ window.UWiq = {
     const tips = [];
     if (!Array.isArray(n.aus)) return tips;
 
-    n.aus.forEach(au => {
+    n.aus.forEach((au) => {
       if (au.is_negative) {
         tips.push(
           `${au.name || "An authorized user account"} is reporting negative. Removing yourself may improve your profile.`
@@ -258,10 +487,12 @@ window.UWiq = {
     if (!Array.isArray(n.addresses)) return tips;
 
     if (n.addresses.length > 3) {
-      tips.push("You have multiple old addresses listed — cleaning these up improves verification.");
+      tips.push(
+        "You have multiple old addresses listed — cleaning these up improves verification."
+      );
     }
 
-    const primary = n.addresses.find(a => a.is_primary);
+    const primary = n.addresses.find((a) => a.is_primary);
     if (primary && primary.is_old) {
       tips.push(
         "Your primary address appears outdated — update your state ID and make sure all bureaus match."
@@ -326,11 +557,13 @@ window.UWiq = {
       out.push(`- Utilization: ${n.util}% (ideal is ~3% per card)`);
 
     out.push(
-      `- Inquiries: EX ${n.inquiries.ex} • TU ${n.inquiries.tu} • EQ ${n.inquiries.eq}`
+      `- Inquiries: EX ${n.inquiries.ex || 0} • TU ${n.inquiries.tu || 0} • EQ ${n.inquiries.eq || 0}`
     );
 
     if (n.negatives > 0) {
-      out.push(`- ${n.negatives} negative account${n.negatives === 1 ? "" : "s"} — still fundable.`);
+      out.push(
+        `- ${n.negatives} negative account${n.negatives === 1 ? "" : "s"} — still fundable.`
+      );
     }
 
     out.push("");
@@ -345,7 +578,9 @@ window.UWiq = {
       out.push(`- Business: $${b.toLocaleString()}`);
       out.push(`- Total: $${t.toLocaleString()}`);
     } else {
-      out.push("- Funding estimates will appear once credit mix is stronger.");
+      out.push(
+        "- Funding estimates will appear once credit mix is stronger."
+      );
     }
 
     return out.join("\n");
@@ -378,7 +613,9 @@ window.UWiq = {
       out.push(`- Business: $${b.toLocaleString()}`);
       out.push(`- Total: $${t.toLocaleString()}`);
     } else {
-      out.push("- Once cleanup is complete, funding opportunities will open up.");
+      out.push(
+        "- Once cleanup is complete, funding opportunities will open up."
+      );
     }
 
     return out.join("\n");
@@ -399,7 +636,7 @@ window.UWiq = {
     if (classification.mode === "approved") {
       out.push(this.buildApprovedSummary(n));
       out.push("\n\nOptimization Tips:");
-      this.buildCombinedSuggestions(n, "approved").forEach(t =>
+      this.buildCombinedSuggestions(n, "approved").forEach((t) =>
         out.push("- " + t)
       );
       return out.join("\n");
@@ -408,7 +645,7 @@ window.UWiq = {
     if (classification.mode === "repair") {
       out.push(this.buildRepairSummary(n));
       out.push("\n\nPriority Fixes:");
-      this.buildCombinedSuggestions(n, "repair").forEach(t =>
+      this.buildCombinedSuggestions(n, "repair").forEach((t) =>
         out.push("- " + t)
       );
       return out.join("\n");
@@ -434,5 +671,5 @@ window.UWiq = {
 };
 
 /* ===========================
-   END OF UWiq Logic Engine
+   END OF UWiq Logic Engine v4
    =========================== */
