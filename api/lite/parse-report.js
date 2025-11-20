@@ -3,7 +3,7 @@
 // Endpoint: /api/lite/parse-report
 //
 // This version upgrades:
-// - GPT-4.1 → GPT-5.1-vision (best OCR + lowest hallucination + strictest JSON adherence)
+// - GPT-4.1 → gpt-4.1 (best OCR + lowest hallucination + strictest JSON adherence)
 // - Adds MULTI-PASS extraction for near-perfect bureau accuracy
 // - Adds schema validator + JSON rewriter
 // - Adds hard normalization + auditor-level checks
@@ -204,7 +204,7 @@ function tryParseJsonWithRepair(raw) {
 }
 
 // ============================================================================
-// ⭐ NEW: MULTIPASS GPT-5.1-VISION ENGINE
+// ⭐ NEW: MULTIPASS gpt-4.1 ENGINE
 // - Pass 1: OCR + raw extract
 // - Pass 2: Re-extract using cleaned text as guidance
 // - Pass 3: Final schema enforcement pass
@@ -219,7 +219,7 @@ async function callVision5_1_Multipass(pdfBuffer, filename) {
 
   // --------------------------- PASS 1 — OCR EXTRACT ---------------------------
   const payload1 = {
-    model: "gpt-5.1-vision",
+    model: "gpt-4.1",
     input: [
       { role: "system", content: LLM_PROMPT },
       {
@@ -256,7 +256,7 @@ async function callVision5_1_Multipass(pdfBuffer, filename) {
   const guidance = JSON.stringify(pass1).slice(0, 18000);
 
   const payload2 = {
-    model: "gpt-5.1-vision",
+    model: "gpt-4.1",
     input: [
       { role: "system", content: LLM_PROMPT },
       {
@@ -292,7 +292,7 @@ async function callVision5_1_Multipass(pdfBuffer, filename) {
 
   // --------------------------- PASS 3 — FINAL SCHEMA HARDEN ---------------------------
   const payload3 = {
-    model: "gpt-5.1-vision",
+    model: "gpt-4.1",
     input: [
       { role: "system", content: LLM_PROMPT + "\n\nRETURN STRICT SCHEMA JSON ONLY." },
       {
