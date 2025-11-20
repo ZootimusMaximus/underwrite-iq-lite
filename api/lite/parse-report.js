@@ -1,12 +1,14 @@
 // ==================================================================================
-// UnderwriteIQ — Perfection Pipeline v2  (GPT-5.1 VISION · MULTIPASS OCR + JSON ENFORCER)
+// UnderwriteIQ — Perfection Pipeline v2  (GPT-4.1 · MULTIPASS + JSON ENFORCER)
 // Endpoint: /api/lite/parse-report
 //
-// This version upgrades:
-// - GPT-4.1 → gpt-4.1 (best OCR + lowest hallucination + strictest JSON adherence)
-// - Adds MULTI-PASS extraction for near-perfect bureau accuracy
-// - Adds schema validator + JSON rewriter
-// - Adds hard normalization + auditor-level checks
+// This version:
+// - Uses gpt-4.1 with PDF via input_file (Responses API)
+// - Multipass extraction for higher accuracy
+// - Hard JSON repair + schema enforcement
+// - Stable bureau structure (experian / equifax / transunion)
+// - Underwriting engine + suggestion engine
+// - Safe fallbacks (never exposes “manual review” / tech errors to clients)
 // ==================================================================================
 
 const fs = require("fs");
@@ -28,7 +30,9 @@ ${String(err && err.stack ? err.stack : err)}
 ---------------------------------------------
 `;
   console.error(msg);
-  try { fs.appendFileSync("/tmp/uwiq-errors.log", msg); } catch (_) {}
+  try {
+    fs.appendFileSync("/tmp/uwiq-errors.log", msg);
+  } catch (_) {}
 }
 
 // ============================================================================
@@ -42,7 +46,8 @@ function buildFallbackResult(reason = "Analyzer failed") {
     summary: {
       score: null,
       risk_band: "unknown",
-      note: "We couldn’t clearly read this credit report file. Please upload a more standard PDF (Experian, Equifax, TransUnion, or AnnualCreditReport.com)."
+      note:
+        "We couldn’t clearly read this credit report file. Please upload a more standard PDF (Experian, Equifax, TransUnion, or AnnualCreditReport.com)."
     },
     issues: [],
     dispute_groups: [],
@@ -63,7 +68,7 @@ function buildFallbackResult(reason = "Analyzer failed") {
 }
 
 // ============================================================================
-// STRICT SYSTEM PROMPT — 5.1 Vision Edition
+// STRICT SYSTEM PROMPT — 4.1 Vision-style schema discipline
 // ============================================================================
 const LLM_PROMPT = `
 You are UnderwriteIQ, a forensic-level credit report analyzer.
@@ -130,10 +135,12 @@ function normalizeLLMOutput(str) {
 }
 
 function extractJsonStringFromResponse(json) {
+  // 1) Direct Responses API field
   if (json.output_text && typeof json.output_text === "string") {
     return json.output_text.trim();
   }
 
+  // 2) Responses API "output" array
   if (Array.isArray(json.output)) {
     for (const msg of json.output) {
       if (!msg || !Array.isArray(msg.content)) continue;
@@ -148,6 +155,7 @@ function extractJsonStringFromResponse(json) {
     }
   }
 
+  // 3) Legacy Chat Completions-style
   if (
     json.choices &&
     json.choices[0]?.message?.content &&
@@ -160,7 +168,7 @@ function extractJsonStringFromResponse(json) {
 }
 
 // ============================================================================
-// JSON REPAIR ENGINE — v5.1 UltraSTRICT
+// JSON REPAIR ENGINE — UltraSTRICT
 // ============================================================================
 function tryParseJsonWithRepair(raw) {
   if (!raw) throw new Error("EMPTY_MODEL_OUTPUT");
@@ -175,16 +183,16 @@ function tryParseJsonWithRepair(raw) {
 
   let fixed = cleaned.substring(first, last + 1);
 
-  // trailing commas
+  // Remove trailing commas like "..., }" or "..., ]"
   fixed = fixed.replace(/,\s*([}\]])/g, "$1");
 
-  // unquoted keys
+  // Quote unquoted keys: foo: → "foo":
   fixed = fixed.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
 
-  // bare date values
+  // Quote date-like bare values: 2024-10 or 2024-10-15
   fixed = fixed.replace(/:\s*(\d{4}-\d{2}(-\d{2})?)/g, ':"$1"');
 
-  // unquoted strings
+  // Auto-quote simple barewords on the RHS
   fixed = fixed.replace(
     /:\s*([A-Za-z][A-Za-z0-9 _\-]*)\s*(,|\})/g,
     (match, val, end) => {
@@ -204,10 +212,10 @@ function tryParseJsonWithRepair(raw) {
 }
 
 // ============================================================================
-// ⭐ NEW: MULTIPASS gpt-4.1 ENGINE
+// ⭐ MULTIPASS gpt-4.1 ENGINE
 // - Pass 1: OCR + raw extract
-// - Pass 2: Re-extract using cleaned text as guidance
-// - Pass 3: Final schema enforcement pass
+// - Pass 2: Re-extract using guidance JSON
+// - Pass 3: Final strict-schema cleanup
 // ============================================================================
 async function callMultipass4_1(pdfBuffer, filename) {
   const key = process.env.UNDERWRITE_IQ_VISION_KEY;
@@ -248,9 +256,8 @@ async function callMultipass4_1(pdfBuffer, filename) {
 
   if (!r1.ok) throw new Error("LLM_PASS1_ERROR: " + (await r1.text()));
   const j1 = await r1.json();
-  let raw1 = extractJsonStringFromResponse(j1);
-  let pass1 = tryParseJsonWithRepair(raw1);
-
+  const raw1 = extractJsonStringFromResponse(j1);
+  const pass1 = tryParseJsonWithRepair(raw1);
 
   // --------------------------- PASS 2 — WITH GUIDANCE ---------------------------
   const guidance = JSON.stringify(pass1).slice(0, 18000);
@@ -265,7 +272,7 @@ async function callMultipass4_1(pdfBuffer, filename) {
           {
             type: "input_text",
             text:
-              "PASS 2: Improve accuracy using guidance JSON (do NOT invent, only correct errors). Guidance: " +
+              "PASS 2: Improve accuracy using this guidance JSON. Do NOT invent values, only correct clear OCR / parsing errors. Guidance: " +
               guidance
           },
           { type: "input_file", filename: safeFilename, file_data: dataUrl }
@@ -287,21 +294,24 @@ async function callMultipass4_1(pdfBuffer, filename) {
 
   if (!r2.ok) throw new Error("LLM_PASS2_ERROR: " + (await r2.text()));
   const j2 = await r2.json();
-  let raw2 = extractJsonStringFromResponse(j2);
-  let pass2 = tryParseJsonWithRepair(raw2);
+  const raw2 = extractJsonStringFromResponse(j2);
+  const pass2 = tryParseJsonWithRepair(raw2);
 
   // --------------------------- PASS 3 — FINAL SCHEMA HARDEN ---------------------------
   const payload3 = {
     model: "gpt-4.1",
     input: [
-      { role: "system", content: LLM_PROMPT + "\n\nRETURN STRICT SCHEMA JSON ONLY." },
+      {
+        role: "system",
+        content: LLM_PROMPT + "\n\nRETURN STRICT SCHEMA JSON ONLY (NO EXTRA FIELDS)."
+      },
       {
         role: "user",
         content: [
           {
             type: "input_text",
             text:
-              "PASS 3: Final JSON cleanup. Fix missing keys, invalid types. DO NOT invent. Input: " +
+              "PASS 3: Final JSON cleanup. Fix missing keys, invalid types, and ensure the schema exactly matches the specification. Do NOT invent values. Input: " +
               JSON.stringify(pass2).slice(0, 18000)
           }
         ]
@@ -321,32 +331,32 @@ async function callMultipass4_1(pdfBuffer, filename) {
   });
 
   if (!r3.ok) throw new Error("LLM_PASS3_ERROR: " + (await r3.text()));
-
   const j3 = await r3.json();
-  let raw3 = extractJsonStringFromResponse(j3);
-  let finalOutput = tryParseJsonWithRepair(raw3);
+  const raw3 = extractJsonStringFromResponse(j3);
+  const finalOutput = tryParseJsonWithRepair(raw3);
 
   return finalOutput;
 }
 
 // ============================================================================
-// RETRY WRAPPER — 5.1 Vision Multipass
+// RETRY WRAPPER — gpt-4.1 Multipass
 // ============================================================================
 async function runCreditPdfLLM(pdfBuffer, filename) {
   let lastErr = null;
 
   for (let i = 1; i <= 3; i++) {
     try {
-      return await callVision5_1_Multipass(pdfBuffer, filename);
+      return await callMultipass4_1(pdfBuffer, filename);
     } catch (err) {
       lastErr = err;
-      logError("VISION_5_1_ATTEMPT_" + i, err);
+      logError("GPT4_1_ATTEMPT_" + i, err);
       await new Promise(r => setTimeout(r, 200 * i));
     }
   }
 
   throw new Error("LLM_FAILED_3X: " + lastErr);
 }
+
 // ============================================================================
 // BUREAU NORMALIZER — ensures stable structure regardless of LLM errors
 // ============================================================================
@@ -389,8 +399,8 @@ function sanitizeScore(score) {
   if (!Number.isFinite(s)) return null;
 
   if (s > 9000) s = Math.floor(s / 10); // 8516 → 851
-  if (s > 850) s = 850;                 // cap at 850
-  if (s < 300) return null;             // invalid
+  if (s > 850) s = 850; // cap at 850
+  if (s < 300) return null; // invalid
 
   return s;
 }
@@ -404,13 +414,14 @@ function toNumberOrNull(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
+
 function numOrZero(v) {
   const n = toNumberOrNull(v);
   return n == null ? 0 : n;
 }
 
 // ============================================================================
-// DATE HELPER
+// DATE HELPER — monthsSince("YYYY-MM" or "YYYY-MM-DD")
 // ============================================================================
 function monthsSince(dateStr) {
   if (!dateStr || typeof dateStr !== "string") return null;
@@ -722,8 +733,141 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     lite_banner_funding: liteBannerFunding
   };
 }
+
 // ============================================================================
-// MAIN HANDLER — PDF Upload → GPT-5.1 Vision (Multipass) → Underwrite → Suggest
+// SUGGESTION ENGINE — human-facing improvement tips
+// ============================================================================
+function buildSuggestions(bureaus, uw) {
+  const primaryKey = uw.primary_bureau;
+  const m = uw.metrics || {};
+
+  const score = m.score;
+  const util = m.utilization_pct;
+  const negatives = m.negative_accounts || 0;
+  const inquiries = (m.inquiries && m.inquiries.total) || 0;
+  const late = m.late_payment_events || 0;
+
+  const actions = [];
+  const au_actions = [];
+
+  // Utilization recommendations
+  if (typeof util === "number" && Number.isFinite(util)) {
+    if (util > 30) {
+      actions.push(
+        `Your utilization is about ${util}%. Pay balances down into the 3–10% range before applying for new credit to maximize approvals.`
+      );
+    } else {
+      actions.push(
+        `Your utilization is in a solid range. Keeping each card between 3–10% will help you qualify for stronger limits.`
+      );
+    }
+  } else {
+    actions.push(
+      `We couldn't clearly read utilization from this PDF, but the rule is simple: keep each card between 3–10% before submitting new applications.`
+    );
+  }
+
+  if (negatives > 0) {
+    actions.push(
+      `You have ${negatives} negative account${
+        negatives === 1 ? "" : "s"
+      }. Cleaning these up greatly improves approval odds with lenders.`
+    );
+  }
+
+  if (inquiries > 0) {
+    actions.push(
+      `You have ${inquiries} total inquiries. Removing unnecessary or recent inquiries helps reduce “too many inquiries” denials.`
+    );
+  }
+
+  // Authorized user cleanup (across all bureaus)
+  const allTradelines = [
+    ...(bureaus.experian?.tradelines || []),
+    ...(bureaus.equifax?.tradelines || []),
+    ...(bureaus.transunion?.tradelines || [])
+  ];
+
+  for (const tl of allTradelines) {
+    if (!tl || typeof tl !== "object") continue;
+    if (tl.is_au !== true) continue;
+
+    const bal = tl.balance ? Number(tl.balance) : 0;
+    const lim = tl.limit ? Number(tl.limit) : 1;
+    const ratio = lim > 0 ? (bal / lim) * 100 : 0;
+    const creditor = tl.creditor || "authorized user account";
+    const status = String(tl.status || "").toLowerCase();
+
+    if (ratio > 30) {
+      au_actions.push(
+        `Authorized user account "${creditor}" is around ${ratio.toFixed(
+          1
+        )}% utilized. Have the primary cardholder pay it down or remove you as an AU.`
+      );
+    }
+
+    if (
+      status.includes("charge") ||
+      status.includes("collection") ||
+      status.includes("derog") ||
+      status.includes("delinquent")
+    ) {
+      au_actions.push(
+        `Authorized user account "${creditor}" is reporting negative history. Ask the primary cardholder to remove you as an AU so it stops reporting.`
+      );
+    }
+  }
+
+  if (uw.optimization?.needs_file_buildout) {
+    actions.push(
+      "Your credit file is on the thin side. Adding 1–2 new primary accounts or low-utilization authorized user accounts will strengthen your profile."
+    );
+  }
+
+  if (negatives === 0 && inquiries === 0 && (typeof util !== "number" || util <= 30)) {
+    actions.push(
+      "You're in a good position to request credit limit increases once balances are paid down."
+    );
+  }
+
+  const webSummary = (() => {
+    let s = `Your strongest bureau right now is ${primaryKey.toUpperCase()}. `;
+    if (!uw.fundable) {
+      s += "You're close — here’s what to improve next to unlock higher approvals:";
+    } else {
+      s += "You're fundable based on your profile. Here’s how to maximize approvals and starting limits:";
+    }
+    return s;
+  })();
+
+  const emailSummary = `
+Your strongest funding bureau is **${primaryKey.toUpperCase()}**.
+
+Snapshot:
+- Score: ${score ?? "not available"}
+- Utilization: ${
+    util != null && Number.isFinite(util) ? util + "%" : "not clearly readable"
+  }
+- Negative accounts: ${negatives}
+- Total inquiries: ${inquiries}
+- Recent late payments: ${late}
+
+Fastest improvements:
+1) Keep all cards in the 3–10% utilization range.
+2) Remove negative items and unnecessary inquiries.
+3) Fix or remove any AU cards that are maxed out or reporting negative history.
+`.trim();
+
+  return {
+    web_summary: webSummary,
+    email_summary: emailSummary,
+    actions,
+    au_actions
+  };
+}
+
+// ============================================================================
+// MAIN HANDLER — PDF Upload → GPT-4.1 Multipass → Underwrite → Suggest
 // ============================================================================
 module.exports = async function handler(req, res) {
   try {
@@ -785,7 +929,7 @@ module.exports = async function handler(req, res) {
     const businessAgeMonths = getNumberField(fields, "businessAgeMonths");
 
     // ---------------------------
-    // LLM Extraction (GPT-5.1 Vision Multipass)
+    // LLM Extraction (gpt-4.1 Multipass)
     // ---------------------------
     let extracted;
     try {
