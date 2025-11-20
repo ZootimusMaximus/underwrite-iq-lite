@@ -209,7 +209,7 @@ function tryParseJsonWithRepair(raw) {
 // - Pass 2: Re-extract using cleaned text as guidance
 // - Pass 3: Final schema enforcement pass
 // ============================================================================
-async function callVision5_1_Multipass(pdfBuffer, filename) {
+async function callMultipass4_1(pdfBuffer, filename) {
   const key = process.env.UNDERWRITE_IQ_VISION_KEY;
   if (!key) throw new Error("Missing UNDERWRITE_IQ_VISION_KEY");
 
