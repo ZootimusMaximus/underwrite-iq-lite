@@ -1,76 +1,69 @@
 // ==================================================================================
-// UnderwriteIQ — Parse-Only Engine (v1)
+// UnderwriteIQ — CLEAN PARSER ONLY (v1)
 // Endpoint: /api/lite/parse-report
 //
-// THIS VERSION DOES ONLY ONE JOB:
+// ❗ CRITICAL RULES FOR THIS FILE:
+// - ONLY parses credit report PDF.
+// - NO underwriting logic.
+// - NO suggestions.
+// - NO redirect logic.
+// - NO business logic.
+// - NO fundability logic.
+// - NO display logic.
+// - NO UWIQ logic.
 //
-//   ✔ Accept PDF upload
-//   ✔ Run gpt-4.1 multipass extraction
-//   ✔ Output STRICT JSON:
-//
-//      {
-//        ok: true,
-//        bureaus: { experian, equifax, transunion },
-//        raw_pdf_bytes: <optional>,
-//        meta: { filename, size }
-//      }
-//
-//   ❌ NO underwriting
-//   ❌ NO suggestions
-//   ❌ NO redirect
-//   ❌ NO fundable logic
-//   ❌ NO scoring logic
-//
-// UWIQ handles ALL LOGIC AFTER THIS.
-//
+// This file feeds:
+//    ➜ /public/uwiq-switchboard.js (underwriting + distribution)
 // ==================================================================================
 
 const fs = require("fs");
 const formidable = require("formidable");
 
+// Vercel API
 module.exports.config = {
   api: { bodyParser: false, sizeLimit: "30mb" }
 };
 
-// ==================================================================================
-// UTIL: Write fatal errors to /tmp
-// ==================================================================================
-function logError(tag, err, ctx = "") {
+// ============================================================================
+// ERROR LOGGER
+// ============================================================================
+function logError(tag, err, context = "") {
   const msg = `
 ==== ${new Date().toISOString()} — ${tag} ====
-${ctx ? "Context:\n" + ctx : ""}
-${String(err?.stack || err)}
+${context ? "Context:\n" + context + "\n" : ""}
+${String(err && err.stack ? err.stack : err)}
 ---------------------------------------------
 `;
   console.error(msg);
   try { fs.appendFileSync("/tmp/uwiq-errors.log", msg); } catch (_) {}
 }
 
-// ==================================================================================
-// CLIENT-SAFE FALLBACK (NO underwriting)
-// ==================================================================================
-function fallback(reason) {
+// ============================================================================
+// FALLBACK RESULT (SAFE RETURN)
+// ============================================================================
+function buildFallbackResult(reason = "Analyzer failed") {
   return {
     ok: false,
     reason,
     bureaus: {
       experian: null,
-      equifax:  null,
+      equifax: null,
       transunion: null
-    }
+    },
+    meta: { fallback: true }
   };
 }
 
-// ==================================================================================
-// STRICT SYSTEM PROMPT — EXACTLY YOUR ORIGINAL SCHEMA
-// ==================================================================================
+// ============================================================================
+// STRICT SYSTEM PROMPT — LLM Schema
+// ============================================================================
 const LLM_PROMPT = `
-You are UnderwriteIQ, a forensic credit-report extractor.
+You are UnderwriteIQ, a forensic-level credit report parser.
 
-You are given a PDF credit report.
-Extract EXACT JSON per schema — NO extra keys.
+You will receive a full credit report PDF.
 
-Schema:
+❗ Return ONLY this schema — no extras, no omissions:
+
 {
   "bureaus": {
     "experian": {
@@ -100,141 +93,160 @@ Schema:
   }
 }
 
-RULES:
-- No hallucination
-- No guessing unknown values
-- No markdown
-- No commentary
-- JSON ONLY
+NO commentary.
+NO markdown.
+NO invented values.
+NO missing keys.
 `;
 
-// ==================================================================================
-// CLEAN JSON HELPERS
-// ==================================================================================
-function normalizeLLM(str) {
+// ============================================================================
+// NORMALIZER HELPERS
+// ============================================================================
+function normalizeLLMOutput(str) {
   return String(str || "")
     .replace(/```json/gi, "")
     .replace(/```/g, "")
     .trim();
 }
 
-function extractJsonString(resp) {
-  if (resp.output_text) return resp.output_text.trim();
+function extractJsonStringFromResponse(json) {
+  // Responses API v1
+  if (json.output_text) return json.output_text.trim();
 
-  if (Array.isArray(resp.output)) {
-    for (const m of resp.output) {
-      for (const c of (m.content || [])) {
-        if ((c.type === "output_text" || c.type === "summary_text") && c.text)
-          return c.text.trim();
+  if (Array.isArray(json.output)) {
+    for (const msg of json.output) {
+      if (!msg || !Array.isArray(msg.content)) continue;
+      for (const block of msg.content) {
+        if (
+          (block.type === "output_text" || block.type === "summary_text") &&
+          typeof block.text === "string"
+        ) {
+          return block.text.trim();
+        }
       }
     }
   }
 
-  if (resp.choices?.[0]?.message?.content)
-    return resp.choices[0].message.content.trim();
+  // Legacy Chat API
+  if (json.choices?.[0]?.message?.content) {
+    return json.choices[0].message.content.trim();
+  }
 
   return null;
 }
 
-function tryParse(raw) {
-  if (!raw) throw new Error("EMPTY_MODEL_OUTPUT");
+// ============================================================================
+// JSON REPAIR (STRICT)
+// ============================================================================
+function tryParseJsonWithRepair(raw) {
+  if (!raw) throw new Error("EMPTY_OUTPUT");
 
-  let s = normalizeLLM(raw);
+  let cleaned = normalizeLLMOutput(raw);
+  const first = cleaned.indexOf("{");
+  const last = cleaned.lastIndexOf("}");
 
-  const first = s.indexOf("{");
-  const last  = s.lastIndexOf("}");
-  if (first === -1 || last === -1) throw new Error("NO_JSON_FOUND");
+  if (first === -1 || last === -1) {
+    throw new Error("NO_JSON_OBJECT_FOUND");
+  }
 
-  let fixed = s.substring(first, last + 1);
-  fixed = fixed.replace(/,\s*([}\]])/g, "$1"); // trailing comma repair
+  let fixed = cleaned.slice(first, last + 1);
 
-  return JSON.parse(fixed);
+  // Remove trailing commas
+  fixed = fixed.replace(/,\s*([}\]])/g, "$1");
+
+  // Quote keys
+  fixed = fixed.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
+
+  // Quote dates
+  fixed = fixed.replace(/:\s*(\d{4}-\d{2}(-\d{2})?)/g, ':"$1"');
+
+  try {
+    return JSON.parse(fixed);
+  } catch (err) {
+    logError("JSON_PARSE_FAIL", err, fixed.slice(0, 1000));
+    throw err;
+  }
 }
 
-// ==================================================================================
+// ============================================================================
 // MULTIPASS GPT-4.1
-// ==================================================================================
-async function runMultipass(pdfBuffer, filename) {
+// ============================================================================
+async function callMultipass(pdfBuffer, filename) {
   const key = process.env.UNDERWRITE_IQ_VISION_KEY;
-  if (!key) throw new Error("Missing API Key");
+  if (!key) throw new Error("Missing UNDERWRITE_IQ_VISION_KEY");
 
-  const dataUrl = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
+  const base64 = pdfBuffer.toString("base64");
+  const dataUrl = `data:application/pdf;base64,${base64}`;
 
-  // -------- PASS 1 --------
-  async function pass1() {
-    const payload = {
-      model: "gpt-4.1",
-      input: [
-        { role: "system", content: LLM_PROMPT },
-        {
-          role: "user",
-          content: [
-            { type: "input_text", text: "Extract per schema." },
-            { type: "input_file", filename, file_data: dataUrl }
-          ]
-        }
-      ],
-      temperature: 0,
-      max_output_tokens: 6000
-    };
+  // -------------------- PASS 1 --------------------
+  const payload = {
+    model: "gpt-4.1",
+    input: [
+      { role: "system", content: LLM_PROMPT },
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: "Extract credit report data." },
+          { type: "input_file", filename, file_data: dataUrl }
+        ]
+      }
+    ],
+    temperature: 0,
+    max_output_tokens: 6000
+  };
 
-    const r = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
+  const r1 = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
 
-    if (!r.ok) throw new Error(await r.text());
-    return tryParse(extractJsonString(await r.json()));
-  }
-
-  // -------- PASS 2 --------
-  async function pass2(guidance) {
-    const payload = {
-      model: "gpt-4.1",
-      input: [
-        { role: "system", content: LLM_PROMPT },
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: "Improve accuracy using guidance (no hallucination). Guidance: " +
-                    JSON.stringify(guidance).slice(0, 18000)
-            },
-            { type: "input_file", filename, file_data: dataUrl }
-          ]
-        }
-      ],
-      temperature: 0,
-      max_output_tokens: 6000
-    };
-
-    const r = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (!r.ok) throw new Error(await r.text());
-    return tryParse(extractJsonString(await r.json()));
-  }
-
-  // ---- RUN MULTIPASS ----
-  const p1 = await pass1();
-  const p2 = await pass2(p1);
-
-  return p2;
+  if (!r1.ok) throw new Error("LLM_ERROR: " + (await r1.text()));
+  const j1 = await r1.json();
+  const raw = extractJsonStringFromResponse(j1);
+  return tryParseJsonWithRepair(raw);
 }
 
-// ==================================================================================
-// HANDLER — Parse-only
-// ==================================================================================
+// ============================================================================
+// CLEAN BUREAU NORMALIZER (NO LOGIC)
+// ============================================================================
+function normalizeBureau(b) {
+  if (!b || typeof b !== "object") {
+    return {
+      score: null,
+      utilization_pct: null,
+      inquiries: null,
+      negatives: null,
+      late_payment_events: null,
+      names: [],
+      addresses: [],
+      employers: [],
+      tradelines: []
+    };
+  }
+
+  return {
+    score: b.score ?? null,
+    utilization_pct: b.utilization_pct ?? null,
+    inquiries: b.inquiries ?? null,
+    negatives: b.negatives ?? null,
+    late_payment_events: b.late_payment_events ?? null,
+    names: Array.isArray(b.names) ? b.names : [],
+    addresses: Array.isArray(b.addresses) ? b.addresses : [],
+    employers: Array.isArray(b.employers) ? b.employers : [],
+    tradelines: Array.isArray(b.tradelines) ? b.tradelines : []
+  };
+}
+
+// ============================================================================
+// HANDLER — PURE PARSER
+// ============================================================================
 module.exports = async function handler(req, res) {
   try {
+    // CORS
     if (req.method === "OPTIONS") {
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -244,9 +256,11 @@ module.exports = async function handler(req, res) {
 
     res.setHeader("Access-Control-Allow-Origin", "*");
 
-    if (req.method !== "POST")
+    if (req.method !== "POST") {
       return res.status(405).json({ ok: false, msg: "Method not allowed" });
+    }
 
+    // Parse upload
     const form = formidable({
       multiples: false,
       keepExtensions: true,
@@ -255,33 +269,38 @@ module.exports = async function handler(req, res) {
     });
 
     const { files } = await new Promise((resolve, reject) =>
-      form.parse(req, (err, fields, files) => err ? reject(err) : resolve({ files }))
+      form.parse(req, (err, fields, files) =>
+        err ? reject(err) : resolve({ files })
+      )
     );
 
     const file = files.file;
-    if (!file?.filepath)
-      return res.status(200).json(fallback("No PDF uploaded"));
-
-    const buffer = await fs.promises.readFile(file.filepath);
-    if (buffer.length < 1500)
-      return res.status(200).json(fallback("File too small to be a credit report"));
-
-    // ---- RUN GPT MULTIPASS ----
-    let bureaus;
-    try {
-      const extracted = await runMultipass(
-        buffer,
-        file.originalFilename || "credit.pdf"
-      );
-
-      bureaus = extracted?.bureaus;
-      if (!bureaus) return res.status(200).json(fallback("Missing bureaus"));
-    } catch (err) {
-      logError("GPT_FAIL", err);
-      return res.status(200).json(fallback("Could not extract report"));
+    if (!file || !file.filepath) {
+      return res.status(200).json(buildFallbackResult("No PDF uploaded"));
     }
 
-    // ---- SUCCESS ----
+    const buffer = await fs.promises.readFile(file.filepath);
+    if (buffer.length < 1500) {
+      return res.status(200).json(buildFallbackResult("File too small"));
+    }
+
+    // MULTIPASS PARSE
+    let extracted;
+    try {
+      extracted = await callMultipass(buffer, file.originalFilename);
+    } catch (err) {
+      logError("LLM_CRASH", err);
+      return res.status(200).json(buildFallbackResult("Could not parse PDF"));
+    }
+
+    // CLEAN NORMALIZATION
+    const bureaus = {
+      experian: normalizeBureau(extracted.bureaus?.experian),
+      equifax: normalizeBureau(extracted.bureaus?.equifax),
+      transunion: normalizeBureau(extracted.bureaus?.transunion)
+    };
+
+    // RETURN PURE PARSE
     return res.status(200).json({
       ok: true,
       bureaus,
@@ -292,7 +311,7 @@ module.exports = async function handler(req, res) {
     });
 
   } catch (err) {
-    logError("FATAL_HANDLER", err);
-    return res.status(200).json(fallback("System error"));
+    logError("FATAL_ERROR", err);
+    return res.status(200).json(buildFallbackResult("System error"));
   }
 };
