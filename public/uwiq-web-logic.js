@@ -263,7 +263,8 @@ window.UWiq = {
       // Business + file profile
       hasBusiness,
       businessAgeMonths,
-      highestLimit: highestLimit || this._toNumber(personal.highest_revolving_limit, 0),
+      highestLimit:
+        highestLimit || this._toNumber(personal.highest_revolving_limit, 0),
       highestLimitAgeMonths: 0,
       thin: !!optimization.thin_file,
 
@@ -521,9 +522,7 @@ window.UWiq = {
     const tips = [];
 
     // Baseline advice
-    tips.push(
-      "Ensure your current address matches across bureaus."
-    );
+    tips.push("Ensure your current address matches across bureaus.");
 
     if (Array.isArray(n.addresses) && n.addresses.length > 1) {
       tips.push("Clean up extra old addresses.");
@@ -607,9 +606,7 @@ window.UWiq = {
       out.push(`- Business: $${b.toLocaleString()}`);
       out.push(`- Total: $${t.toLocaleString()}`);
     } else {
-      out.push(
-        "- Funding estimates will appear once credit mix is stronger."
-      );
+      out.push("- Funding estimates will appear once credit mix is stronger.");
     }
 
     return out.join("\n");
@@ -684,10 +681,102 @@ window.UWiq = {
   },
 
   /* ------------------------------------------------------------
-     15. MAIN EXPORT
+     15. MAIN EXPORT — full backend payload
      ------------------------------------------------------------ */
   buildDisplay(rawJson) {
     const n = this.normalize(rawJson);
+    const classification = this.classify(n);
+
+    return {
+      valid: n.valid,
+      mode: classification.mode,
+      summaryText: this.buildDisplayBlock(n, classification),
+      data: n
+    };
+  },
+
+  /* ------------------------------------------------------------
+     16. LITE EXPORT — from redirect query string
+        For fix-my-credit / funding-approved pages
+     ------------------------------------------------------------ */
+  buildFromRedirectQuery(search) {
+    // search: string like "?personal=..." or a URLSearchParams
+    let params;
+    if (typeof URLSearchParams !== "undefined") {
+      if (search instanceof URLSearchParams) {
+        params = search;
+      } else {
+        const s =
+          typeof search === "string"
+            ? search
+            : typeof window !== "undefined"
+            ? window.location.search || ""
+            : "";
+        params = new URLSearchParams(s);
+      }
+    } else {
+      // super-defensive: no URLSearchParams support
+      params = {
+        get() {
+          return null;
+        }
+      };
+    }
+
+    const getNum = (key, fallback = null) => {
+      const v = params.get(key);
+      if (v === null || v === "") return fallback;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+
+    const modeParam = params.get("mode");
+    const fundableFlag = params.get("fundable");
+
+    const n = {
+      valid: true,
+      fundable:
+        modeParam === "approved" ||
+        modeParam === "fundable" ||
+        fundableFlag === "1",
+
+      // core metrics (optional in query)
+      score: getNum("score", null),
+      util: getNum("util", null),
+      negatives: getNum("negatives", 0),
+      lates: getNum("lates", 0),
+
+      inquiries: {
+        ex: getNum("inq_ex", 0),
+        tu: getNum("inq_tu", 0),
+        eq: getNum("inq_eq", 0),
+        total: getNum("inq_total", 0)
+      },
+
+      // no tradeline detail from redirect
+      cards: [],
+      loans: [],
+      aus: [],
+      addresses: [],
+
+      hasBusiness: getNum("business", 0) > 0,
+      businessAgeMonths: getNum("biz_age", 0),
+      highestLimit: getNum("highestLimit", 0),
+      highestLimitAgeMonths: 0,
+      thin: params.get("thin") === "1",
+
+      personalFunding: getNum("personal", 0),
+      businessFunding: getNum("business", 0),
+      totalFunding: getNum("total", null),
+      personalPotential: getNum("personalPotential", null),
+      businessPotential: getNum("businessPotential", null),
+      totalPotential: getNum("totalPotential", null)
+    };
+
+    if (n.totalFunding == null) {
+      n.totalFunding = (n.personalFunding || 0) + (n.businessFunding || 0);
+    }
+
     const classification = this.classify(n);
 
     return {
