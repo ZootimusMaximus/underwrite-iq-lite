@@ -1011,20 +1011,64 @@ module.exports = async function handler(req, res) {
     }
 
 // ---------------------------
-// Redirect Logic (FIXED)
+// Redirect Logic (Analyzer → Web pages)
 // ---------------------------
-const redirect = {
-  url: uw.fundable
-    ? "https://fundhub.ai/funding-approved-analyzer-462533"
-    : "https://fundhub.ai/fix-my-credit-analyzer",
-  query: {
-    bureau: uw.primary_bureau,
-    funding: uw.lite_banner_funding,
-    personal: uw.personal.total_personal_funding,
-    business: uw.business.business_funding,
-    total: uw.totals.total_combined_funding
-  }
-};
+const metrics    = uw.metrics    || {};
+const inquiries  = metrics.inquiries || {};
+const personal   = uw.personal   || {};
+const business   = uw.business   || {};
+const totals     = uw.totals     || {};
+
+// normalize numbers so we don't send weird null/undefined
+const safe = (v) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+
+let redirect;
+
+if (uw.fundable) {
+  // ✅ APPROVED → Funding Approved page
+  redirect = {
+    url: "https://fundhub.ai/funding-approved-analyzer-462533",
+    query: {
+      // main funding numbers for approval page
+      personalTotal: safe(personal.total_personal_funding),
+      businessTotal: safe(business.business_funding),
+      totalCombined: safe(totals.total_combined_funding),
+      funding:       safe(uw.lite_banner_funding),
+
+      // score + risk metrics
+      score: metrics.score ?? null,
+      util:  metrics.utilization_pct ?? null,
+      neg:   metrics.negative_accounts ?? 0,
+      late:  metrics.late_payment_events ?? 0,
+
+      // inquiry breakdown
+      inqEx: safe(inquiries.ex),
+      inqTu: safe(inquiries.tu),
+      inqEq: safe(inquiries.eq)
+    }
+  };
+} else {
+  // 🔧 REPAIR → Fix My Credit page
+  redirect = {
+    url: "https://fundhub.ai/fix-my-credit-analyzer",
+    query: {
+      // repair page wants “potential after repair”
+      personalPotential: safe(personal.total_personal_funding),
+      businessPotential: safe(business.business_funding),
+      totalPotential:    safe(totals.total_combined_funding),
+
+      // also feed these so “Negative Items / Late / Score” show real values
+      score: metrics.score ?? null,
+      util:  metrics.utilization_pct ?? null,
+      neg:   metrics.negative_accounts ?? 0,
+      late:  metrics.late_payment_events ?? 0,
+
+      inqEx: safe(inquiries.ex),
+      inqTu: safe(inquiries.tu),
+      inqEq: safe(inquiries.eq)
+    }
+  };
+}
 
     // ---------------------------
     // SUCCESS RESPONSE
