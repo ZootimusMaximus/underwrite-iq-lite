@@ -1,161 +1,265 @@
 // ============================================================================
-// UnderwriteIQ — AI Gatekeeper (gpt-4o-mini)
+// UnderwriteIQ — SWITCHBOARD (Stage 2: Validation + AI Gate + Parse + Merge)
 // ----------------------------------------------------------------------------
-// Purpose:
-//   A cheap classifier to reject obvious NON–credit reports BEFORE expensive
-//   GPT-4.1 Vision parsing.
-//
-// Responsibilities:
-//   ✔ Detect obvious fake PDF uploads
-//   ✔ Detect bank statements, IDs, screenshots, tax forms, blank docs
-//   ✔ Detect “not a credit report”
-//   ✔ Return STRICT JSON only
-//   ✔ Fail open (do NOT block) if AI check fails unexpectedly
-//
-// NOTES:
-//   - gpt-4o-mini costs ~1/20th of Vision
-//   - Only first ~200 KB of PDF is sent
-//   - This is SAFE and DOES NOT affect parse quality
-//
-// Use:
-//   const { aiGateCheck } = require("./ai-gatekeeper");
-//   const gate = await aiGateCheck(buffer, filename);
-//
-//   if (!gate.ok) reject upload early.
-// ============================================================================
 
-function extractTextFromResponse(r) {
-  if (!r) return null;
+const fs = require("fs");
+const formidable = require("formidable");
 
-  if (r.output_text && typeof r.output_text === "string") {
-    return r.output_text.trim();
+const { validateReports } = require("./validate-reports");
+const { aiGateCheck } = require("./ai-gatekeeper");
+const { computeUnderwrite, getNumberField } = require("./underwriter");
+
+const PARSE_ENDPOINT =
+  process.env.PARSE_ENDPOINT ||
+  "https://underwrite-iq-lite.vercel.app/api/lite/parse-report";
+
+const MIN_PDF_BYTES = 40 * 1024;
+
+// Safe number for URLs
+function safeNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// GPT-4.1 parser call
+async function callParseReport(buffer, filename) {
+  const formData = new FormData();
+  const blob = new Blob([buffer], { type: "application/pdf" });
+  formData.append("file", blob, filename || "report.pdf");
+
+  const resp = await fetch(PARSE_ENDPOINT, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`parse-report HTTP error: ${resp.status} ${text}`);
   }
 
-  if (Array.isArray(r.output)) {
-    for (const msg of r.output) {
-      if (!msg || !Array.isArray(msg.content)) continue;
-      for (const block of msg.content) {
-        if (block.type === "output_text" && typeof block.text === "string") {
-          return block.text.trim();
-        }
+  return await resp.json();
+}
+
+// Extract bureaus present in parsed output
+function detectBureauCodes(parsed) {
+  const out = [];
+  if (!parsed || !parsed.bureaus) return out;
+  const b = parsed.bureaus;
+
+  if (b.experian) out.push("EX");
+  if (b.equifax) out.push("EQ");
+  if (b.transunion) out.push("TU");
+
+  return out;
+}
+
+// Prevent duplicate bureaus across reports
+function mergeBureausOrThrow(parsedResults) {
+  const final = { experian: null, equifax: null, transunion: null };
+  const seen = { EX: false, EQ: false, TU: false };
+
+  for (const parsed of parsedResults) {
+    if (!parsed || !parsed.ok || !parsed.bureaus) {
+      throw new Error("One of the reports could not be parsed.");
+    }
+
+    const b = parsed.bureaus;
+    const codes = detectBureauCodes(parsed);
+
+    if (codes.length === 0) {
+      throw new Error("One uploaded PDF does not contain recognizable bureaus.");
+    }
+
+    for (const code of codes) {
+      if (code === "EX") {
+        if (seen.EX) throw new Error("Duplicate Experian detected.");
+        seen.EX = true;
+        final.experian = b.experian;
+      }
+      if (code === "EQ") {
+        if (seen.EQ) throw new Error("Duplicate Equifax detected.");
+        seen.EQ = true;
+        final.equifax = b.equifax;
+      }
+      if (code === "TU") {
+        if (seen.TU) throw new Error("Duplicate TransUnion detected.");
+        seen.TU = true;
+        final.transunion = b.transunion;
       }
     }
   }
 
-  if (r.choices?.[0]?.message?.content) {
-    return String(r.choices[0].message.content).trim();
+  if (!final.experian && !final.equifax && !final.transunion) {
+    throw new Error("No valid bureaus found.");
   }
 
-  return null;
+  return final;
 }
 
-async function aiGateCheck(buffer, filename) {
+// ============================================================================
+// MAIN HANDLER
+// ============================================================================
+module.exports = async function handler(req, res) {
   try {
-    const key = process.env.UNDERWRITE_IQ_VISION_KEY;
-    if (!key) {
-      return { ok: true, reason: "No AI key configured; skipped." };
+    // CORS
+    if (req.method === "OPTIONS") {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      return res.status(200).end();
+    }
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
+    if (req.method !== "POST") {
+      return res.status(405).json({ ok: false, msg: "Method not allowed" });
     }
 
-    // Only send beginning of PDF (cheap + safer)
-    const base64 = buffer.toString("base64");
-    const head = base64.slice(0, 200_000); // ~200 KB
-    const dataUrl = `data:application/pdf;base64,${head}`;
-    const safeName = filename || "report.pdf";
-
-    const systemPrompt = `
-You are a strict classifier for a credit report analyzer.
-
-You MUST decide whether an uploaded PDF is a REAL consumer credit report
-from Experian, Equifax, TransUnion, or tri-merge.
-
-Return STRICT JSON ONLY in this schema:
-
-{
-  "likely_credit_report": true | false,
-  "reason": "short explanation",
-  "suspected_bureaus": ["experian" | "equifax" | "transunion"] | []
-}
-
-Rules:
-- If content looks like bank statements, paystubs, IDs, letters, tax docs,
-  or random screenshots → likely_credit_report = false.
-- If layout, headers, terminology match credit reports → true.
-- NEVER output anything except the JSON object.
-`;
-
-    const body = {
-      model: "gpt-4o-mini",
-      input: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: [
-            { type: "input_text", text: "Classify this PDF upload." },
-            {
-              type: "input_file",
-              filename: safeName,
-              file_data: dataUrl
-            }
-          ]
-        }
-      ],
-      temperature: 0,
-      max_output_tokens: 300
-    };
-
-    const resp = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
+    // Parse incoming form-data
+    const form = formidable({
+      multiples: true,
+      keepExtensions: true,
+      uploadDir: "/tmp",
+      maxFileSize: 25 * 1024 * 1024
     });
 
-    if (!resp.ok) {
-      // AI check failed → DO NOT BLOCK → fail open
-      return { ok: true, reason: "AI gate network error; skipped." };
+    const { files, fields } = await new Promise((resolve, reject) =>
+      form.parse(req, (err, flds, fls) =>
+        err ? reject(err) : resolve({ fields: flds, files: fls })
+      )
+    );
+
+    let rawFiles = files && files.file;
+    let fileList = Array.isArray(rawFiles) ? rawFiles : rawFiles ? [rawFiles] : [];
+
+    // ========================================================================
+    // STAGE 1 — STRUCTURAL VALIDATION (cheap)
+    // ========================================================================
+    const validation = await validateReports(fileList);
+    if (!validation.ok) {
+      return res.status(200).json({ ok: false, msg: validation.reason });
+    }
+    const validatedFiles = validation.files || fileList;
+
+    if (!validatedFiles.length) {
+      return res.status(200).json({ ok: false, msg: "No valid PDFs." });
     }
 
-    const json = await resp.json();
-    const txt = extractTextFromResponse(json);
+    // ========================================================================
+    // STAGE 1.5 — AI GATEKEEPER (cheap GPT-4o-mini)
+    // ========================================================================
+    for (const f of validatedFiles) {
+      const buf = await fs.promises.readFile(f.filepath);
 
-    if (!txt) {
-      return { ok: true, reason: "AI gate empty response; skipped." };
+      const gate = await aiGateCheck(buf, f.originalFilename);
+
+      // If gatekeeper explicitly rejects → stop now
+      if (!gate.ok) {
+        return res.status(200).json({
+          ok: false,
+          msg: gate.reason || "File rejected by AI gatekeeper."
+        });
+      }
     }
 
-    let verdict;
+    // ========================================================================
+    // STAGE 2 — EXPENSIVE GPT-4.1 PARSE (run ONLY after gatekeeper)
+    // ========================================================================
+    const parsedResults = [];
+    for (const f of validatedFiles) {
+      const buf = await fs.promises.readFile(f.filepath);
+
+      if (buf.length < MIN_PDF_BYTES) {
+        return res.status(200).json({
+          ok: false,
+          msg: "One PDF is too small or corrupted."
+        });
+      }
+
+      const parsed = await callParseReport(buf, f.originalFilename);
+      parsedResults.push(parsed);
+    }
+
+    // ========================================================================
+    // STAGE 3 — BUREAU MERGE VALIDATION
+    // ========================================================================
+    let mergedBureaus;
     try {
-      verdict = JSON.parse(txt);
+      mergedBureaus = mergeBureausOrThrow(parsedResults);
     } catch (err) {
-      // AI returned weird stuff → DO NOT BLOCK
-      return { ok: true, reason: "AI gate JSON parse failed; skipped." };
+      return res.status(200).json({ ok: false, msg: err.message });
     }
 
-    const likely = !!verdict.likely_credit_report;
-    const reason = String(verdict.reason || "").slice(0, 300);
+    // ========================================================================
+    // STAGE 4 — UNDERWRITING
+    // ========================================================================
+    const businessAgeMonths = getNumberField(fields, "businessAgeMonths");
+    const uw = computeUnderwrite(mergedBureaus, businessAgeMonths);
 
-    if (!likely) {
-      return {
-        ok: false,
-        reason:
-          reason ||
-          "This file does not appear to be a real consumer credit report."
-      };
-    }
+    const p = uw.personal || {};
+    const b = uw.business || {};
+    const t = uw.totals || {};
+    const m = uw.metrics || {};
+    const inq = m.inquiries || {};
+    const opt = uw.optimization || {};
 
-    return {
-      ok: true,
-      reason: reason || "Looks like a real credit report.",
-      suspected_bureaus: verdict.suspected_bureaus || []
+    // ========================================================================
+    // STAGE 5 — SUGGESTION CARDS
+    // ========================================================================
+    const suggestionCards = [];
+
+    if (opt.needs_util_reduction) suggestionCards.push("util_high");
+    if (opt.needs_new_primary_revolving) suggestionCards.push("needs_revolving");
+    if (opt.needs_inquiry_cleanup) suggestionCards.push("inquiries");
+    if (opt.needs_negative_cleanup) suggestionCards.push("negatives");
+    if (opt.needs_file_buildout || opt.thin_file || opt.file_all_negative)
+      suggestionCards.push("build_file");
+
+    // ========================================================================
+    // STAGE 6 — FRONTEND QUERY
+    // ========================================================================
+    const query = {
+      personalTotal: safeNum(p.total_personal_funding),
+      businessTotal: safeNum(b.business_funding),
+      totalCombined: safeNum(t.total_combined_funding),
+
+      score: safeNum(m.score),
+      util: safeNum(m.utilization_pct),
+
+      inqEx: safeNum(inq.ex),
+      inqTu: safeNum(inq.tu),
+      inqEq: safeNum(inq.eq),
+
+      neg: safeNum(m.negative_accounts),
+      late: safeNum(m.late_payment_events)
     };
-  } catch (err) {
-    console.error("AI_GATEKEEPER ERROR:", err);
-    // Fail open to avoid blocking
-    return { ok: true, reason: "AI gate exception; skipped." };
-  }
-}
 
-module.exports = {
-  aiGateCheck
+    // ========================================================================
+    // STAGE 7 — REDIRECT
+    // ========================================================================
+    const redirect = {};
+
+    if (uw.fundable) {
+      redirect.url = "https://fundhub.ai/funding-approved-analyzer-462533";
+    } else {
+      redirect.url = "https://fundhub.ai/fix-my-credit-analyzer";
+    }
+    redirect.query = query;
+
+    // ========================================================================
+    // RESPONSE
+    // ========================================================================
+    return res.status(200).json({
+      ok: true,
+      parsed: parsedResults,
+      bureaus: mergedBureaus,
+      underwrite: uw,
+      optimization: opt,
+      cards: suggestionCards,
+      redirect
+    });
+
+  } catch (err) {
+    console.error("SWITCHBOARD ERROR:", err);
+    return res.status(200).json({ ok: false, msg: "System error in switchboard." });
+  }
 };
