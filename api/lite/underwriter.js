@@ -323,7 +323,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
       total_combined_funding: totalCombinedFunding
     },
     optimization,
-    lite_banner_funding
+    lite_banner_funding: liteBannerFunding // ✅ FIXED
   };
 }
 
