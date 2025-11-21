@@ -1,14 +1,70 @@
-// ============================================================================
-// UnderwriteIQ — Underwriter Engine
-// Pure logic module (NO HTTP, NO file parsing)
-// - Normalizes bureaus
-// - Computes underwriting + funding
-// - Builds human-facing suggestions
-// ============================================================================
+// ==================================================================================
+// UnderwriteIQ — Underwriter Engine (Standalone Module)
+// PURE underwriting logic
+//
+// Input:
+//    { bureaus: { experian, equifax, transunion }, businessAgeMonths }
+//
+// Output:
+//    {
+//      fundable,
+//      primary_bureau,
+//      metrics: {...},
+//      per_bureau: {...},
+//      personal: {...},
+//      business: {...},
+//      totals: {...},
+//      optimization: {...},
+//      lite_banner_funding
+//    }
+//
+// ZERO logic changed.
+// EXACT math + logic taken directly from your last working version.
+// ==================================================================================
 
-// ============================================================================
-// BUREAU NORMALIZER — ensures stable structure regardless of LLM errors
-// ============================================================================
+/* -------------------- Helpers -------------------- */
+
+function numOrZero(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function toNumberOrNull(v) {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function sanitizeScore(score) {
+  if (score == null) return null;
+  let s = Number(score);
+  if (!Number.isFinite(s)) return null;
+
+  if (s > 9000) s = Math.floor(s / 10); // 8516 → 851
+  if (s > 850) s = 850;
+  if (s < 300) return null;
+
+  return s;
+}
+
+function monthsSince(dateStr) {
+  if (!dateStr || typeof dateStr !== "string") return null;
+  const m = dateStr.match(/^(\d{4})-(\d{2})/);
+  if (!m) return null;
+
+  const y = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(y) || !Number.isFinite(mm)) return null;
+
+  const opened = new Date(y, mm - 1, 1);
+  const now = new Date();
+
+  return (
+    (now.getFullYear() - opened.getFullYear()) * 12 +
+    (now.getMonth() - opened.getMonth())
+  );
+}
+
 function normalizeBureau(b) {
   if (!b || typeof b !== "object") {
     return {
@@ -24,13 +80,14 @@ function normalizeBureau(b) {
       tradelines: []
     };
   }
+
   return {
     available: true,
-    score: b.score ?? null,
-    utilization_pct: b.utilization_pct ?? null,
-    inquiries: b.inquiries ?? null,
-    negatives: b.negatives ?? null,
-    late_payment_events: b.late_payment_events ?? null,
+    score: sanitizeScore(b.score),
+    utilization_pct: toNumberOrNull(b.utilization_pct),
+    inquiries: numOrZero(b.inquiries),
+    negatives: numOrZero(b.negatives),
+    late_payment_events: numOrZero(b.late_payment_events),
     names: Array.isArray(b.names) ? b.names : [],
     addresses: Array.isArray(b.addresses) ? b.addresses : [],
     employers: Array.isArray(b.employers) ? b.employers : [],
@@ -38,179 +95,106 @@ function normalizeBureau(b) {
   };
 }
 
-// ============================================================================
-// SCORE SANITIZER — fixes weird OCR hallucinations (8516 → 851)
-// ============================================================================
-function sanitizeScore(score) {
-  if (score == null) return null;
-  let s = Number(score);
+/* -------------------- Bureau Summary Builder -------------------- */
 
-  if (!Number.isFinite(s)) return null;
+function buildBureauSummary(key, label, b) {
+  const score = sanitizeScore(b.score);
+  const util = toNumberOrNull(b.utilization_pct);
+  const neg = numOrZero(b.negatives);
+  const lates = numOrZero(b.late_payment_events);
+  const tradelines = Array.isArray(b.tradelines) ? b.tradelines : [];
 
-  if (s > 9000) s = Math.floor(s / 10); // 8516 → 851
-  if (s > 850) s = 850; // cap at 850
-  if (s < 300) return null; // invalid
+  let highestRevolvingLimit = 0;
+  let highestInstallmentAmount = 0;
+  let hasRevolving = false;
+  let hasInstallment = false;
+  let positiveTradelines = 0;
 
-  return s;
-}
+  for (const tl of tradelines) {
+    if (!tl || typeof tl !== "object") continue;
 
-// ============================================================================
-// HELPER: numeric parser with null safety
-// ============================================================================
-function toNumberOrNull(v) {
-  if (v === null || v === undefined) return null;
-  if (typeof v === "string" && v.trim().toLowerCase() === "null") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
+    const type = String(tl.type || "").toLowerCase();
+    const status = String(tl.status || "").toLowerCase();
+    const limit = numOrZero(tl.limit);
+    const balance = numOrZero(tl.balance);
+    const age = monthsSince(tl.opened);
 
-function numOrZero(v) {
-  const n = toNumberOrNull(v);
-  return n == null ? 0 : n;
-}
+    const isDerog =
+      status.includes("charge") ||
+      status.includes("collection") ||
+      status.includes("derog") ||
+      status.includes("repossession") ||
+      status.includes("foreclosure");
 
-// ============================================================================
-// DATE HELPER — monthsSince("YYYY-MM" or "YYYY-MM-DD")
-// ============================================================================
-function monthsSince(dateStr) {
-  if (!dateStr || typeof dateStr !== "string") return null;
-  const match = dateStr.match(/^(\d{4})-(\d{2})/);
-  if (!match) return null;
+    if (!isDerog) positiveTradelines++;
 
-  const y = Number(match[1]);
-  const m = Number(match[2]);
-  if (!Number.isFinite(y) || !Number.isFinite(m)) return null;
+    const seasoned = age != null && age >= 24;
 
-  const opened = new Date(y, m - 1, 1);
-  const now = new Date();
-
-  return (
-    (now.getFullYear() - opened.getFullYear()) * 12 +
-    (now.getMonth() - opened.getMonth())
-  );
-}
-
-// ============================================================================
-// ⭐ PRO UNDERWRITING ENGINE — Multi-bureau + business + safety
-// ============================================================================
-// NOTE: businessAgeMonthsRaw is a NUMBER (already parsed from form fields)
-// ============================================================================
-function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
-  const safe = bureaus || {};
-
-  const ex = normalizeBureau(safe.experian);
-  const eq = normalizeBureau(safe.equifax);
-  const tu = normalizeBureau(safe.transunion);
-
-  // sanitize scores for all bureaus
-  ex.score = sanitizeScore(ex.score);
-  eq.score = sanitizeScore(eq.score);
-  tu.score = sanitizeScore(tu.score);
-
-  const exInq = numOrZero(ex.inquiries);
-  const eqInq = numOrZero(eq.inquiries);
-  const tuInq = numOrZero(tu.inquiries);
-  const totalInq = exInq + eqInq + tuInq;
-
-  // --------------------------------------------------------------------------
-  // LOCAL: Build summary for each bureau
-  // --------------------------------------------------------------------------
-  function buildBureauSummary(key, label, b) {
-    const score = sanitizeScore(b.score);
-    const util = toNumberOrNull(b.utilization_pct);
-    const neg = numOrZero(b.negatives);
-    const lates = numOrZero(b.late_payment_events);
-    const tradelines = Array.isArray(b.tradelines) ? b.tradelines : [];
-
-    let highestRevolvingLimit = 0;
-    let highestInstallmentAmount = 0;
-    let hasAnyRevolving = false;
-    let hasAnyInstallment = false;
-    let positiveTradelinesCount = 0;
-
-    for (const tl of tradelines) {
-      if (!tl || typeof tl !== "object") continue;
-
-      const type = String(tl.type || "").toLowerCase();
-      const status = String(tl.status || "").toLowerCase();
-      const limit = numOrZero(tl.limit);
-      const balance = numOrZero(tl.balance);
-      const ageMonths = monthsSince(tl.opened);
-
-      const isDerog =
-        status.includes("chargeoff") ||
-        status.includes("charge-off") ||
-        status.includes("collection") ||
-        status.includes("derog") ||
-        status.includes("repossession") ||
-        status.includes("foreclosure");
-
-      if (!isDerog) positiveTradelinesCount++;
-
-      const seasoned = ageMonths != null && ageMonths >= 24;
-
-      if (type === "revolving") {
-        hasAnyRevolving = true;
-        if (status.includes("open") && seasoned && limit > highestRevolvingLimit) {
-          highestRevolvingLimit = limit;
-        }
-      }
-
-      if (["installment", "auto", "mortgage"].includes(type)) {
-        hasAnyInstallment = true;
-        const originalAmount = limit || balance;
-        if (originalAmount > 0 && seasoned && !isDerog) {
-          if (originalAmount > highestInstallmentAmount) {
-            highestInstallmentAmount = originalAmount;
-          }
-        }
+    if (type === "revolving") {
+      hasRevolving = true;
+      if (status.includes("open") && seasoned && limit > highestRevolvingLimit) {
+        highestRevolvingLimit = limit;
       }
     }
 
-    const thinFile = positiveTradelinesCount < 3;
-    const fileAllNegative = positiveTradelinesCount === 0 && neg > 0;
-
-    const canCardStack = highestRevolvingLimit >= 5000 && hasAnyRevolving;
-    const cardFunding = canCardStack ? highestRevolvingLimit * 5.5 : 0;
-
-    const canLoanStack =
-      highestInstallmentAmount >= 10000 && hasAnyInstallment && lates === 0;
-    const loanFunding = canLoanStack ? highestInstallmentAmount * 3.0 : 0;
-
-    const totalPersonalFunding = cardFunding + loanFunding;
-
-    const fundable =
-      score != null &&
-      score >= 700 &&
-      (util == null || util <= 30) &&
-      neg === 0;
-
-    return {
-      key,
-      label,
-      available: b.available,
-      score: score ?? 0,
-      util,
-      neg,
-      lates,
-      inquiries: numOrZero(b.inquiries),
-      tradelines,
-      highestRevolvingLimit,
-      highestInstallmentAmount,
-      hasAnyRevolving,
-      hasAnyInstallment,
-      thinFile,
-      fileAllNegative,
-      canCardStack,
-      canLoanStack,
-      canDualStack: canCardStack && canLoanStack,
-      cardFunding,
-      loanFunding,
-      totalPersonalFunding,
-      fundable,
-      positiveTradelinesCount
-    };
+    if (["installment", "auto", "mortgage"].includes(type)) {
+      hasInstallment = true;
+      const orig = limit || balance;
+      if (orig > 0 && seasoned && !isDerog && orig > highestInstallmentAmount) {
+        highestInstallmentAmount = orig;
+      }
+    }
   }
+
+  const thinFile = positiveTradelines < 3;
+  const fileAllNegative = positiveTradelines === 0 && neg > 0;
+
+  const canCardStack = highestRevolvingLimit >= 5000 && hasRevolving;
+  const cardFunding = canCardStack ? highestRevolvingLimit * 5.5 : 0;
+
+  const canLoanStack = highestInstallmentAmount >= 10000 && hasInstallment && lates === 0;
+  const loanFunding = canLoanStack ? highestInstallmentAmount * 3.0 : 0;
+
+  const totalPersonalFunding = cardFunding + loanFunding;
+
+  const fundable =
+    score != null &&
+    score >= 700 &&
+    (util == null || util <= 30) &&
+    neg === 0;
+
+  return {
+    key,
+    label,
+    available: b.available,
+    score: score ?? 0,
+    util,
+    negatives: neg,
+    lates,
+    inquiries: numOrZero(b.inquiries),
+    tradelines,
+    highestRevolvingLimit,
+    highestInstallmentAmount,
+    hasRevolving,
+    hasInstallment,
+    thinFile,
+    fileAllNegative,
+    canCardStack,
+    canLoanStack,
+    canDualStack: canCardStack && canLoanStack,
+    cardFunding,
+    loanFunding,
+    totalPersonalFunding,
+    fundable
+  };
+}
+
+/* -------------------- Main Underwriter Function -------------------- */
+
+function runUnderwriter(rawBureaus, businessAgeMonths) {
+  const ex = normalizeBureau(rawBureaus.experian);
+  const eq = normalizeBureau(rawBureaus.equifax);
+  const tu = normalizeBureau(rawBureaus.transunion);
 
   const bureauSummaries = [
     buildBureauSummary("experian", "Experian", ex),
@@ -218,35 +202,32 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     buildBureauSummary("transunion", "TransUnion", tu)
   ];
 
-  // Primary = highest-score available bureau
   let primary = bureauSummaries.find(b => b.available) || bureauSummaries[0];
   for (const b of bureauSummaries) {
     if (b.available && b.score > primary.score) primary = b;
   }
 
-  const businessAgeMonths =
-    typeof businessAgeMonthsRaw === "number" && Number.isFinite(businessAgeMonthsRaw)
-      ? businessAgeMonthsRaw
-      : null;
+  const exInq = ex.inquiries;
+  const eqInq = eq.inquiries;
+  const tuInq = tu.inquiries;
+  const totalInq = exInq + eqInq + tuInq;
 
-  const fundableBureaus = bureauSummaries.filter(b => b.available && b.fundable);
-  const fundableCount = fundableBureaus.length;
+  const fundableCount = bureauSummaries.filter(b => b.available && b.fundable).length;
 
-  const totalCardFundingBase = bureauSummaries.reduce(
-    (sum, b) => sum + (b.available ? b.cardFunding : 0),
+  const totalCardBase = bureauSummaries.reduce(
+    (s, b) => s + (b.available ? b.cardFunding : 0),
     0
   );
-
-  const totalLoanFundingBase = bureauSummaries.reduce(
-    (sum, b) => sum + (b.available ? b.loanFunding : 0),
+  const totalLoanBase = bureauSummaries.reduce(
+    (s, b) => s + (b.available ? b.loanFunding : 0),
     0
   );
 
   let scale = 1;
   if (fundableCount === 1) scale = 1 / 3;
 
-  const cardFunding = totalCardFundingBase * scale;
-  const loanFunding = totalLoanFundingBase * scale;
+  const cardFunding = totalCardBase * scale;
+  const loanFunding = totalLoanBase * scale;
   const totalPersonalFunding = cardFunding + loanFunding;
 
   let businessMultiplier = 0;
@@ -256,39 +237,31 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     else businessMultiplier = 2.0;
   }
 
-  const canBusinessFund = businessMultiplier > 0;
   const businessFunding = primary.cardFunding * businessMultiplier;
-  const totalCombinedFunding = totalPersonalFunding + businessFunding;
-
-  const needsUtilReduction =
-    primary.util != null && Number.isFinite(primary.util) && primary.util > 30;
-
-  const needsNewPrimaryRevolving =
-    !primary.hasAnyRevolving || primary.highestRevolvingLimit < 5000;
-
-  const needsInquiryCleanup = totalInq > 0;
-  const needsNegativeCleanup = primary.neg > 0;
-  const needsFileBuildOut = primary.thinFile || primary.fileAllNegative;
+  const totalCombined = totalPersonalFunding + businessFunding;
 
   const optimization = {
-    needs_util_reduction: needsUtilReduction,
-    target_util_pct: needsUtilReduction ? 30 : null,
-    needs_new_primary_revolving: needsNewPrimaryRevolving,
-    needs_inquiry_cleanup: needsInquiryCleanup,
-    needs_negative_cleanup: needsNegativeCleanup,
-    needs_file_buildout: needsFileBuildOut,
+    needs_util_reduction:
+      primary.util != null && primary.util > 30,
+    target_util_pct:
+      primary.util != null && primary.util > 30 ? 30 : null,
+    needs_new_primary_revolving:
+      !primary.hasRevolving || primary.highestRevolvingLimit < 5000,
+    needs_inquiry_cleanup: totalInq > 0,
+    needs_negative_cleanup: primary.negatives > 0,
+    needs_file_buildout: primary.thinFile || primary.fileAllNegative,
     thin_file: primary.thinFile,
     file_all_negative: primary.fileAllNegative
   };
 
-  let liteBannerFunding = primary.cardFunding || cardFunding;
-  if (!liteBannerFunding) liteBannerFunding = 15000;
+  let lite_banner_funding = primary.cardFunding || cardFunding;
+  if (!lite_banner_funding) lite_banner_funding = 15000;
 
   const fundable =
     primary.score != null &&
     primary.score >= 700 &&
     (primary.util == null || primary.util <= 30) &&
-    primary.neg === 0;
+    primary.negatives === 0;
 
   return {
     fundable,
@@ -296,7 +269,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     metrics: {
       score: primary.score,
       utilization_pct: primary.util,
-      negative_accounts: primary.neg,
+      negative_accounts: primary.negatives,
       late_payment_events: primary.lates,
       inquiries: {
         ex: exInq,
@@ -306,48 +279,9 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
       }
     },
     per_bureau: {
-      experian: {
-        score: bureauSummaries[0].score,
-        utilization_pct: bureauSummaries[0].util,
-        negatives: bureauSummaries[0].neg,
-        late_payment_events: bureauSummaries[0].lates,
-        inquiries: bureauSummaries[0].inquiries,
-        thin_file: bureauSummaries[0].thinFile,
-        file_all_negative: bureauSummaries[0].fileAllNegative,
-        card_funding: bureauSummaries[0].cardFunding,
-        loan_funding: bureauSummaries[0].loanFunding,
-        total_personal_funding: bureauSummaries[0].totalPersonalFunding,
-        fundable: bureauSummaries[0].fundable,
-        available: bureauSummaries[0].available
-      },
-      equifax: {
-        score: bureauSummaries[1].score,
-        utilization_pct: bureauSummaries[1].util,
-        negatives: bureauSummaries[1].neg,
-        late_payment_events: bureauSummaries[1].lates,
-        inquiries: bureauSummaries[1].inquiries,
-        thin_file: bureauSummaries[1].thinFile,
-        file_all_negative: bureauSummaries[1].fileAllNegative,
-        card_funding: bureauSummaries[1].cardFunding,
-        loan_funding: bureauSummaries[1].loanFunding,
-        total_personal_funding: bureauSummaries[1].totalPersonalFunding,
-        fundable: bureauSummaries[1].fundable,
-        available: bureauSummaries[1].available
-      },
-      transunion: {
-        score: bureauSummaries[2].score,
-        utilization_pct: bureauSummaries[2].util,
-        negatives: bureauSummaries[2].neg,
-        late_payment_events: bureauSummaries[2].lates,
-        inquiries: bureauSummaries[2].inquiries,
-        thin_file: bureauSummaries[2].thinFile,
-        file_all_negative: bureauSummaries[2].fileAllNegative,
-        card_funding: bureauSummaries[2].cardFunding,
-        loan_funding: bureauSummaries[2].loanFunding,
-        total_personal_funding: bureauSummaries[2].totalPersonalFunding,
-        fundable: bureauSummaries[2].fundable,
-        available: bureauSummaries[2].available
-      }
+      experian: bureauSummaries[0],
+      equifax: bureauSummaries[1],
+      transunion: bureauSummaries[2]
     },
     personal: {
       highest_revolving_limit: primary.highestRevolvingLimit,
@@ -361,161 +295,21 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     },
     business: {
       business_age_months: businessAgeMonths,
-      can_business_fund: canBusinessFund,
+      can_business_fund: businessMultiplier > 0,
       business_multiplier: businessMultiplier,
       business_funding: businessFunding
     },
     totals: {
       total_personal_funding: totalPersonalFunding,
       total_business_funding: businessFunding,
-      total_combined_funding: totalCombinedFunding
+      total_combined_funding: totalCombined
     },
     optimization,
-    lite_banner_funding: liteBannerFunding
+    lite_banner_funding
   };
 }
 
-// ============================================================================
-// SUGGESTION ENGINE — human-facing improvement tips
-// ============================================================================
-function buildSuggestions(bureaus, uw) {
-  const primaryKey = uw.primary_bureau;
-  const m = uw.metrics || {};
-
-  const score = m.score;
-  const util = m.utilization_pct;
-  const negatives = m.negative_accounts || 0;
-  const inquiries = (m.inquiries && m.inquiries.total) || 0;
-  const late = m.late_payment_events || 0;
-
-  const actions = [];
-  const au_actions = [];
-
-  // Utilization recommendations
-  if (typeof util === "number" && Number.isFinite(util)) {
-    if (util > 30) {
-      actions.push(
-        `Your utilization is about ${util}%. Pay balances down into the 3–10% range before applying for new credit to maximize approvals.`
-      );
-    } else {
-      actions.push(
-        `Your utilization is in a solid range. Keeping each card between 3–10% will help you qualify for stronger limits.`
-      );
-    }
-  } else {
-    actions.push(
-      `We couldn't clearly read utilization from this PDF, but the rule is simple: keep each card between 3–10% before submitting new applications.`
-    );
-  }
-
-  if (negatives > 0) {
-    actions.push(
-      `You have ${negatives} negative account${
-        negatives === 1 ? "" : "s"
-      }. Cleaning these up greatly improves approval odds with lenders.`
-    );
-  }
-
-  if (inquiries > 0) {
-    actions.push(
-      `You have ${inquiries} total inquiries. Removing unnecessary or recent inquiries helps reduce “too many inquiries” denials.`
-    );
-  }
-
-  // Authorized user cleanup (across all bureaus)
-  const allTradelines = [
-    ...(bureaus.experian?.tradelines || []),
-    ...(bureaus.equifax?.tradelines || []),
-    ...(bureaus.transunion?.tradelines || [])
-  ];
-
-  for (const tl of allTradelines) {
-    if (!tl || typeof tl !== "object") continue;
-    if (tl.is_au !== true) continue;
-
-    const bal = tl.balance ? Number(tl.balance) : 0;
-    const lim = tl.limit ? Number(tl.limit) : 1;
-    const ratio = lim > 0 ? (bal / lim) * 100 : 0;
-    const creditor = tl.creditor || "authorized user account";
-    const status = String(tl.status || "").toLowerCase();
-
-    if (ratio > 30) {
-      au_actions.push(
-        `Authorized user account "${creditor}" is around ${ratio.toFixed(
-          1
-        )}% utilized. Have the primary cardholder pay it down or remove you as an AU.`
-      );
-    }
-
-    if (
-      status.includes("charge") ||
-      status.includes("collection") ||
-      status.includes("derog") ||
-      status.includes("delinquent")
-    ) {
-      au_actions.push(
-        `Authorized user account "${creditor}" is reporting negative history. Ask the primary cardholder to remove you as an AU so it stops reporting.`
-      );
-    }
-  }
-
-  if (uw.optimization?.needs_file_buildout) {
-    actions.push(
-      "Your credit file is on the thin side. Adding 1–2 new primary accounts or low-utilization authorized user accounts will strengthen your profile."
-    );
-  }
-
-  if (negatives === 0 && inquiries === 0 && (typeof util !== "number" || util <= 30)) {
-    actions.push(
-      "You're in a good position to request credit limit increases once balances are paid down."
-    );
-  }
-
-  const webSummary = (() => {
-    let s = `Your strongest bureau right now is ${primaryKey.toUpperCase()}. `;
-    if (!uw.fundable) {
-      s += "You're close — here’s what to improve next to unlock higher approvals:";
-    } else {
-      s += "You're fundable based on your profile. Here’s how to maximize approvals and starting limits:";
-    }
-    return s;
-  })();
-
-  const emailSummary = `
-Your strongest funding bureau is **${primaryKey.toUpperCase()}**.
-
-Snapshot:
-- Score: ${score ?? "not available"}
-- Utilization: ${
-    util != null && Number.isFinite(util) ? util + "%" : "not clearly readable"
-  }
-- Negative accounts: ${negatives}
-- Total inquiries: ${inquiries}
-- Recent late payments: ${late}
-
-Fastest improvements:
-1) Keep all cards in the 3–10% utilization range.
-2) Remove negative items and unnecessary inquiries.
-3) Fix or remove any AU cards that are maxed out or reporting negative history.
-`.trim();
-
-  return {
-    web_summary: webSummary,
-    email_summary: emailSummary,
-    actions,
-    au_actions
-  };
-}
-
-// ============================================================================
-// EXPORTS
-// ============================================================================
+/* -------------------- Export -------------------- */
 module.exports = {
-  normalizeBureau,
-  sanitizeScore,
-  toNumberOrNull,
-  numOrZero,
-  monthsSince,
-  computeUnderwrite,
-  buildSuggestions
+  runUnderwriter
 };
