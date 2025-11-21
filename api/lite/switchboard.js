@@ -13,15 +13,7 @@
 //   ✔ Merge all bureaus into one { experian, equifax, transunion } object
 //   ✔ Run computeUnderwrite(mergedBureaus, businessAgeMonths)
 //   ✔ Decide Approved vs Repair
-//   ✔ Return redirect object + minimal data for frontend
-//
-// NOT responsible for:
-//   ✖ Parsing PDFs directly (that's parse-report.js)
-//   ✖ Low-level file validation (that's validate-reports.js)
-//   ✖ UI changes
-//   ✖ Email / PDF generation (later)
-//
-// IMPORTANT: Do NOT change parse-report.js or underwriter.js.
+//   ✔ Return redirect object + data (including suggestion cards)
 // ============================================================================
 
 const fs = require("fs");
@@ -108,9 +100,8 @@ function mergeBureausOrThrow(parsedResults) {
     const b = parsed.bureaus;
     const codes = detectBureauCodes(parsed);
 
-    // If this file has no recognized bureaus at all, skip it (or treat as error)
+    // If this file has no recognized bureaus at all, error
     if (codes.length === 0) {
-      // You can choose to ignore or throw. Throw is safer.
       throw new Error(
         "One of the uploaded PDFs does not appear to contain a recognizable Experian, Equifax, or TransUnion section."
       );
@@ -177,7 +168,7 @@ module.exports = async function handler(req, res) {
 
     // ----- Parse multipart/form-data -----
     const form = formidable({
-      multiples: true,           // allow 1–3 files under the same "file" field
+      multiples: true, // allow 1–3 files under the same "file" field
       keepExtensions: true,
       uploadDir: "/tmp",
       maxFileSize: 25 * 1024 * 1024
@@ -254,6 +245,7 @@ module.exports = async function handler(req, res) {
     const t = uw.totals || {};
     const m = uw.metrics || {};
     const inq = m.inquiries || {};
+    const opt = uw.optimization || {};
 
     // ----- Stage 5: Build query params for frontend (minimal) -----
     const query = {
@@ -272,7 +264,30 @@ module.exports = async function handler(req, res) {
       late: safeNum(m.late_payment_events)
     };
 
-    // ----- Stage 6: Decide redirect -----
+    // ----- Stage 6: Suggestion cards (IF/THEN based on optimization flags) -----
+    const suggestionCards = [];
+
+    if (opt.needs_util_reduction) {
+      suggestionCards.push("util_high");
+    }
+
+    if (opt.needs_new_primary_revolving) {
+      suggestionCards.push("needs_revolving");
+    }
+
+    if (opt.needs_inquiry_cleanup) {
+      suggestionCards.push("inquiries");
+    }
+
+    if (opt.needs_negative_cleanup) {
+      suggestionCards.push("negatives");
+    }
+
+    if (opt.needs_file_buildout || opt.thin_file || opt.file_all_negative) {
+      suggestionCards.push("build_file");
+    }
+
+    // ----- Stage 7: Decide redirect -----
     const redirect = {};
 
     if (uw.fundable) {
@@ -290,10 +305,11 @@ module.exports = async function handler(req, res) {
     // ----- Final response -----
     return res.status(200).json({
       ok: true,
-      // You can strip parsedResults/mergedBureaus later if you want tighter gating
       parsed: parsedResults,
       bureaus: mergedBureaus,
       underwrite: uw,
+      optimization: opt,
+      cards: suggestionCards,
       redirect
     });
   } catch (err) {
