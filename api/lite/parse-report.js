@@ -1010,21 +1010,21 @@ module.exports = async function handler(req, res) {
       };
     }
 
-    // ---------------------------
-    // Redirect Logic
-    // ---------------------------
-    const redirect = {
-      url: uw.fundable
-        ? "https://fundhub.ai/confirmation-page-296844-430611"
-        : "https://fundhub.ai/confirmation-page-296844-430611-722950",
-      query: {
-        bureau: uw.primary_bureau,
-        funding: uw.lite_banner_funding,
-        personal: uw.personal.total_personal_funding,
-        business: uw.business.business_funding,
-        total: uw.totals.total_combined_funding
-      }
-    };
+// ---------------------------
+// Redirect Logic (FIXED)
+// ---------------------------
+const redirect = {
+  url: uw.fundable
+    ? "https://fundhub.ai/funding-approved-analyzer-462533"
+    : "https://fundhub.ai/fix-my-credit-analyzer",
+  query: {
+    bureau: uw.primary_bureau,
+    funding: uw.lite_banner_funding,
+    personal: uw.personal.total_personal_funding,
+    business: uw.business.business_funding,
+    total: uw.totals.total_combined_funding
+  }
+};
 
     // ---------------------------
     // SUCCESS RESPONSE
