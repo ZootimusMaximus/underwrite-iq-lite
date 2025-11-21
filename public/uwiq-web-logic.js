@@ -606,7 +606,9 @@ window.UWiq = {
       out.push(`- Business: $${b.toLocaleString()}`);
       out.push(`- Total: $${t.toLocaleString()}`);
     } else {
-      out.push("- Funding estimates will appear once credit mix is stronger.");
+      out.push(
+        "- Funding estimates will appear once credit mix is stronger."
+      );
     }
 
     return out.join("\n");
@@ -681,7 +683,7 @@ window.UWiq = {
   },
 
   /* ------------------------------------------------------------
-     15. MAIN EXPORT — full backend payload
+     15. MAIN EXPORT — full backend payload → display
      ------------------------------------------------------------ */
   buildDisplay(rawJson) {
     const n = this.normalize(rawJson);
@@ -743,13 +745,13 @@ window.UWiq = {
       // core metrics (optional in query)
       score: getNum("score", null),
       util: getNum("util", null),
-      negatives: getNum("negatives", 0),
-      lates: getNum("lates", 0),
+      negatives: getNum("negatives", 0) ?? getNum("neg", 0),
+      lates: getNum("lates", 0) ?? getNum("late", 0),
 
       inquiries: {
-        ex: getNum("inq_ex", 0),
-        tu: getNum("inq_tu", 0),
-        eq: getNum("inq_eq", 0),
+        ex: getNum("inq_ex", getNum("inqEx", 0)),
+        tu: getNum("inq_tu", getNum("inqTu", 0)),
+        eq: getNum("inq_eq", getNum("inqEq", 0)),
         total: getNum("inq_total", 0)
       },
 
@@ -765,9 +767,14 @@ window.UWiq = {
       highestLimitAgeMonths: 0,
       thin: params.get("thin") === "1",
 
-      personalFunding: getNum("personal", 0),
-      businessFunding: getNum("business", 0),
-      totalFunding: getNum("total", null),
+      // current funding (approval page)
+      personalFunding: getNum("personal", 0) ?? getNum("personalTotal", 0),
+      businessFunding: getNum("business", 0) ?? getNum("businessTotal", 0),
+      totalFunding:
+        getNum("total", null) ??
+        getNum("totalCombined", null),
+
+      // potential after repair (repair page)
       personalPotential: getNum("personalPotential", null),
       businessPotential: getNum("businessPotential", null),
       totalPotential: getNum("totalPotential", null)
@@ -784,6 +791,111 @@ window.UWiq = {
       mode: classification.mode,
       summaryText: this.buildDisplayBlock(n, classification),
       data: n
+    };
+  },
+
+  /* ------------------------------------------------------------
+     17. REDIRECT BUILDER — from normalized object "n"
+        Use this on the analyzer page AFTER parse-report
+        to build URLs for Approved / Repair pages.
+     ------------------------------------------------------------ */
+  buildRedirectFromNormalized(n) {
+    if (!n || !n.valid) {
+      return {
+        url: "https://fundhub.ai/fix-my-credit-analyzer",
+        query: {}
+      };
+    }
+
+    const safe = (v) =>
+      typeof v === "number" && Number.isFinite(v) ? v : 0;
+
+    const score = n.score ?? null;
+    const util  = n.util ?? null;
+    const neg   = n.negatives ?? 0;
+    const late  = n.lates ?? 0;
+
+    const inq = n.inquiries || {
+      ex: 0, tu: 0, eq: 0, total: 0
+    };
+
+    const personal = safe(n.personalFunding);
+    const business = safe(n.businessFunding);
+    const total    = safe(n.totalFunding);
+
+    const personalPotential = safe(n.personalPotential);
+    const businessPotential = safe(n.businessPotential);
+    const totalPotential    = safe(n.totalPotential);
+
+    // --------------------------------------------------------
+    // APPROVED → Funding Approved Page
+    // --------------------------------------------------------
+    if (n.fundable) {
+      return {
+        url: "https://fundhub.ai/funding-approved-analyzer-462533",
+        query: {
+          mode: "approved",
+
+          // For approval page JS
+          personalTotal: personal,
+          businessTotal: business,
+          totalCombined: total,
+          funding: total,
+
+          // Metrics for UI
+          score,
+          util,
+          neg,
+          late,
+
+          // Inquiries for UI
+          inqEx: safe(inq.ex),
+          inqTu: safe(inq.tu),
+          inqEq: safe(inq.eq),
+
+          // Also send the "UWiq tester" style keys
+          personal,
+          business,
+          total,
+          negatives: neg,
+          lates: late,
+          inq_ex: safe(inq.ex),
+          inq_tu: safe(inq.tu),
+          inq_eq: safe(inq.eq),
+          inq_total: safe(inq.total)
+        }
+      };
+    }
+
+    // --------------------------------------------------------
+    // REPAIR → Fix My Credit Page
+    // --------------------------------------------------------
+    return {
+      url: "https://fundhub.ai/fix-my-credit-analyzer",
+      query: {
+        mode: "repair",
+
+        // After-repair funding for repair page JS
+        personalPotential,
+        businessPotential,
+        totalPotential,
+
+        // Metrics for “Negative Items / Late / Score”
+        score,
+        util,
+        neg,
+        late,
+
+        // Inquiries
+        inqEx: safe(inq.ex),
+        inqTu: safe(inq.tu),
+        inqEq: safe(inq.eq),
+        inq_total: safe(inq.total),
+
+        // Also send these for compatibility
+        negatives: neg,
+        lates: late
+      }
     };
   }
 };
