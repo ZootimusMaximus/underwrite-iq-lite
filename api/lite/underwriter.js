@@ -10,7 +10,7 @@ function sanitizeScore(score) {
   if (!Number.isFinite(s)) return null;
 
   if (s > 9000) s = Math.floor(s / 10); // 8516 → 851
-  if (s > 850) s = 850; 
+  if (s > 850) s = 850;
   if (s < 300) return null;
 
   return s;
@@ -318,7 +318,7 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
       business_funding: businessFunding
     },
     totals: {
-      total_personal_funding,
+      total_personal_funding: totalPersonalFunding,
       total_business_funding: businessFunding,
       total_combined_funding: totalCombinedFunding
     },
