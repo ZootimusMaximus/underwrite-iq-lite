@@ -9,26 +9,24 @@ const { validateReports } = require("./validate-reports");
 const { computeUnderwrite, getNumberField } = require("./underwriter");
 const { aiGateCheck } = require("./ai-gatekeeper");
 
-// NEW — external suggestion engine
+// 🔥 NEW — modular suggestion engine
 const { buildSuggestions } = require("./suggestions");
 
-// You can move this to an env var if needed
+// Parser endpoint
 const PARSE_ENDPOINT =
   process.env.PARSE_ENDPOINT ||
   "https://underwrite-iq-lite.vercel.app/api/lite/parse-report";
 
 const MIN_PDF_BYTES = 40 * 1024;
 
-// ----------------------------------------------------------------------------
 // Safe number helper
-// ----------------------------------------------------------------------------
 function safeNum(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
 
 // ----------------------------------------------------------------------------
-// Call parse-report for one PDF
+// Call parse-report for a single PDF buffer
 // ----------------------------------------------------------------------------
 async function callParseReport(buffer, filename) {
   const formData = new FormData();
@@ -49,11 +47,11 @@ async function callParseReport(buffer, filename) {
 }
 
 // ----------------------------------------------------------------------------
-// Detect bureau codes inside parsed result
+// Detect which bureaus exist in a parsed result
 // ----------------------------------------------------------------------------
 function detectBureauCodes(parsed) {
   const out = [];
-  if (!parsed?.bureaus) return out;
+  if (!parsed || !parsed.bureaus) return out;
 
   const b = parsed.bureaus;
   if (b.experian) out.push("EX");
@@ -64,35 +62,36 @@ function detectBureauCodes(parsed) {
 }
 
 // ----------------------------------------------------------------------------
-// Merge bureaus from 1–3 files (no duplicates allowed)
+// Merge bureaus from multiple parsed results, enforcing "no duplicates"
 // ----------------------------------------------------------------------------
 function mergeBureausOrThrow(parsedResults) {
   const final = { experian: null, equifax: null, transunion: null };
   const seen = { EX: false, EQ: false, TU: false };
 
   for (const parsed of parsedResults) {
-    if (!parsed?.ok || !parsed.bureaus) {
-      throw new Error("One uploaded report failed to parse.");
+    if (!parsed || !parsed.ok || !parsed.bureaus) {
+      throw new Error("One of the reports could not be parsed.");
     }
 
     const codes = detectBureauCodes(parsed);
+    const b = parsed.bureaus;
+
     if (codes.length === 0) {
-      throw new Error(
-        "One of the uploaded PDFs does not contain a recognizable Experian, Equifax, or TransUnion section."
-      );
+      throw new Error("One uploaded PDF has no recognizable Experian, Equifax, or TransUnion sections.");
     }
 
-    const b = parsed.bureaus;
     for (const code of codes) {
       if (code === "EX") {
         if (seen.EX) throw new Error("Duplicate Experian detected.");
         seen.EX = true;
         final.experian = b.experian;
-      } else if (code === "EQ") {
+      }
+      if (code === "EQ") {
         if (seen.EQ) throw new Error("Duplicate Equifax detected.");
         seen.EQ = true;
         final.equifax = b.equifax;
-      } else if (code === "TU") {
+      }
+      if (code === "TU") {
         if (seen.TU) throw new Error("Duplicate TransUnion detected.");
         seen.TU = true;
         final.transunion = b.transunion;
@@ -101,39 +100,39 @@ function mergeBureausOrThrow(parsedResults) {
   }
 
   if (!final.experian && !final.equifax && !final.transunion) {
-    throw new Error("No valid bureaus were found.");
+    throw new Error("No valid bureaus found.");
   }
 
   return final;
 }
 
 // ----------------------------------------------------------------------------
-// Build card tags (unchanged)
+// Build cards (tags only — used by front-end)
 // ----------------------------------------------------------------------------
 function buildCards(uw) {
   const cards = [];
-  const opt = uw.optimization || {};
-  const metrics = uw.metrics || {};
+  const o = uw.optimization || {};
+  const m = uw.metrics || {};
 
-  if (opt.needs_util_reduction) cards.push("util_high");
-  if (opt.needs_new_primary_revolving) cards.push("needs_revolving");
-  if (opt.needs_inquiry_cleanup) cards.push("inquiries");
-  if (opt.needs_negative_cleanup) cards.push("negatives");
-  if (opt.needs_file_buildout) cards.push("file_buildout");
+  if (o.needs_util_reduction) cards.push("util_high");
+  if (o.needs_new_primary_revolving) cards.push("needs_revolving");
+  if (o.needs_inquiry_cleanup) cards.push("inquiries");
+  if (o.needs_negative_cleanup) cards.push("negatives");
+  if (o.needs_file_buildout) cards.push("file_buildout");
 
-  if (!uw.fundable && (metrics.score || 0) >= 680) {
+  if (!uw.fundable && (m.score || 0) >= 680) {
     cards.push("near_approval");
   }
 
   return cards;
 }
 
-// ============================================================================
+// ----------------------------------------------------------------------------
 // MAIN HANDLER
-// ============================================================================
+// ----------------------------------------------------------------------------
 module.exports = async function handler(req, res) {
   try {
-    // CORS
+    // ----- CORS -----
     if (req.method === "OPTIONS") {
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -142,12 +141,11 @@ module.exports = async function handler(req, res) {
     }
 
     res.setHeader("Access-Control-Allow-Origin", "*");
-
     if (req.method !== "POST") {
       return res.status(405).json({ ok: false, msg: "Method not allowed" });
     }
 
-    // Parse files
+    // ----- Parse multipart -----
     const form = formidable({
       multiples: true,
       keepExtensions: true,
@@ -161,21 +159,21 @@ module.exports = async function handler(req, res) {
       )
     );
 
-    let raw = files?.file;
-    let fileList = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    const rawFiles = files?.file;
+    const fileList = Array.isArray(rawFiles) ? rawFiles : rawFiles ? [rawFiles] : [];
 
-    // Stage 1: structural validation
+    // ----- Stage 1: structural validation -----
     const validation = await validateReports(fileList);
     if (!validation.ok) {
       return res.status(200).json({ ok: false, msg: validation.reason });
     }
 
     const validatedFiles = validation.files || fileList;
-    if (validatedFiles.length === 0) {
-      return res.status(200).json({ ok: false, msg: "No valid files." });
+    if (!validatedFiles.length) {
+      return res.status(200).json({ ok: false, msg: "No valid PDFs." });
     }
 
-    // Stage 1b: AI gatekeeper + parsing
+    // ----- Stage 1b: AI gatekeeper -----
     const parsedResults = [];
     for (const f of validatedFiles) {
       const buf = await fs.promises.readFile(f.filepath);
@@ -192,11 +190,12 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ ok: false, msg: gate.reason });
       }
 
+      // ----- Stage 2: expensive GPT parse -----
       const parsed = await callParseReport(buf, f.originalFilename);
       parsedResults.push(parsed);
     }
 
-    // Stage 3: bureau merge
+    // ----- Stage 3: bureau merge -----
     let mergedBureaus;
     try {
       mergedBureaus = mergeBureausOrThrow(parsedResults);
@@ -204,7 +203,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: false, msg: err.message });
     }
 
-    // Stage 4: underwriting
+    // ----- Stage 4: underwriting -----
     const businessAgeMonths = getNumberField(fields, "businessAgeMonths");
     const uw = computeUnderwrite(mergedBureaus, businessAgeMonths);
 
@@ -214,30 +213,32 @@ module.exports = async function handler(req, res) {
     const m = uw.metrics || {};
     const inq = m.inquiries || {};
 
-    // Stage 5: cards + suggestions
-    const cards = buildCards(uw);
-
-    // NEW — LLC logic injected correctly
+    // ----- Stage 5: modular suggestions -----
     const suggestions = buildSuggestions(uw, {
-      hasLLC: fields.hasLLC === "true" || fields.hasLLC === true,
+      hasLLC: fields.hasLLC === "true",
       llcAgeMonths: Number(fields.llcAgeMonths || 0)
     });
 
-    // Stage 6: query params for frontend
+    const cards = buildCards(uw);
+
+    // ----- Stage 6: redirect query -----
     const query = {
       personalTotal: safeNum(p.total_personal_funding),
       businessTotal: safeNum(b.business_funding),
       totalCombined: safeNum(t.total_combined_funding),
+
       score: safeNum(m.score),
       util: safeNum(m.utilization_pct),
+
       inqEx: safeNum(inq.ex),
       inqTu: safeNum(inq.tu),
       inqEq: safeNum(inq.eq),
+
       neg: safeNum(m.negative_accounts),
       late: safeNum(m.late_payment_events)
     };
 
-    // Stage 7: redirect
+    // ----- Stage 7: redirect -----
     const redirect = {
       url: uw.fundable
         ? "https://fundhub.ai/funding-approved-analyzer-462533"
@@ -245,13 +246,13 @@ module.exports = async function handler(req, res) {
       query
     };
 
-    // Final response
+    // ----- FINAL RESPONSE -----
     return res.status(200).json({
       ok: true,
       parsed: parsedResults,
       bureaus: mergedBureaus,
       underwrite: uw,
-      optimization: uw.optimization || {},
+      optimization: uw.optimization,
       cards,
       suggestions,
       redirect
@@ -259,6 +260,9 @@ module.exports = async function handler(req, res) {
 
   } catch (err) {
     console.error("SWITCHBOARD FATAL ERROR:", err);
-    return res.status(200).json({ ok: false, msg: "System error in switchboard." });
+    return res.status(200).json({
+      ok: false,
+      msg: "System error in switchboard."
+    });
   }
 };
