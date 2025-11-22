@@ -1,9 +1,10 @@
 // ============================================================================
-// UnderwriteIQ — SWITCHBOARD (Stage 2: Validation + Merge + Underwrite)
+// UnderwriteIQ — SWITCHBOARD (Stage 2: Validation + Merge + Underwrite + Suggestions)
 // ----------------------------------------------------------------------------
 // Responsibilities:
 //   ✔ Accept 1–3 uploaded PDFs
 //   ✔ Run Stage 1 structural validation (validate-reports.js)
+//   ✔ Optional cheap AI gate (ai-gatekeeper.js) to reject obvious non-reports
 //   ✔ Call parse-report.js ONCE PER FILE (GPT-4.1) to extract bureaus
 //   ✔ Enforce business rules about bureau combinations:
 //        - Allow 1–3 reports total
@@ -12,8 +13,15 @@
 //        - Tri-merge is naturally forced to be alone because it contains all 3
 //   ✔ Merge all bureaus into one { experian, equifax, transunion } object
 //   ✔ Run computeUnderwrite(mergedBureaus, businessAgeMonths)
-//   ✔ Decide Approved vs Repair
-//   ✔ Return redirect object + data (including suggestion cards)
+//   ✔ Build cards + suggestions
+//   ✔ Decide Approved vs Repair + redirect
+//   ✔ Return redirect object + data for frontend / tester
+//
+// NOT responsible for:
+//   ✖ Parsing PDFs directly (that's parse-report.js)
+//   ✖ Low-level file validation (that's validate-reports.js)
+//   ✖ UI changes
+//   ✖ Email / PDF generation (later)
 // ============================================================================
 
 const fs = require("fs");
@@ -21,6 +29,7 @@ const formidable = require("formidable");
 
 const { validateReports } = require("./validate-reports");
 const { computeUnderwrite, getNumberField } = require("./underwriter");
+const { aiGateCheck } = require("./ai-gatekeeper");
 
 // You can move this to an env var if you want later.
 const PARSE_ENDPOINT =
@@ -147,6 +156,105 @@ function mergeBureausOrThrow(parsedResults) {
 }
 
 // ----------------------------------------------------------------------------
+// Build card tags (for front-end “card” components)
+// ----------------------------------------------------------------------------
+function buildCards(uw) {
+  const cards = [];
+  const opt = uw.optimization || {};
+  const metrics = uw.metrics || {};
+
+  if (opt.needs_util_reduction) cards.push("util_high");
+  if (opt.needs_new_primary_revolving) cards.push("needs_revolving");
+  if (opt.needs_inquiry_cleanup) cards.push("inquiries");
+  if (opt.needs_negative_cleanup) cards.push("negatives");
+  if (opt.needs_file_buildout) cards.push("file_buildout");
+
+  // Could also add score buckets etc later if you want
+  if (!uw.fundable && (metrics.score || 0) >= 680) {
+    cards.push("near_approval");
+  }
+
+  return cards;
+}
+
+// ----------------------------------------------------------------------------
+// Build smart suggestions (English text) from underwriting result
+// ----------------------------------------------------------------------------
+function buildSuggestions(uw) {
+  const out = [];
+
+  const o = uw.optimization || {};
+  const m = uw.metrics || {};
+  const p = uw.personal || {};
+  const b = uw.business || {};
+
+  const util = m.utilization_pct;
+  const totalInq = (m.inquiries && m.inquiries.total) || 0;
+  const neg = m.negative_accounts || 0;
+
+  // UTILIZATION
+  if (o.needs_util_reduction) {
+    if (util >= 80) {
+      out.push("Your utilization is extremely high (80%+). Paying balances down aggressively will unlock a large jump in scores and approvals.");
+    } else if (util >= 50) {
+      out.push("Your utilization is high (50–80%). Reducing revolving balances under 30% will significantly improve approval odds and limits.");
+    } else {
+      out.push("Lower your revolving utilization below ~30% for optimal approval odds and limit assignments.");
+    }
+  }
+
+  // REVOLVING PRIMARY
+  if (o.needs_new_primary_revolving) {
+    out.push("Add a strong primary revolving account (not AU) with a $5,000+ limit to anchor your profile before stacking.");
+  }
+
+  // INQUIRIES
+  if (o.needs_inquiry_cleanup) {
+    if (totalInq > 12) {
+      out.push("You have a high number of recent hard inquiries. Cleaning these up will prevent auto-declines and open up better approvals.");
+    } else {
+      out.push("Removing unnecessary or duplicate hard inquiries will improve automated underwriting scores and limit increases.");
+    }
+  }
+
+  // NEGATIVE ITEMS
+  if (o.needs_negative_cleanup) {
+    if (neg > 5) {
+      out.push("You have multiple negative accounts. Prioritize charge-offs and collections first to unlock the biggest score gains.");
+    } else {
+      out.push("You have some negative accounts. Targeted disputes and settlement strategy will help remove them from your reports.");
+    }
+  }
+
+  // FILE BUILD-OUT
+  if (o.needs_file_buildout) {
+    if (o.file_all_negative) {
+      out.push("Your file is mostly negative or very thin. Add 1–2 new primary tradelines and a small installment account to rebuild your foundation.");
+    } else if (p.highest_revolving_limit === 0 && p.highest_installment_amount === 0) {
+      out.push("Your file is thin. Add at least one primary credit card and one small installment loan to establish depth.");
+    } else {
+      out.push("Add a couple of additional positive tradelines to strengthen your profile and unlock higher funding tiers.");
+    }
+  }
+
+  // BUSINESS FUNDING CONTEXT
+  if (!b.can_business_fund && p.card_funding > 0) {
+    out.push("Once your personal profile is optimized, aging your LLC and adding business banking relationships can unlock business funding.");
+  }
+
+  // SAFETY: if for some reason nothing fired
+  if (out.length === 0) {
+    if (uw.fundable) {
+      out.push("Your profile is in a strong position. The main focus now is sequencing and lender selection to maximize total funding.");
+    } else {
+      out.push("You are close to being fundable. A few targeted optimizations to utilization and inquiries will push you into approval range.");
+    }
+  }
+
+  return out;
+}
+
+// ----------------------------------------------------------------------------
 // MAIN HANDLER
 // ----------------------------------------------------------------------------
 module.exports = async function handler(req, res) {
@@ -206,7 +314,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ----- Stage 2: parse each file with parse-report.js (GPT-4.1) -----
+    // ----- Stage 1b: cheap AI gate (optional, but safe) -----
     const parsedResults = [];
 
     for (const f of validatedFiles) {
@@ -220,6 +328,16 @@ module.exports = async function handler(req, res) {
         });
       }
 
+      // Cheap classifier before expensive vision
+      const gate = await aiGateCheck(buf, f.originalFilename);
+      if (!gate.ok) {
+        return res.status(200).json({
+          ok: false,
+          msg: gate.reason || "This file does not appear to be a real credit report."
+        });
+      }
+
+      // ----- Stage 2: parse each file with parse-report.js (GPT-4.1) -----
       const parsed = await callParseReport(buf, f.originalFilename);
       parsedResults.push(parsed);
     }
@@ -245,9 +363,12 @@ module.exports = async function handler(req, res) {
     const t = uw.totals || {};
     const m = uw.metrics || {};
     const inq = m.inquiries || {};
-    const opt = uw.optimization || {};
 
-    // ----- Stage 5: Build query params for frontend (minimal) -----
+    // ----- Stage 5: Build cards + suggestions -----
+    const cards = buildCards(uw);
+    const suggestions = buildSuggestions(uw);
+
+    // ----- Stage 6: Build query params for frontend (minimal) -----
     const query = {
       personalTotal: safeNum(p.total_personal_funding),
       businessTotal: safeNum(b.business_funding),
@@ -263,29 +384,6 @@ module.exports = async function handler(req, res) {
       neg: safeNum(m.negative_accounts),
       late: safeNum(m.late_payment_events)
     };
-
-    // ----- Stage 6: Suggestion cards (IF/THEN based on optimization flags) -----
-    const suggestionCards = [];
-
-    if (opt.needs_util_reduction) {
-      suggestionCards.push("util_high");
-    }
-
-    if (opt.needs_new_primary_revolving) {
-      suggestionCards.push("needs_revolving");
-    }
-
-    if (opt.needs_inquiry_cleanup) {
-      suggestionCards.push("inquiries");
-    }
-
-    if (opt.needs_negative_cleanup) {
-      suggestionCards.push("negatives");
-    }
-
-    if (opt.needs_file_buildout || opt.thin_file || opt.file_all_negative) {
-      suggestionCards.push("build_file");
-    }
 
     // ----- Stage 7: Decide redirect -----
     const redirect = {};
@@ -308,8 +406,9 @@ module.exports = async function handler(req, res) {
       parsed: parsedResults,
       bureaus: mergedBureaus,
       underwrite: uw,
-      optimization: opt,
-      cards: suggestionCards,
+      optimization: uw.optimization || {},
+      cards,
+      suggestions,
       redirect
     });
   } catch (err) {
