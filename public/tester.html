@@ -331,29 +331,42 @@ function renderSummary(result) {
     text += `- Business Funding Potential: $${formatMoney(businessTotal)}\n`;
     text += `- Total Funding Potential After Repair: $${formatMoney(totalCombined)}\n\n`;
 
+    /* ===========================
+       FIXED SUGGESTION BLOCK
+       =========================== */
     text += "Quick Fixes You Can Do Right Now:\n";
-    const fixes = [];
 
-    if (opt.needs_util_reduction) {
-      fixes.push("- Pay revolving balances down to ~30% utilization (or lower).");
-    }
-    if (opt.needs_new_primary_revolving) {
-      fixes.push("- Add a strong primary credit card (or high-limit AU) to anchor your profile.");
-    }
-    if (opt.needs_inquiry_cleanup) {
-      fixes.push("- Dispute or remove unnecessary hard inquiries before your next funding round.");
-    }
-    if (opt.needs_negative_cleanup) {
-      fixes.push("- Attack negative accounts (collections/charge-offs) with targeted disputes.");
-    }
-    if (opt.needs_file_buildout || opt.thin_file || opt.file_all_negative) {
-      fixes.push("- Build more positive tradelines (1–2 secured cards, small installment loan, etc.).");
-    }
-    if (fixes.length === 0) {
-      fixes.push("- No major repair items detected. You’re mainly optimizing for higher approvals.");
-    }
+    const backendSuggestions = Array.isArray(result.suggestions)
+      ? result.suggestions
+      : [];
 
-    text += fixes.join("\n") + "\n";
+    if (backendSuggestions.length > 0) {
+      text += backendSuggestions.map(s => "- " + s).join("\n") + "\n";
+    } else {
+      // fallback to old logic only if backend suggestions missing
+      const fixes = [];
+
+      if (opt.needs_util_reduction) {
+        fixes.push("- Pay revolving balances down to ~30% utilization (or lower).");
+      }
+      if (opt.needs_new_primary_revolving) {
+        fixes.push("- Add a strong primary credit card (or high-limit AU) to anchor your profile.");
+      }
+      if (opt.needs_inquiry_cleanup) {
+        fixes.push("- Dispute or remove unnecessary hard inquiries before your next funding round.");
+      }
+      if (opt.needs_negative_cleanup) {
+        fixes.push("- Attack negative accounts (collections/charge-offs) with targeted disputes.");
+      }
+      if (opt.needs_file_buildout || opt.thin_file || opt.file_all_negative) {
+        fixes.push("- Build more positive tradelines (1–2 secured cards, small installment loan, etc.).");
+      }
+      if (fixes.length === 0) {
+        fixes.push("- No major repair items detected. You’re mainly optimizing for higher approvals.");
+      }
+
+      text += fixes.join("\n") + "\n";
+    }
   }
 
   summaryA.textContent = text;
