@@ -24,6 +24,7 @@
 
 const fs = require("fs");
 const formidable = require("formidable");
+const { googleOCR } = require("./google-ocr.js");
 
 module.exports.config = {
   api: { bodyParser: false, sizeLimit: "30mb" }
@@ -274,6 +275,14 @@ module.exports = async function handler(req, res) {
 
     const buf = await fs.promises.readFile(file.filepath);
     if (buf.length < 1000) return res.status(200).json(buildFallback("PDF too small."));
+
+    // ----- OPTIONAL: Google OCR pre-pass (stubbed) -----
+    try {
+      const ocrResult = await googleOCR(buf);
+      console.log("[googleOCR]", ocrResult.note || ocrResult);
+    } catch (err) {
+      console.error("[googleOCR] error", err);
+    }
 
     let extracted;
     try {
