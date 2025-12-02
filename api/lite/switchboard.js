@@ -8,6 +8,13 @@ const formidable = require("formidable");
 const { validateReports } = require("./validate-reports");
 const { computeUnderwrite, getNumberField } = require("./underwriter");
 const { aiGateCheck } = require("./ai-gatekeeper");
+const {
+  buildDedupeKeys,
+  createRedisClient,
+  checkDedupe,
+  storeRedirect,
+  TTL_SECONDS
+} = require("./dedupe-store");
 
 // 🔥 NEW — modular suggestion engine
 const { buildSuggestions } = require("./suggestions");
@@ -23,6 +30,25 @@ const MIN_PDF_BYTES = 40 * 1024;
 function safeNum(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+function getFieldValue(fields, key) {
+  if (!fields || fields[key] == null) return null;
+  const raw = Array.isArray(fields[key]) ? fields[key][0] : fields[key];
+  if (typeof raw === "string") return raw;
+  if (raw == null) return null;
+  return String(raw);
+}
+
+function formatSuggestions(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map((item, idx) => {
+    if (typeof item === "string") {
+      return { title: `Action ${idx + 1}`, description: item };
+    }
+    if (item && typeof item === "object") return item;
+    return { title: `Action ${idx + 1}`, description: String(item || "") };
+  });
 }
 
 // ----------------------------------------------------------------------------
@@ -159,6 +185,21 @@ module.exports = async function handler(req, res) {
       )
     );
 
+    const dedupeClient = createRedisClient();
+    const dedupeKeys = buildDedupeKeys({
+      email: getFieldValue(fields, "email"),
+      phone: getFieldValue(fields, "phone"),
+      deviceId: getFieldValue(fields, "deviceId"),
+      refId: getFieldValue(fields, "refId")
+    });
+
+    if (dedupeClient && (dedupeKeys.userKey || dedupeKeys.deviceKey || dedupeKeys.refKey)) {
+      const cached = await checkDedupe(dedupeClient, dedupeKeys);
+      if (cached?.redirect) {
+        return res.status(200).json({ ok: true, redirect: cached.redirect, deduped: true });
+      }
+    }
+
     const rawFiles = files?.file;
     const fileList = Array.isArray(rawFiles) ? rawFiles : rawFiles ? [rawFiles] : [];
 
@@ -239,16 +280,46 @@ module.exports = async function handler(req, res) {
     };
 
     // ----- Stage 7: redirect -----
+    const baseUrl = uw.fundable
+      ? "https://fundhub.ai/funding-approved-analyzer-462533"
+      : "https://fundhub.ai/fix-my-credit-analyzer";
+
+    const qs = new URLSearchParams(query || {}).toString();
+    const resultUrl = baseUrl + (qs ? "?" + qs : "");
+
+    const refId =
+      dedupeKeys.refId ||
+      getFieldValue(fields, "refId") ||
+      `ref-${Date.now().toString(36)}${Math.random().toString(16).slice(2, 6)}`;
+
+    const suggestionObjects = formatSuggestions(suggestions);
+    const nowIso = new Date().toISOString();
+    const daysRemaining = Math.max(0, Math.ceil(TTL_SECONDS / (60 * 60 * 24)));
+
     const redirect = {
-      url: uw.fundable
-        ? "https://fundhub.ai/funding-approved-analyzer-462533"
-        : "https://fundhub.ai/fix-my-credit-analyzer",
-      query
+      resultType: uw.fundable ? "funding" : "repair",
+      resultUrl,
+      url: resultUrl,
+      query,
+      suggestions: suggestionObjects,
+      lastUpload: nowIso,
+      daysRemaining,
+      refId,
+      affiliateLink: `https://fundhub.ai/credit-analyzer.html?ref=${encodeURIComponent(refId)}`
     };
+
+    if (dedupeClient && (dedupeKeys.userKey || dedupeKeys.deviceKey || dedupeKeys.refKey)) {
+      try {
+        await storeRedirect(dedupeClient, dedupeKeys, redirect);
+      } catch (err) {
+        console.error("[dedupe] failed to write redirect", err);
+      }
+    }
 
     // ----- FINAL RESPONSE -----
     return res.status(200).json({
       ok: true,
+      deduped: false,
       parsed: parsedResults,
       bureaus: mergedBureaus,
       underwrite: uw,

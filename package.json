@@ -9,10 +9,12 @@
 
   "scripts": {
     "dev": "vercel dev",
-    "start": "node api/lite/parse-report.js"
+    "start": "node api/lite/parse-report.js",
+    "test": "node --test"
   },
 
   "dependencies": {
+    "@upstash/redis": "1.30.0",
     "formidable": "2.1.1",
     "pdf-parse": "1.1.1"
   },
