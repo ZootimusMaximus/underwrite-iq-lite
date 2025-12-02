@@ -276,12 +276,13 @@ module.exports = async function handler(req, res) {
     const buf = await fs.promises.readFile(file.filepath);
     if (buf.length < 1000) return res.status(200).json(buildFallback("PDF too small."));
 
-    // ----- OPTIONAL: Google OCR pre-pass (stubbed) -----
-    try {
-      const ocrResult = await googleOCR(buf);
-      console.log("[googleOCR]", ocrResult.note || ocrResult);
-    } catch (err) {
-      console.error("[googleOCR] error", err);
+    if (process.env.IDENTITY_VERIFICATION_ENABLED !== "false") {
+      try {
+        const ocrResult = await googleOCR(buf);
+        console.log("[googleOCR]", ocrResult.note || ocrResult);
+      } catch (err) {
+        console.error("[googleOCR] error", err);
+      }
     }
 
     let extracted;

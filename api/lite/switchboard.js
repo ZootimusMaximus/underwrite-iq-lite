@@ -25,6 +25,8 @@ const PARSE_ENDPOINT =
   "https://underwrite-iq-lite.vercel.app/api/lite/parse-report";
 
 const MIN_PDF_BYTES = 40 * 1024;
+const AFFILIATE_ENABLED = process.env.AFFILIATE_DASHBOARD_ENABLED === "true";
+const IDENTITY_ENABLED = process.env.IDENTITY_VERIFICATION_ENABLED !== "false";
 
 // Safe number helper
 function safeNum(v) {
@@ -193,6 +195,11 @@ module.exports = async function handler(req, res) {
       refId: getFieldValue(fields, "refId")
     });
 
+    if (!AFFILIATE_ENABLED) {
+      dedupeKeys.refKey = null;
+      dedupeKeys.refId = null;
+    }
+
     if (dedupeClient && (dedupeKeys.userKey || dedupeKeys.deviceKey || dedupeKeys.refKey)) {
       const cached = await checkDedupe(dedupeClient, dedupeKeys);
       if (cached?.redirect) {
@@ -226,9 +233,11 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const gate = await aiGateCheck(buf, f.originalFilename);
-      if (!gate.ok) {
-        return res.status(200).json({ ok: false, msg: gate.reason });
+      if (IDENTITY_ENABLED) {
+        const gate = await aiGateCheck(buf, f.originalFilename);
+        if (!gate.ok) {
+          return res.status(200).json({ ok: false, msg: gate.reason });
+        }
       }
 
       // ----- Stage 2: expensive GPT parse -----

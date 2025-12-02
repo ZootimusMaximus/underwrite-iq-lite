@@ -22,6 +22,10 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ ok: false, msg: "Email is required." });
   }
 
+  if (process.env.IDENTITY_VERIFICATION_ENABLED === "false") {
+    return res.status(200).json({ ok: true });
+  }
+
   const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
   if (!emailRegex.test(email)) {
     return res.status(200).json({ ok: false, msg: "Please enter a valid email address." });

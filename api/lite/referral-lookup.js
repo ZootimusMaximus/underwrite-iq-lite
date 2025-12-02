@@ -14,6 +14,10 @@ module.exports = async function handler(req, res) {
       return res.status(405).json({ ok: false, msg: "Method not allowed" });
     }
 
+    if (process.env.AFFILIATE_DASHBOARD_ENABLED !== "true") {
+      return res.status(200).json({ ok: true, redirect: null, disabled: true });
+    }
+
     const ref = req.query?.ref || req.query?.refId;
     if (!ref || typeof ref !== "string") {
       return res.status(200).json({ ok: false, msg: "Missing ref id." });
