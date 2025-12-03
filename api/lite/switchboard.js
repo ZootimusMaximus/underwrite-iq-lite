@@ -5,6 +5,8 @@
 const fs = require("fs");
 const formidable = require("formidable");
 
+const { jsonResponse, preflightResponse } = require("./http");
+const { redirectFromRecord, buildAffiliateLink } = require("./redirects");
 const { validateReports } = require("./validate-reports");
 const { computeUnderwrite, getNumberField } = require("./underwriter");
 const { aiGateCheck } = require("./ai-gatekeeper");
@@ -158,19 +160,14 @@ function buildCards(uw) {
 // ----------------------------------------------------------------------------
 // MAIN HANDLER
 // ----------------------------------------------------------------------------
-module.exports = async function handler(req, res) {
+module.exports = async function handler(req) {
   try {
-    // ----- CORS -----
     if (req.method === "OPTIONS") {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-      return res.status(200).end();
+      return preflightResponse("POST,OPTIONS");
     }
 
-    res.setHeader("Access-Control-Allow-Origin", "*");
     if (req.method !== "POST") {
-      return res.status(405).json({ ok: false, msg: "Method not allowed" });
+      return jsonResponse({ ok: false, msg: "Method not allowed" }, { status: 405 });
     }
 
     // ----- Parse multipart -----
@@ -203,7 +200,7 @@ module.exports = async function handler(req, res) {
     if (dedupeClient && (dedupeKeys.userKey || dedupeKeys.deviceKey || dedupeKeys.refKey)) {
       const cached = await checkDedupe(dedupeClient, dedupeKeys);
       if (cached?.redirect) {
-        return res.status(200).json({ ok: true, redirect: cached.redirect, deduped: true });
+        return redirectFromRecord(cached.redirect);
       }
     }
 
@@ -213,12 +210,12 @@ module.exports = async function handler(req, res) {
     // ----- Stage 1: structural validation -----
     const validation = await validateReports(fileList);
     if (!validation.ok) {
-      return res.status(200).json({ ok: false, msg: validation.reason });
+      return jsonResponse({ ok: false, msg: validation.reason });
     }
 
     const validatedFiles = validation.files || fileList;
     if (!validatedFiles.length) {
-      return res.status(200).json({ ok: false, msg: "No valid PDFs." });
+      return jsonResponse({ ok: false, msg: "No valid PDFs." });
     }
 
     // ----- Stage 1b: AI gatekeeper -----
@@ -227,7 +224,7 @@ module.exports = async function handler(req, res) {
       const buf = await fs.promises.readFile(f.filepath);
 
       if (!buf || buf.length < MIN_PDF_BYTES) {
-        return res.status(200).json({
+        return jsonResponse({
           ok: false,
           msg: "One PDF appears incomplete or corrupted."
         });
@@ -236,7 +233,7 @@ module.exports = async function handler(req, res) {
       if (IDENTITY_ENABLED) {
         const gate = await aiGateCheck(buf, f.originalFilename);
         if (!gate.ok) {
-          return res.status(200).json({ ok: false, msg: gate.reason });
+          return jsonResponse({ ok: false, msg: gate.reason });
         }
       }
 
@@ -250,7 +247,7 @@ module.exports = async function handler(req, res) {
     try {
       mergedBureaus = mergeBureausOrThrow(parsedResults);
     } catch (err) {
-      return res.status(200).json({ ok: false, msg: err.message });
+      return jsonResponse({ ok: false, msg: err.message });
     }
 
     // ----- Stage 4: underwriting -----
@@ -288,14 +285,6 @@ module.exports = async function handler(req, res) {
       late: safeNum(m.late_payment_events)
     };
 
-    // ----- Stage 7: redirect -----
-    const baseUrl = uw.fundable
-      ? "https://""/funding-approved-analyzer-462533"
-      : "https://""/fix-my-credit-analyzer";
-
-    const qs = new URLSearchParams(query || {}).toString();
-    const resultUrl = baseUrl + (qs ? "?" + qs : "");
-
     const refId =
       dedupeKeys.refId ||
       getFieldValue(fields, "refId") ||
@@ -305,44 +294,36 @@ module.exports = async function handler(req, res) {
     const nowIso = new Date().toISOString();
     const daysRemaining = Math.max(0, Math.ceil(TTL_SECONDS / (60 * 60 * 24)));
 
-    const redirect = {
+    const resultPath = uw.fundable
+      ? "/funding-approved-analyzer.html"
+      : "/fix-my-credit-analyzer.html";
+
+    const redirectRecord = {
       resultType: uw.fundable ? "funding" : "repair",
-      resultUrl,
-      url: resultUrl,
+      resultPath,
       query,
       suggestions: suggestionObjects,
       lastUpload: nowIso,
       daysRemaining,
       refId,
-      affiliateLink: `https://""/credit-analyzer.html?ref=${encodeURIComponent(refId)}`
+      affiliateLink: buildAffiliateLink(refId)
     };
 
     if (dedupeClient && (dedupeKeys.userKey || dedupeKeys.deviceKey || dedupeKeys.refKey)) {
       try {
-        await storeRedirect(dedupeClient, dedupeKeys, redirect);
+        await storeRedirect(dedupeClient, dedupeKeys, redirectRecord);
       } catch (err) {
         console.error("[dedupe] failed to write redirect", err);
       }
     }
 
-    // ----- FINAL RESPONSE -----
-    return res.status(200).json({
-      ok: true,
-      deduped: false,
-      parsed: parsedResults,
-      bureaus: mergedBureaus,
-      underwrite: uw,
-      optimization: uw.optimization,
-      cards,
-      suggestions,
-      redirect
-    });
+    return redirectFromRecord(redirectRecord);
 
   } catch (err) {
     console.error("SWITCHBOARD FATAL ERROR:", err);
-    return res.status(200).json({
+    return jsonResponse({
       ok: false,
       msg: "System error in switchboard."
-    });
+    }, { status: 500 });
   }
 };

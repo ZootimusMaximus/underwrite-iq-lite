@@ -1,4 +1,5 @@
 const DEFAULT_BASE = "https://services.leadconnectorhq.com";
+const { buildFrontendUrl } = require("./redirects");
 
 function getApiBase() {
   return process.env.GHL_API_BASE || DEFAULT_BASE;
@@ -60,7 +61,7 @@ async function getAffiliateStats(contactId) {
       tier2_referrals_count: refsResp?.tier2_referrals_count ?? 0,
       referral_url:
         statsResp?.referral_url ||
-        `${base}/credit-analyzer.html?ref=${encodeURIComponent(contactId)}`
+        buildFrontendUrl("/credit-analyzer.html", { ref: contactId })
     };
 
     return { ok: true, stats, warning: null };
@@ -82,7 +83,7 @@ function emptyStats(contactId) {
     tier1_referrals_count: 0,
     tier2_referrals_count: 0,
     referral_url: contactId
-      ? `https://credit-analyzer.html?ref=${encodeURIComponent(contactId)}`
+      ? buildFrontendUrl("/credit-analyzer.html", { ref: contactId })
       : ""
   };
 }

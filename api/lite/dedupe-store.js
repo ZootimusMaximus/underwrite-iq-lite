@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { Redis } = require("@upstash/redis");
+const { buildAffiliateLink } = require("./redirects");
 
 const TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const USER_PREFIX = "uwiq:u:";
@@ -90,10 +91,7 @@ async function writeCachedRedirect(redis, key, payload) {
 
 function prepareRedirectPayload(redirect, derivedRefId) {
   const refId = redirect?.refId || derivedRefId || null;
-  const affiliateLink =
-    redirect?.affiliateLink ||
-    (refId ? `https://""/credit-analyzer.html?ref=${encodeURIComponent(refId)}` : null);
-
+  const affiliateLink = redirect?.affiliateLink || buildAffiliateLink(refId);
   const lastUpload = redirect?.lastUpload || new Date().toISOString();
   const daysRemaining = redirect?.daysRemaining ?? computeDaysRemaining(lastUpload) ?? 30;
 
