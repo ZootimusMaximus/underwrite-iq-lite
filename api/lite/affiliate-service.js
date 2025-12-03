@@ -82,7 +82,7 @@ function emptyStats(contactId) {
     tier1_referrals_count: 0,
     tier2_referrals_count: 0,
     referral_url: contactId
-      ? `https://fundhub.ai/credit-analyzer.html?ref=${encodeURIComponent(contactId)}`
+      ? `https://credit-analyzer.html?ref=${encodeURIComponent(contactId)}`
       : ""
   };
 }

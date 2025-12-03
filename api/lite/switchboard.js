@@ -290,8 +290,8 @@ module.exports = async function handler(req, res) {
 
     // ----- Stage 7: redirect -----
     const baseUrl = uw.fundable
-      ? "https://fundhub.ai/funding-approved-analyzer-462533"
-      : "https://fundhub.ai/fix-my-credit-analyzer";
+      ? "https://""/funding-approved-analyzer-462533"
+      : "https://""/fix-my-credit-analyzer";
 
     const qs = new URLSearchParams(query || {}).toString();
     const resultUrl = baseUrl + (qs ? "?" + qs : "");
@@ -314,7 +314,7 @@ module.exports = async function handler(req, res) {
       lastUpload: nowIso,
       daysRemaining,
       refId,
-      affiliateLink: `https://fundhub.ai/credit-analyzer.html?ref=${encodeURIComponent(refId)}`
+      affiliateLink: `https://""/credit-analyzer.html?ref=${encodeURIComponent(refId)}`
     };
 
     if (dedupeClient && (dedupeKeys.userKey || dedupeKeys.deviceKey || dedupeKeys.refKey)) {

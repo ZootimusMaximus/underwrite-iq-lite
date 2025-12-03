@@ -27,12 +27,12 @@ Deleting either the user key or device key in Redis immediately allows a fresh s
 ```json
 {
   "resultType": "funding | repair",
-  "resultUrl": "https://fundhub.ai/success/XYZ",
+  "resultUrl": "https://""/success/XYZ",
   "suggestions": [{ "title": "string", "description": "string" }],
   "lastUpload": "2025-02-01T12:45:00.000Z",
   "daysRemaining": 23,
   "refId": "<contactId>",
-  "affiliateLink": "https://fundhub.ai/credit-analyzer.html?ref=<contactId>"
+  "affiliateLink": "https://""/credit-analyzer.html?ref=<contactId>"
 }
 ```
 This payload is returned on dedupe hits and is stored under the user/device/ref keys with the 30-day TTL.

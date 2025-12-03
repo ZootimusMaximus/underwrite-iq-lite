@@ -92,7 +92,7 @@ function prepareRedirectPayload(redirect, derivedRefId) {
   const refId = redirect?.refId || derivedRefId || null;
   const affiliateLink =
     redirect?.affiliateLink ||
-    (refId ? `https://fundhub.ai/credit-analyzer.html?ref=${encodeURIComponent(refId)}` : null);
+    (refId ? `https://""/credit-analyzer.html?ref=${encodeURIComponent(refId)}` : null);
 
   const lastUpload = redirect?.lastUpload || new Date().toISOString();
   const daysRemaining = redirect?.daysRemaining ?? computeDaysRemaining(lastUpload) ?? 30;
