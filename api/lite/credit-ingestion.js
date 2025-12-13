@@ -33,14 +33,14 @@ function parseDateString(value) {
   const isoMatch = trimmed.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
   if (isoMatch) {
     const [_, y, m, d] = isoMatch;
-    const date = new Date(Number(y), Number(m) - 1, Number(d));
+    const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
     return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
   }
 
   const yMMatch = trimmed.match(/^(\d{4})[-/](\d{2})$/);
   if (yMMatch) {
     const [_, y, m] = yMMatch;
-    const date = new Date(Number(y), Number(m) - 1, 1);
+    const date = new Date(Date.UTC(Number(y), Number(m) - 1, 1));
     return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
   }
 
@@ -48,7 +48,7 @@ function parseDateString(value) {
   if (slashMatch) {
     let [_, m, d, y] = slashMatch;
     if (y.length === 2) y = "20" + y;
-    const date = new Date(Number(y), Number(m) - 1, Number(d));
+    const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
     return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
   }
 

@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Vercel
+.vercel
+.vercel.json
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Test artifacts
+test-results/
+coverage/
+e2e-screenshots/
+test-server.pid
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+
+# Temporary files
+*.tmp
+.cache/

@@ -1,0 +1,140 @@
+name: Test Suite
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+      - feature/*
+      - fix/*
+      - update/*
+      - deploy/*
+  pull_request:
+    branches:
+      - main
+      - staging
+      - feature/*
+      - fix/*
+      - update/*
+      - deploy/*
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: |
+            test-results/
+            coverage/
+          retention-days: 7
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start test server
+        run: |
+          npm run dev:test &
+          echo $! > test-server.pid
+
+          # Wait for server to be ready (max 30 seconds)
+          echo "Waiting for test server to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:3000/tester.html > /dev/null; then
+              echo "Test server is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 1
+          done
+
+          # Verify server is running
+          if ! curl -s http://localhost:3000/tester.html > /dev/null; then
+            echo "Failed to start test server"
+            exit 1
+          fi
+
+      - name: Run e2e tests
+        run: npm run test:e2e
+
+      - name: Stop test server
+        if: always()
+        run: |
+          if [ -f test-server.pid ]; then
+            kill $(cat test-server.pid) || true
+            rm test-server.pid
+          fi
+
+      - name: Upload e2e test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: |
+            test-results/
+            e2e-screenshots/
+          retention-days: 7
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [unit-tests, e2e-tests]
+    if: always()
+
+    steps:
+      - name: Check test results
+        run: |
+          if [ "${{ needs.unit-tests.result }}" != "success" ]; then
+            echo "❌ Unit tests failed"
+            exit 1
+          fi
+
+          if [ "${{ needs.e2e-tests.result }}" != "success" ]; then
+            echo "❌ E2E tests failed"
+            exit 1
+          fi
+
+          echo "✅ All tests passed!"

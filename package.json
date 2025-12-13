@@ -9,8 +9,10 @@
 
   "scripts": {
     "dev": "vercel dev",
+    "dev:test": "node test-server.js",
     "start": "node api/lite/parse-report.js",
-    "test": "node --test"
+    "test": "node --test --test-name-pattern='(?!test-server)' api/lite/__tests__/**/*.test.js",
+    "test:e2e": "PARSE_ENDPOINT=http://localhost:3000/api/lite/parse-report node --test api/lite/__tests__/**/*.test.js"
   },
 
   "dependencies": {
