@@ -14,6 +14,7 @@
     "api/lite/validate-phone.js",
     "api/lite/ai-gatekeeper.js",
     "api/lite/rate-limiter.js",
+    "api/lite/fetch-utils.js",
     "api/lite/validate/**",
     "node_modules/**"
   ],

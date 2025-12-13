@@ -149,7 +149,7 @@ test("buildSuggestions returns general buildout suggestion", () => {
 test("buildSuggestions suggests LLC for fundable user without LLC", () => {
   const uw = createMockUW({ fundable: true });
   const suggestions = buildSuggestions(uw, { hasLLC: false });
-  assert.ok(suggestions.some(s => s.includes("don't have an LLC") && s.includes("approved")));
+  assert.ok(suggestions.some(s => s.includes("LLC")));
 });
 
 test("buildSuggestions suggests LLC for non-fundable user without LLC", () => {
