@@ -51,16 +51,16 @@ test("hasValidPDFHeader rejects text file", () => {
 });
 
 test("hasValidPDFHeader rejects JPEG file", () => {
-  const jpegFile = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]);
+  const jpegFile = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
   assert.equal(hasValidPDFHeader(jpegFile), false);
 });
 
 test("hasValidPDFHeader rejects PNG file", () => {
-  const pngFile = Buffer.from([0x89, 0x50, 0x4E, 0x47]);
+  const pngFile = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
   assert.equal(hasValidPDFHeader(pngFile), false);
 });
 
 test("hasValidPDFHeader rejects ZIP file", () => {
-  const zipFile = Buffer.from([0x50, 0x4B, 0x03, 0x04]);
+  const zipFile = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
   assert.equal(hasValidPDFHeader(zipFile), false);
 });

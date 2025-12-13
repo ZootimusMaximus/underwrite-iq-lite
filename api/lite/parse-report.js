@@ -219,7 +219,10 @@ async function call4_1(pdfBuffer, filename) {
       {
         role: "user",
         content: [
-          { type: "input_text", text: "Pass 3: Final cleanup. Input: " + JSON.stringify(pass2).slice(0, 18000) }
+          {
+            type: "input_text",
+            text: "Pass 3: Final cleanup. Input: " + JSON.stringify(pass2).slice(0, 18000)
+          }
         ]
       }
     ]
@@ -296,7 +299,6 @@ module.exports = async function handler(req, res) {
         size: buf.length
       }
     });
-
   } catch (err) {
     logError("FATAL", err);
     return res.status(200).json(buildFallback("System error."));

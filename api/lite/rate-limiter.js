@@ -49,7 +49,9 @@ function createRateLimiter() {
       prefix: "uwiq:ratelimit"
     });
 
-    logInfo(`Rate limiting initialized: ${RATE_LIMIT_MAX_REQUESTS} requests per ${RATE_LIMIT_WINDOW}`);
+    logInfo(
+      `Rate limiting initialized: ${RATE_LIMIT_MAX_REQUESTS} requests per ${RATE_LIMIT_WINDOW}`
+    );
     return ratelimit;
   } catch (err) {
     logWarn("Failed to initialize rate limiter", { error: err.message });

@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const { Redis } = require("@upstash/redis");
-const { logError, logWarn, logInfo } = require("./logger");
+const { logError, logWarn } = require("./logger");
 
 const TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const USER_PREFIX = "uwiq:u:";
@@ -42,7 +42,8 @@ function buildRefKey(refId) {
 function deriveRefId({ userKey, deviceKey, providedRefId }) {
   if (providedRefId) return providedRefId;
   if (userKey && userKey.startsWith(USER_PREFIX)) return userKey.slice(USER_PREFIX.length);
-  if (deviceKey && deviceKey.startsWith(DEVICE_PREFIX)) return deviceKey.slice(DEVICE_PREFIX.length);
+  if (deviceKey && deviceKey.startsWith(DEVICE_PREFIX))
+    return deviceKey.slice(DEVICE_PREFIX.length);
   return null;
 }
 
@@ -122,7 +123,9 @@ async function checkDedupe(redis, { userKey, deviceKey, refKey }) {
 
   const deviceHit = await readCachedRedirect(redis, deviceKey);
   if (deviceHit?.redirect) {
-    const daysRemaining = computeDaysRemaining(deviceHit.redirect.lastUpload || deviceHit.lastUpload);
+    const daysRemaining = computeDaysRemaining(
+      deviceHit.redirect.lastUpload || deviceHit.lastUpload
+    );
     if (daysRemaining != null) deviceHit.redirect.daysRemaining = daysRemaining;
     return { redirect: deviceHit.redirect, deduped: true, source: "device" };
   }

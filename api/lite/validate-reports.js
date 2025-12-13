@@ -24,7 +24,7 @@
 
 const fs = require("fs");
 const crypto = require("crypto");
-const { logError, logWarn } = require("./logger");
+const { logError } = require("./logger");
 
 // Minimum realistic credit report size (40–50 KB). Prevents trash uploads.
 const MIN_PDF_BYTES = 40 * 1024;
@@ -44,10 +44,7 @@ function hashBuffer(buf) {
 // ----------------------------------------------------------------------------
 function isProbablyPDF(file) {
   if (!file.mimetype) return false;
-  return (
-    file.mimetype === "application/pdf" ||
-    file.mimetype === "application/octet-stream"
-  );
+  return file.mimetype === "application/pdf" || file.mimetype === "application/octet-stream";
 }
 
 // ----------------------------------------------------------------------------
@@ -112,7 +109,8 @@ async function validateReports(files) {
       if (!hasValidPDFHeader(buf)) {
         return {
           ok: false,
-          reason: "One of the uploaded files is not a valid PDF. The file header is missing or corrupted."
+          reason:
+            "One of the uploaded files is not a valid PDF. The file header is missing or corrupted."
         };
       }
 
@@ -139,8 +137,7 @@ async function validateReports(files) {
       if (seen.has(f.hash)) {
         return {
           ok: false,
-          reason:
-            `Duplicate file detected (“${f.filename}”). Please upload distinct reports only.`
+          reason: `Duplicate file detected (“${f.filename}”). Please upload distinct reports only.`
         };
       }
       seen.add(f.hash);

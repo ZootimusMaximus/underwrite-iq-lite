@@ -1,4 +1,4 @@
-const { logError, logWarn } = require("./logger");
+const { logWarn } = require("./logger");
 
 const DEFAULT_BASE = "https://services.leadconnectorhq.com";
 

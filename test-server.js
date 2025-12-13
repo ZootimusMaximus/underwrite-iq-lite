@@ -108,17 +108,18 @@ const server = http.createServer(async (req, res) => {
 
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       const ext = path.extname(filePath);
-      const contentType = {
-        ".html": "text/html",
-        ".js": "application/javascript",
-        ".css": "text/css",
-        ".json": "application/json",
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".gif": "image/gif",
-        ".svg": "image/svg+xml",
-        ".ico": "image/x-icon"
-      }[ext] || "text/plain";
+      const contentType =
+        {
+          ".html": "text/html",
+          ".js": "application/javascript",
+          ".css": "text/css",
+          ".json": "application/json",
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".gif": "image/gif",
+          ".svg": "image/svg+xml",
+          ".ico": "image/x-icon"
+        }[ext] || "text/plain";
 
       res.writeHead(200, { "Content-Type": contentType });
       fs.createReadStream(filePath).pipe(res);

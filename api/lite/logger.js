@@ -18,15 +18,15 @@ const logger = pino({
           options: {
             colorize: true,
             translateTime: "HH:MM:ss Z",
-            ignore: "pid,hostname",
-          },
+            ignore: "pid,hostname"
+          }
         }
       : undefined,
 
   // Base fields included in every log
   base: {
     service: "underwrite-iq-lite",
-    env: process.env.NODE_ENV || "production",
+    env: process.env.NODE_ENV || "production"
   },
 
   // Timestamp format
@@ -36,8 +36,8 @@ const logger = pino({
   serializers: {
     err: pino.stdSerializers.err,
     req: pino.stdSerializers.req,
-    res: pino.stdSerializers.res,
-  },
+    res: pino.stdSerializers.res
+  }
 });
 
 /**
@@ -51,9 +51,9 @@ function logError(tag, err, context = "") {
     {
       tag,
       context,
-      err: err instanceof Error ? err : new Error(String(err)),
+      err: err instanceof Error ? err : new Error(String(err))
     },
-    `Error: ${tag}`,
+    `Error: ${tag}`
   );
 }
 
@@ -99,5 +99,5 @@ module.exports = {
   logInfo,
   logWarn,
   logDebug,
-  createChildLogger,
+  createChildLogger
 };

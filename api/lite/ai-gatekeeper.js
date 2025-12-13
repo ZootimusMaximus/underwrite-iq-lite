@@ -4,7 +4,7 @@
 // Purpose: Cheap classifier to reject non–credit reports BEFORE GPT-4 Vision.
 // ============================================================================
 
-const { logError, logWarn, logInfo } = require("./logger");
+const { logError } = require("./logger");
 const { fetchWithTimeout } = require("./fetch-utils");
 
 function extractTextFromResponse(r) {
@@ -79,14 +79,18 @@ Accept: Experian, Equifax, TransUnion, or tri-merge credit reports.
       max_output_tokens: 200
     };
 
-    const resp = await fetchWithTimeout("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json"
+    const resp = await fetchWithTimeout(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
       },
-      body: JSON.stringify(body)
-    }, 30000); // 30 second timeout for gatekeeper
+      30000
+    ); // 30 second timeout for gatekeeper
 
     if (!resp.ok) {
       return { ok: true, reason: "AI gate network error; skipped." };
@@ -111,9 +115,7 @@ Accept: Experian, Equifax, TransUnion, or tri-merge credit reports.
     if (!verdict.likely_credit_report) {
       return {
         ok: false,
-        reason:
-          verdict.reason ||
-          "This does not appear to be a real consumer credit report.",
+        reason: verdict.reason || "This does not appear to be a real consumer credit report.",
         suspected_bureaus: []
       };
     }

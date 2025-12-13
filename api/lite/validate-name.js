@@ -27,9 +27,10 @@ module.exports = function handler(req, res) {
   }
 
   if (!nameRegex.test(firstName) || !nameRegex.test(lastName)) {
-    return res
-      .status(200)
-      .json({ ok: false, error: "Names can only contain letters, spaces, hyphens, or apostrophes." });
+    return res.status(200).json({
+      ok: false,
+      error: "Names can only contain letters, spaces, hyphens, or apostrophes."
+    });
   }
 
   return res.status(200).json({ ok: true });

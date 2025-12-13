@@ -42,11 +42,7 @@ function validateConfigWithWarnings() {
   validateConfig();
 
   // Check optional but recommended vars
-  const recommended = [
-    "REDIRECT_URL_FUNDABLE",
-    "REDIRECT_URL_NOT_FUNDABLE",
-    "REDIRECT_BASE_URL"
-  ];
+  const recommended = ["REDIRECT_URL_FUNDABLE", "REDIRECT_URL_NOT_FUNDABLE", "REDIRECT_BASE_URL"];
 
   const missingRecommended = recommended.filter(key => !process.env[key]);
 

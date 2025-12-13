@@ -1,7 +1,5 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("fs");
-const path = require("path");
 const http = require("http");
 
 /**
@@ -98,9 +96,7 @@ function createMultipartFormData(files, fields = {}) {
   // Add field data
   for (const [key, value] of Object.entries(fields)) {
     parts.push(
-      `--${boundary}\r\n` +
-      `Content-Disposition: form-data; name="${key}"\r\n\r\n` +
-      `${value}\r\n`
+      `--${boundary}\r\n` + `Content-Disposition: form-data; name="${key}"\r\n\r\n` + `${value}\r\n`
     );
   }
 
@@ -108,8 +104,8 @@ function createMultipartFormData(files, fields = {}) {
   for (const file of files) {
     parts.push(
       `--${boundary}\r\n` +
-      `Content-Disposition: form-data; name="file"; filename="${file.name}"\r\n` +
-      `Content-Type: application/pdf\r\n\r\n`
+        `Content-Disposition: form-data; name="file"; filename="${file.name}"\r\n` +
+        `Content-Type: application/pdf\r\n\r\n`
     );
     parts.push(file.buffer);
     parts.push("\r\n");
@@ -117,9 +113,7 @@ function createMultipartFormData(files, fields = {}) {
 
   parts.push(`--${boundary}--\r\n`);
 
-  const buffers = parts.map(part =>
-    Buffer.isBuffer(part) ? part : Buffer.from(part)
-  );
+  const buffers = parts.map(part => (Buffer.isBuffer(part) ? part : Buffer.from(part)));
 
   return {
     boundary,
@@ -140,10 +134,10 @@ async function callSwitchboard(formData, boundary, serverUrl) {
       }
     };
 
-    const req = http.request(url, options, (res) => {
+    const req = http.request(url, options, res => {
       let data = "";
 
-      res.on("data", (chunk) => {
+      res.on("data", chunk => {
         data += chunk;
       });
 
@@ -167,106 +161,116 @@ async function callSwitchboard(formData, boundary, serverUrl) {
 const PARSE_ENDPOINT = process.env.PARSE_ENDPOINT;
 const shouldSkip = !PARSE_ENDPOINT;
 
-test("switchboard e2e - validates response structure for tester.html", { skip: shouldSkip }, async () => {
-  // Create mock PDF
-  const pdfBuffer = createMockCreditReportPDF();
+test(
+  "switchboard e2e - validates response structure for tester.html",
+  { skip: shouldSkip },
+  async () => {
+    // Create mock PDF
+    const pdfBuffer = createMockCreditReportPDF();
 
-  const files = [{
-    name: "credit-report.pdf",
-    buffer: pdfBuffer
-  }];
+    const files = [
+      {
+        name: "credit-report.pdf",
+        buffer: pdfBuffer
+      }
+    ];
 
-  const fields = {
-    email: "test@example.com",
-    phone: "555-0123",
-    deviceId: "test-device-123",
-    businessAgeMonths: "24",
-    hasLLC: "true",
-    llcAgeMonths: "12"
-  };
+    const fields = {
+      email: "test@example.com",
+      phone: "555-0123",
+      deviceId: "test-device-123",
+      businessAgeMonths: "24",
+      hasLLC: "true",
+      llcAgeMonths: "12"
+    };
 
-  // Create multipart form data
-  const { boundary, body } = createMultipartFormData(files, fields);
+    // Create multipart form data
+    const { boundary, body } = createMultipartFormData(files, fields);
 
-  // Make request to switchboard endpoint
-  // Note: This requires a running dev server (npm run dev)
-  const SERVER_URL = process.env.TEST_SERVER_URL || "http://localhost:3000";
+    // Make request to switchboard endpoint
+    // Note: This requires a running dev server (npm run dev)
+    const SERVER_URL = process.env.TEST_SERVER_URL || "http://localhost:3000";
 
-  const response = await callSwitchboard(body, boundary, SERVER_URL);
+    const response = await callSwitchboard(body, boundary, SERVER_URL);
 
-  // Validate HTTP status
-  assert.equal(response.status, 200, "Expected HTTP 200 response");
+    // Validate HTTP status
+    assert.equal(response.status, 200, "Expected HTTP 200 response");
 
-  const result = response.data;
+    const result = response.data;
 
-  // Validate required top-level fields that tester.html expects
-  assert.ok("ok" in result, "Response should have 'ok' field");
+    // Validate required top-level fields that tester.html expects
+    assert.ok("ok" in result, "Response should have 'ok' field");
 
-  // If successful, validate underwrite object structure
-  if (result.ok && result.underwrite) {
-    const uw = result.underwrite;
+    // If successful, validate underwrite object structure
+    if (result.ok && result.underwrite) {
+      const uw = result.underwrite;
 
-    // Validate metrics object (used in tester.html lines 287-298)
-    assert.ok(uw.metrics, "underwrite should have metrics");
-    assert.ok("score" in uw.metrics, "metrics should have score");
-    assert.ok("negative_accounts" in uw.metrics, "metrics should have negative_accounts");
-    assert.ok("late_payment_events" in uw.metrics, "metrics should have late_payment_events");
-    assert.ok("utilization_pct" in uw.metrics, "metrics should have utilization_pct");
+      // Validate metrics object (used in tester.html lines 287-298)
+      assert.ok(uw.metrics, "underwrite should have metrics");
+      assert.ok("score" in uw.metrics, "metrics should have score");
+      assert.ok("negative_accounts" in uw.metrics, "metrics should have negative_accounts");
+      assert.ok("late_payment_events" in uw.metrics, "metrics should have late_payment_events");
+      assert.ok("utilization_pct" in uw.metrics, "metrics should have utilization_pct");
 
-    // Validate inquiries object
-    if (uw.metrics.inquiries) {
-      const inq = uw.metrics.inquiries;
-      assert.ok("ex" in inq || "tu" in inq || "eq" in inq,
-        "inquiries should have at least one bureau (ex, tu, or eq)");
+      // Validate inquiries object
+      if (uw.metrics.inquiries) {
+        const inq = uw.metrics.inquiries;
+        assert.ok(
+          "ex" in inq || "tu" in inq || "eq" in inq,
+          "inquiries should have at least one bureau (ex, tu, or eq)"
+        );
+      }
+
+      // Validate funding amounts (used in tester.html lines 300-302)
+      assert.ok(uw.personal, "underwrite should have personal");
+      assert.ok(
+        "total_personal_funding" in uw.personal,
+        "personal should have total_personal_funding"
+      );
+
+      assert.ok(uw.business, "underwrite should have business");
+      assert.ok("business_funding" in uw.business, "business should have business_funding");
+
+      assert.ok(uw.totals, "underwrite should have totals");
+      assert.ok("total_combined_funding" in uw.totals, "totals should have total_combined_funding");
+
+      // Validate fundable flag (used in tester.html line 310)
+      assert.ok("fundable" in uw, "underwrite should have fundable boolean");
+      assert.equal(typeof uw.fundable, "boolean", "fundable should be boolean");
+
+      // Validate optimization object (used in tester.html lines 348-361)
+      if (uw.optimization) {
+        const opt = uw.optimization;
+        // Check that optimization flags exist (optional fields)
+        const optFlags = [
+          "needs_util_reduction",
+          "needs_new_primary_revolving",
+          "needs_inquiry_cleanup",
+          "needs_negative_cleanup",
+          "needs_file_buildout",
+          "thin_file",
+          "file_all_negative"
+        ];
+
+        // At least some optimization flags should be present
+        const hasOptFlags = optFlags.some(flag => flag in opt);
+        assert.ok(hasOptFlags, "optimization should have at least one flag");
+      }
     }
 
-    // Validate funding amounts (used in tester.html lines 300-302)
-    assert.ok(uw.personal, "underwrite should have personal");
-    assert.ok("total_personal_funding" in uw.personal, "personal should have total_personal_funding");
+    // Validate suggestions array (used in tester.html lines 339-344)
+    if ("suggestions" in result) {
+      assert.ok(Array.isArray(result.suggestions), "suggestions should be an array");
 
-    assert.ok(uw.business, "underwrite should have business");
-    assert.ok("business_funding" in uw.business, "business should have business_funding");
-
-    assert.ok(uw.totals, "underwrite should have totals");
-    assert.ok("total_combined_funding" in uw.totals, "totals should have total_combined_funding");
-
-    // Validate fundable flag (used in tester.html line 310)
-    assert.ok("fundable" in uw, "underwrite should have fundable boolean");
-    assert.equal(typeof uw.fundable, "boolean", "fundable should be boolean");
-
-    // Validate optimization object (used in tester.html lines 348-361)
-    if (uw.optimization) {
-      const opt = uw.optimization;
-      // Check that optimization flags exist (optional fields)
-      const optFlags = [
-        "needs_util_reduction",
-        "needs_new_primary_revolving",
-        "needs_inquiry_cleanup",
-        "needs_negative_cleanup",
-        "needs_file_buildout",
-        "thin_file",
-        "file_all_negative"
-      ];
-
-      // At least some optimization flags should be present
-      const hasOptFlags = optFlags.some(flag => flag in opt);
-      assert.ok(hasOptFlags, "optimization should have at least one flag");
+      // Each suggestion should be a string
+      result.suggestions.forEach((suggestion, idx) => {
+        assert.equal(typeof suggestion, "string", `suggestion[${idx}] should be a string`);
+      });
     }
+
+    // Test passed - all assertions completed successfully
   }
-
-  // Validate suggestions array (used in tester.html lines 339-344)
-  if ("suggestions" in result) {
-    assert.ok(Array.isArray(result.suggestions), "suggestions should be an array");
-
-    // Each suggestion should be a string
-    result.suggestions.forEach((suggestion, idx) => {
-      assert.equal(typeof suggestion, "string",
-        `suggestion[${idx}] should be a string`);
-    });
-  }
-
-  // Test passed - all assertions completed successfully
-});
+);
 
 test("switchboard e2e - handles multiple PDF files", { skip: shouldSkip }, async () => {
   // Create two mock PDFs (simulating tri-merge scenario)
@@ -310,10 +314,12 @@ test("switchboard e2e - rejects files that are too small", { skip: shouldSkip },
   // Create a PDF that's smaller than MIN_PDF_BYTES (40KB)
   const tinyPdf = Buffer.from("%PDF-1.4\nsmall file\n%%EOF");
 
-  const files = [{
-    name: "tiny.pdf",
-    buffer: tinyPdf
-  }];
+  const files = [
+    {
+      name: "tiny.pdf",
+      buffer: tinyPdf
+    }
+  ];
 
   const fields = {
     email: "tiny@example.com",

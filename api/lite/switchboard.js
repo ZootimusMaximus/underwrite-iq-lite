@@ -7,7 +7,7 @@ const formidable = require("formidable");
 
 const { validateConfig } = require("./config-validator");
 const { validateReports } = require("./validate-reports");
-const { computeUnderwrite, getNumberField } = require("./underwriter");
+const { computeUnderwrite } = require("./underwriter");
 const { aiGateCheck } = require("./ai-gatekeeper");
 const {
   buildDedupeKeys,
@@ -27,7 +27,7 @@ const { rateLimitMiddleware } = require("./rate-limiter");
 const { sanitizeFormFields } = require("./input-sanitizer");
 
 // Logging
-const { logError, logWarn, logInfo } = require("./logger");
+const { logError, logWarn } = require("./logger");
 
 // Helper to clean up temp files (prevents /tmp from filling up)
 async function cleanupTempFiles(files) {
@@ -53,8 +53,7 @@ try {
 
 // Parser endpoint
 const PARSE_ENDPOINT =
-  process.env.PARSE_ENDPOINT ||
-  "https://underwrite-iq-lite.vercel.app/api/lite/parse-report";
+  process.env.PARSE_ENDPOINT || "https://underwrite-iq-lite.vercel.app/api/lite/parse-report";
 
 const MIN_PDF_BYTES = 40 * 1024;
 const AFFILIATE_ENABLED = process.env.AFFILIATE_DASHBOARD_ENABLED === "true";
@@ -64,14 +63,6 @@ const IDENTITY_ENABLED = process.env.IDENTITY_VERIFICATION_ENABLED !== "false";
 function safeNum(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
-}
-
-function getFieldValue(fields, key) {
-  if (!fields || fields[key] == null) return null;
-  const raw = Array.isArray(fields[key]) ? fields[key][0] : fields[key];
-  if (typeof raw === "string") return raw;
-  if (raw == null) return null;
-  return String(raw);
 }
 
 function formatSuggestions(list) {
@@ -137,7 +128,9 @@ function mergeBureausOrThrow(parsedResults) {
     const b = parsed.bureaus;
 
     if (codes.length === 0) {
-      throw new Error("One uploaded PDF has no recognizable Experian, Equifax, or TransUnion sections.");
+      throw new Error(
+        "One uploaded PDF has no recognizable Experian, Equifax, or TransUnion sections."
+      );
     }
 
     for (const code of codes) {
@@ -228,9 +221,7 @@ module.exports = async function handler(req, res) {
     // ----- Input sanitization -----
     const sanitizationResult = sanitizeFormFields(fields);
     if (!sanitizationResult.ok) {
-      const errorMessages = sanitizationResult.errors
-        .map(e => `${e.field}: ${e.error}`)
-        .join(", ");
+      const errorMessages = sanitizationResult.errors.map(e => `${e.field}: ${e.error}`).join(", ");
       return res.status(200).json({
         ok: false,
         msg: `Invalid input: ${errorMessages}`
@@ -348,8 +339,8 @@ module.exports = async function handler(req, res) {
 
     // ----- Stage 7: redirect -----
     const baseUrl = uw.fundable
-      ? (process.env.REDIRECT_URL_FUNDABLE || "https://fundhub.ai/funding-approved-analyzer-462533")
-      : (process.env.REDIRECT_URL_NOT_FUNDABLE || "https://fundhub.ai/fix-my-credit-analyzer");
+      ? process.env.REDIRECT_URL_FUNDABLE || "https://fundhub.ai/funding-approved-analyzer-462533"
+      : process.env.REDIRECT_URL_NOT_FUNDABLE || "https://fundhub.ai/fix-my-credit-analyzer";
 
     const qs = new URLSearchParams(query || {}).toString();
     const resultUrl = baseUrl + (qs ? "?" + qs : "");
@@ -401,7 +392,6 @@ module.exports = async function handler(req, res) {
       suggestions,
       redirect
     });
-
   } catch (err) {
     logError("Switchboard fatal error", err, {
       method: req.method,

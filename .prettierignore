@@ -1,0 +1,5 @@
+node_modules
+coverage
+.vercel
+*.min.js
+package-lock.json
