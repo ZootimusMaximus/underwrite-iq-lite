@@ -47,12 +47,20 @@ function deriveRefId({ userKey, deviceKey, providedRefId }) {
   return null;
 }
 
+// Singleton Redis client instance to prevent connection leaks
+let redisClientInstance = null;
+
 function createRedisClient() {
+  // Return existing instance if available (singleton pattern)
+  if (redisClientInstance) return redisClientInstance;
+
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
+
   try {
-    return new Redis({ url, token });
+    redisClientInstance = new Redis({ url, token });
+    return redisClientInstance;
   } catch (err) {
     logError("Failed to initialize Redis client", err);
     return null;

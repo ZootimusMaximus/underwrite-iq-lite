@@ -128,8 +128,27 @@ async function checkRateLimit(req) {
 
     return { success, limit, remaining, reset, identifier };
   } catch (err) {
-    // If rate limiting fails, allow request but log error
-    logWarn("Rate limit check failed, allowing request", { error: err.message });
+    // FAIL CLOSED in production - block requests when rate limiting is unavailable
+    // This prevents unbounded API costs if Redis goes down
+    const isProduction = process.env.NODE_ENV === "production";
+
+    if (isProduction) {
+      logWarn("Rate limit check failed, BLOCKING request (fail-closed)", {
+        error: err.message,
+        identifier
+      });
+      return {
+        success: false,
+        limit: 0,
+        remaining: 0,
+        reset: Date.now() + 60000, // Retry after 1 minute
+        identifier,
+        error: "Rate limiting service unavailable"
+      };
+    }
+
+    // In development, allow request but log warning
+    logWarn("Rate limit check failed, allowing request (dev mode)", { error: err.message });
     return {
       success: true,
       limit: 0,

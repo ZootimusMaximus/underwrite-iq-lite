@@ -56,6 +56,10 @@ const PARSE_ENDPOINT =
   process.env.PARSE_ENDPOINT || "https://underwrite-iq-lite.vercel.app/api/lite/parse-report";
 
 const MIN_PDF_BYTES = 40 * 1024;
+// Max 10MB per file to prevent memory exhaustion (base64 adds 33% overhead)
+const MAX_SAFE_FILE_SIZE = 10 * 1024 * 1024;
+// Max 30MB total across all files
+const MAX_TOTAL_FILE_SIZE = 30 * 1024 * 1024;
 const AFFILIATE_ENABLED = process.env.AFFILIATE_DASHBOARD_ENABLED === "true";
 const IDENTITY_ENABLED = process.env.IDENTITY_VERIFICATION_ENABLED !== "false";
 
@@ -267,10 +271,41 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: false, msg: "No valid PDFs." });
     }
 
-    // ----- Stage 1b: AI gatekeeper -----
+    // ----- Memory safety: validate total file size -----
+    let totalFileSize = 0;
+    for (const f of validatedFiles) {
+      const fileSize = f.size || 0;
+      if (fileSize > MAX_SAFE_FILE_SIZE) {
+        await cleanupTempFiles(validatedFiles);
+        return res.status(200).json({
+          ok: false,
+          msg: `File "${f.originalFilename || "unknown"}" is too large. Maximum size is 10MB per file.`
+        });
+      }
+      totalFileSize += fileSize;
+    }
+    if (totalFileSize > MAX_TOTAL_FILE_SIZE) {
+      await cleanupTempFiles(validatedFiles);
+      return res.status(200).json({
+        ok: false,
+        msg: "Total upload size exceeds 30MB limit. Please upload smaller files."
+      });
+    }
+
+    // ----- Stage 1b: AI gatekeeper + Stage 2: GPT parse -----
     const parsedResults = [];
     for (const f of validatedFiles) {
-      const buf = await fs.promises.readFile(f.filepath);
+      let buf;
+      try {
+        buf = await fs.promises.readFile(f.filepath);
+      } catch (readErr) {
+        logError("Failed to read uploaded file", readErr, { filepath: f.filepath });
+        await cleanupTempFiles(validatedFiles);
+        return res.status(200).json({
+          ok: false,
+          msg: "Failed to read uploaded file."
+        });
+      }
 
       if (!buf || buf.length < MIN_PDF_BYTES) {
         await cleanupTempFiles(validatedFiles);
@@ -281,16 +316,38 @@ module.exports = async function handler(req, res) {
       }
 
       if (IDENTITY_ENABLED) {
-        const gate = await aiGateCheck(buf, f.originalFilename);
-        if (!gate.ok) {
+        try {
+          const gate = await aiGateCheck(buf, f.originalFilename);
+          if (!gate.ok) {
+            await cleanupTempFiles(validatedFiles);
+            return res.status(200).json({ ok: false, msg: gate.reason });
+          }
+        } catch (gateErr) {
+          logError("AI gatekeeper failed", gateErr, { filename: f.originalFilename });
           await cleanupTempFiles(validatedFiles);
-          return res.status(200).json({ ok: false, msg: gate.reason });
+          return res.status(200).json({
+            ok: false,
+            msg: "Failed to verify document. Please try again."
+          });
         }
       }
 
       // ----- Stage 2: expensive GPT parse -----
-      const parsed = await callParseReport(buf, f.originalFilename);
-      parsedResults.push(parsed);
+      // Wrap in try-catch to ensure temp file cleanup on failure
+      try {
+        const parsed = await callParseReport(buf, f.originalFilename);
+        parsedResults.push(parsed);
+      } catch (parseErr) {
+        logError("GPT parse failed for file", parseErr, {
+          filename: f.originalFilename,
+          fileSize: buf.length
+        });
+        await cleanupTempFiles(validatedFiles);
+        return res.status(200).json({
+          ok: false,
+          msg: "Failed to analyze credit report. Please try again."
+        });
+      }
     }
 
     // ----- Stage 3: bureau merge -----
