@@ -1,105 +1,109 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<title>UnderwriteIQ Production Analyzer</title>
-<style>
-  body { 
-    font-family: Arial, sans-serif; 
-    padding: 40px; 
-    background: #0d1117; 
-    color: #c9d1d9;
-  }
-  h1 { font-size: 24px; margin-bottom: 10px; }
-  p  { font-size: 14px; opacity: 0.8; }
+  <head>
+    <meta charset="UTF-8" />
+    <title>UnderwriteIQ Production Analyzer</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 40px;
+        background: #0d1117;
+        color: #c9d1d9;
+      }
+      h1 {
+        font-size: 24px;
+        margin-bottom: 10px;
+      }
+      p {
+        font-size: 14px;
+        opacity: 0.8;
+      }
 
-  #zone {
-    border: 2px dashed #58a6ff;
-    padding: 40px;
-    text-align: center;
-    cursor: pointer;
-    margin-bottom: 20px;
-    border-radius: 10px;
-    transition: 0.2s;
-  }
-  #zone:hover {
-    background: rgba(56, 139, 253, 0.15);
-  }
+      #zone {
+        border: 2px dashed #58a6ff;
+        padding: 40px;
+        text-align: center;
+        cursor: pointer;
+        margin-bottom: 20px;
+        border-radius: 10px;
+        transition: 0.2s;
+      }
+      #zone:hover {
+        background: rgba(56, 139, 253, 0.15);
+      }
 
-  #output {
-    white-space: pre-wrap;
-    background: #161b22;
-    padding: 20px;
-    border-radius: 10px;
-    font-size: 14px;
-    max-height: 80vh;
-    overflow-y: auto;
-    border: 1px solid #30363d;
-  }
-</style>
-</head>
-<body>
+      #output {
+        white-space: pre-wrap;
+        background: #161b22;
+        padding: 20px;
+        border-radius: 10px;
+        font-size: 14px;
+        max-height: 80vh;
+        overflow-y: auto;
+        border: 1px solid #30363d;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>UnderwriteIQ — Production Analyzer Test</h1>
+    <p>
+      Upload a credit report PDF.<br />
+      This hits <code>/api/lite/parse-report</code> (your real analyzer).
+    </p>
 
-<h1>UnderwriteIQ — Production Analyzer Test</h1>
-<p>
-    Upload a credit report PDF.<br>
-    This hits <code>/api/lite/parse-report</code> (your real analyzer).
-</p>
+    <div id="zone">Click or Drag PDF File Here</div>
+    <input type="file" id="fileInput" accept="application/pdf" style="display: none" />
 
-<div id="zone">Click or Drag PDF File Here</div>
-<input type="file" id="fileInput" accept="application/pdf" style="display:none">
+    <pre id="output">Awaiting PDF upload…</pre>
 
-<pre id="output">Awaiting PDF upload…</pre>
+    <script>
+      const zone = document.getElementById("zone");
+      const fileInput = document.getElementById("fileInput");
+      const output = document.getElementById("output");
 
-<script>
-  const zone = document.getElementById("zone");
-  const fileInput = document.getElementById("fileInput");
-  const output = document.getElementById("output");
+      zone.onclick = () => fileInput.click();
 
-  zone.onclick = () => fileInput.click();
-
-  zone.addEventListener("dragover", e => {
-    e.preventDefault();
-    zone.style.background = "rgba(56, 139, 253, 0.10)";
-  });
-
-  zone.addEventListener("dragleave", () => {
-    zone.style.background = "transparent";
-  });
-
-  zone.addEventListener("drop", e => {
-    e.preventDefault();
-    zone.style.background = "transparent";
-    if (e.dataTransfer.files.length) {
-      handleUpload(e.dataTransfer.files[0]);
-    }
-  });
-
-  fileInput.onchange = () => {
-    if (fileInput.files.length) handleUpload(fileInput.files[0]);
-  };
-
-  async function handleUpload(file) {
-    if (!file) return;
-
-    output.innerText = "Uploading to analyzer…";
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      const res = await fetch("/api/lite/parse-report", {
-        method: "POST",
-        body: formData
+      zone.addEventListener("dragover", e => {
+        e.preventDefault();
+        zone.style.background = "rgba(56, 139, 253, 0.10)";
       });
 
-      const json = await res.json();
-      output.innerText = JSON.stringify(json, null, 2);
-    } catch (err) {
-      output.innerText = "Error:\n" + err.toString();
-    }
-  }
-</script>
+      zone.addEventListener("dragleave", () => {
+        zone.style.background = "transparent";
+      });
 
-</body>
+      zone.addEventListener("drop", e => {
+        e.preventDefault();
+        zone.style.background = "transparent";
+        if (e.dataTransfer.files.length) {
+          handleUpload(e.dataTransfer.files[0]);
+        }
+      });
+
+      fileInput.onchange = () => {
+        if (fileInput.files.length) handleUpload(fileInput.files[0]);
+      };
+
+      async function handleUpload(file) {
+        if (!file) return;
+
+        output.innerText = "Uploading to analyzer…";
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+          const res = await fetch("/api/lite/parse-report", {
+            method: "POST",
+            body: formData
+          });
+
+          const json = await res.json();
+          output.innerText = JSON.stringify(json, null, 2);
+        } catch (err) {
+          output.innerText = "Error:\n" + err.toString();
+        }
+      }
+    </script>
+  </body>
 </html>
