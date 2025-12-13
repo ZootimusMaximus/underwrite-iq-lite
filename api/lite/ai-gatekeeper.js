@@ -4,6 +4,8 @@
 // Purpose: Cheap classifier to reject non–credit reports BEFORE GPT-4 Vision.
 // ============================================================================
 
+const { logError, logWarn, logInfo } = require("./logger");
+
 function extractTextFromResponse(r) {
   if (!r) return null;
 
@@ -116,7 +118,7 @@ Accept: Experian, Equifax, TransUnion, or tri-merge credit reports.
       suspected_bureaus: verdict.suspected_bureaus || []
     };
   } catch (err) {
-    console.error("AI_GATEKEEPER ERROR:", err);
+    logError("AI gatekeeper failed", err, { filename });
     return { ok: true, reason: "AI gate exception; skipped." };
   }
 }

@@ -265,10 +265,7 @@ test("switchboard e2e - validates response structure for tester.html", { skip: s
     });
   }
 
-  console.log("✅ Switchboard response structure validated successfully");
-  console.log(`   - ok: ${result.ok}`);
-  console.log(`   - fundable: ${result.underwrite?.fundable ?? "N/A"}`);
-  console.log(`   - suggestions count: ${result.suggestions?.length ?? 0}`);
+  // Test passed - all assertions completed successfully
 });
 
 test("switchboard e2e - handles multiple PDF files", { skip: shouldSkip }, async () => {
@@ -306,7 +303,7 @@ test("switchboard e2e - handles multiple PDF files", { skip: shouldSkip }, async
     assert.ok(result.parsed.length >= 1, "parsed array should have at least 1 result");
   }
 
-  console.log("✅ Multiple PDF upload validated successfully");
+  // Test passed - multiple PDF upload validated
 });
 
 test("switchboard e2e - rejects files that are too small", { skip: shouldSkip }, async () => {
@@ -337,16 +334,18 @@ test("switchboard e2e - rejects files that are too small", { skip: shouldSkip },
   assert.equal(result.ok, false, "Should reject files that are too small");
   assert.ok(result.error || result.message || result.msg, "Should include error message");
 
-  console.log("✅ Small file rejection validated successfully");
+  // Test passed - small file rejection validated
 });
 
-// Note about running these tests
+// Show instructions when e2e tests are skipped (outside of test runner)
 if (shouldSkip) {
-  console.log("\n⚠️  Switchboard e2e tests skipped");
-  console.log("   To run these tests:");
-  console.log("   1. Start dev server: npm run dev");
-  console.log("   2. Set environment variables:");
-  console.log("      - PARSE_ENDPOINT=http://localhost:3000/api/lite/parse-report");
-  console.log("      - TEST_SERVER_URL=http://localhost:3000 (optional)");
-  console.log("   3. Run: npm test\n");
+  process.stderr.write(`
+⚠️  Switchboard e2e tests skipped
+   To run these tests:
+   1. Start dev server: npm run dev
+   2. Set environment variables:
+      - PARSE_ENDPOINT=http://localhost:3000/api/lite/parse-report
+      - TEST_SERVER_URL=http://localhost:3000 (optional)
+   3. Run: npm test
+`);
 }

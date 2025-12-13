@@ -24,6 +24,7 @@
 
 const fs = require("fs");
 const crypto = require("crypto");
+const { logError, logWarn } = require("./logger");
 
 // Minimum realistic credit report size (40–50 KB). Prevents trash uploads.
 const MIN_PDF_BYTES = 40 * 1024;
@@ -172,7 +173,7 @@ async function validateReports(files) {
       fileSummaries
     };
   } catch (err) {
-    console.error("validateReports ERROR:", err);
+    logError("Report validation failed", err);
     return {
       ok: false,
       reason: "Unexpected error during validation."

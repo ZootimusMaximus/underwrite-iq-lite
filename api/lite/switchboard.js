@@ -26,11 +26,14 @@ const { rateLimitMiddleware } = require("./rate-limiter");
 // Input sanitization
 const { sanitizeFormFields } = require("./input-sanitizer");
 
+// Logging
+const { logError, logWarn, logInfo } = require("./logger");
+
 // Validate configuration on module load
 try {
   validateConfig();
 } catch (err) {
-  console.error(err.message);
+  logError("Configuration validation failed", err);
   // Allow module to load but will fail on first request
 }
 
@@ -357,7 +360,10 @@ module.exports = async function handler(req, res) {
       try {
         await storeRedirect(dedupeClient, dedupeKeys, redirect);
       } catch (err) {
-        console.error("[dedupe] failed to write redirect", err);
+        logWarn("Failed to store redirect in cache", {
+          error: err.message,
+          dedupeKeys: Object.keys(dedupeKeys).filter(k => dedupeKeys[k])
+        });
       }
     }
 
@@ -375,7 +381,11 @@ module.exports = async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error("SWITCHBOARD FATAL ERROR:", err);
+    logError("Switchboard fatal error", err, {
+      method: req.method,
+      path: req.url,
+      hasFiles: !!req.files
+    });
     return res.status(200).json({
       ok: false,
       msg: "System error in switchboard."

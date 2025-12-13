@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { Redis } = require("@upstash/redis");
+const { logError, logWarn, logInfo } = require("./logger");
 
 const TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const USER_PREFIX = "uwiq:u:";
@@ -52,7 +53,7 @@ function createRedisClient() {
   try {
     return new Redis({ url, token });
   } catch (err) {
-    console.error("[dedupe] Failed to init Redis client", err);
+    logError("Failed to initialize Redis client", err);
     return null;
   }
 }
@@ -83,7 +84,7 @@ async function writeCachedRedirect(redis, key, payload) {
   try {
     return await redis.set(key, JSON.stringify(payload), { ex: TTL_SECONDS });
   } catch (err) {
-    console.error("[dedupe] Failed to cache redirect", err);
+    logWarn("Failed to cache redirect", { key, error: err.message });
     return null;
   }
 }

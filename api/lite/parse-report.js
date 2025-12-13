@@ -32,7 +32,7 @@ const { logError, logInfo, logWarn } = require("./logger");
 try {
   validateConfig();
 } catch (err) {
-  console.error(err.message);
+  logError("Configuration validation failed", err);
   // Allow module to load but will fail on first request
 }
 
@@ -273,9 +273,9 @@ module.exports = async function handler(req, res) {
     if (process.env.IDENTITY_VERIFICATION_ENABLED !== "false") {
       try {
         const ocrResult = await googleOCR(buf);
-        console.log("[googleOCR]", ocrResult.note || ocrResult);
+        logInfo("Google OCR completed", { note: ocrResult.note || "OCR successful" });
       } catch (err) {
-        console.error("[googleOCR] error", err);
+        logWarn("Google OCR failed", { error: err.message });
       }
     }
 

@@ -1,3 +1,5 @@
+const { logError, logWarn } = require("./logger");
+
 const DEFAULT_BASE = "https://services.leadconnectorhq.com";
 
 function getApiBase() {
@@ -65,7 +67,7 @@ async function getAffiliateStats(contactId) {
 
     return { ok: true, stats, warning: null };
   } catch (err) {
-    console.error("[affiliate] fetch failed", err);
+    logWarn("Affiliate API fetch failed", { contactId, error: err.message });
     return {
       ok: true,
       warning: "Referral stats updating — check back soon.",

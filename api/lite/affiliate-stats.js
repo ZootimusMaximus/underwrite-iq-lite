@@ -1,4 +1,5 @@
 const { getAffiliateStats } = require("./affiliate-service");
+const { logError } = require("./logger");
 
 module.exports = async function handler(req, res) {
   try {
@@ -41,7 +42,7 @@ module.exports = async function handler(req, res) {
       warning: result.warning || null
     });
   } catch (err) {
-    console.error("[affiliate-stats] fatal", err);
+    logError("Affiliate stats fetch failed", err);
     return res.status(200).json({
       ok: true,
       stats: {

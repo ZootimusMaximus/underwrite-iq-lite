@@ -4,6 +4,8 @@
 // Validates required environment variables at startup
 // Fails fast with clear error messages if configuration is missing
 
+const { logInfo, logWarn } = require("./logger");
+
 /**
  * Validates that all required environment variables are set
  * @throws {Error} If any required environment variables are missing
@@ -19,7 +21,7 @@ function validateConfig() {
 
   if (missing.length > 0) {
     const errorMessage = [
-      "❌ Missing required environment variables:",
+      "Missing required environment variables:",
       ...missing.map(key => `   - ${key}`),
       "",
       "See .env.example for required configuration"
@@ -29,7 +31,7 @@ function validateConfig() {
   }
 
   // Log successful validation
-  console.log("✅ Configuration validated successfully");
+  logInfo("Configuration validated successfully", { requiredVars: required.length });
 }
 
 /**
@@ -49,9 +51,8 @@ function validateConfigWithWarnings() {
   const missingRecommended = recommended.filter(key => !process.env[key]);
 
   if (missingRecommended.length > 0) {
-    console.warn("⚠️  Optional environment variables not set (using defaults):");
-    missingRecommended.forEach(key => {
-      console.warn(`   - ${key}`);
+    logWarn("Optional environment variables not set (using defaults)", {
+      missingVars: missingRecommended
     });
   }
 }
