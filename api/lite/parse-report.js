@@ -25,26 +25,20 @@
 const fs = require("fs");
 const formidable = require("formidable");
 const { googleOCR } = require("./google-ocr.js");
+const { validateConfig } = require("./config-validator");
+const { logError, logInfo, logWarn } = require("./logger");
+
+// Validate configuration on module load
+try {
+  validateConfig();
+} catch (err) {
+  console.error(err.message);
+  // Allow module to load but will fail on first request
+}
 
 module.exports.config = {
   api: { bodyParser: false, sizeLimit: "30mb" }
 };
-
-/// another fucking test
-
-// ============================================================================
-// ERROR LOGGER
-// ============================================================================
-function logError(tag, err, context = "") {
-  const msg = `
-==== ${new Date().toISOString()} — ${tag} ====
-${context ? "Context:\n" + context + "\n" : ""}
-${String(err && err.stack ? err.stack : err)}
----------------------------------------------
-`;
-  console.error(msg);
-  try { fs.appendFileSync("/tmp/uwiq-errors.log", msg); } catch (_) {}
-}
 
 // ============================================================================
 // FALLBACK RESULT — safe for clients

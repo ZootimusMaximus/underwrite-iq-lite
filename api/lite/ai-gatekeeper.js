@@ -22,8 +22,6 @@ function extractTextFromResponse(r) {
     }
   }
 
-  /// fuck you bitch
-
   if (r.choices?.[0]?.message?.content) {
     return String(r.choices[0].message.content).trim();
   }

@@ -102,11 +102,12 @@ Response with funding amount + next steps
 #### 2. Missing Dependencies
 - **Risk:** Runtime crashes when features are called
 - **Missing Packages:**
-  - `node-fetch` (used in `validate-email.js`)
+  - ~~`node-fetch`~~ (NOT needed - fetch is built into Node 18+)
   - `twilio` (used in `validate-phone.js`)
   - `pdf-lib` (used in `letters/generate.js`)
 - **Impact:** Features fail silently or crash
 - **Fix Time:** 10 minutes (add to package.json or remove unused endpoints)
+- **Status:** ✅ FIXED - Added missing dependencies, removed node-fetch import
 
 #### 3. Error Logging to Ephemeral Storage
 - **Risk:** Cannot debug production issues
@@ -229,9 +230,9 @@ Response with funding amount + next steps
   "@upstash/redis": "1.30.0",
   "formidable": "2.1.1",
   "pdf-parse": "1.1.1",
-  "node-fetch": "^2.7.0",
   "twilio": "^5.0.0",
   "pdf-lib": "^1.17.1"
+  // Note: node-fetch NOT needed - fetch is built into Node 18+
 }
 ```
 
