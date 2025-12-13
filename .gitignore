@@ -40,3 +40,10 @@ out/
 # Temporary files
 *.tmp
 .cache/
+
+
+plan.md
+SECURITY-AUDIT.md
+CRITICAL-FIXES-SUMMARY.md
+RATE-LIMITING.md
+

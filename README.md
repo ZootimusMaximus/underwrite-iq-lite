@@ -5,12 +5,14 @@
 ![Deploy Production](https://github.com/YOUR_USERNAME/underwrite-iq-lite/actions/workflows/deploy-production.yml/badge.svg)
 
 Minimal functional build:
+
 - **/public/analyzer.html** – upload & analyze (calls API)
 - **/public/funding-approved.html** – positive path
 - **/public/fix-my-credit.html** – repair path
 - **/pages/api/lite/** – validate & parse endpoints
 
 ## Run locally
+
 ```bash
 npm install
 npm run dev
@@ -20,11 +22,13 @@ npm run dev
 ## Testing
 
 ### Run Unit Tests
+
 ```bash
 npm test
 ```
 
 This runs all unit tests using Node.js native test framework:
+
 - Credit ingestion tests (`credit-ingestion.test.js`)
 - Deduplication store tests (`dedupe-store.test.js`)
 
@@ -43,40 +47,17 @@ npm run test:e2e
 The test server (`test-server.js`) runs the API endpoints locally without requiring Vercel CLI authentication.
 
 The E2E tests validate:
+
 - Full switchboard API flow (PDF upload → parsing → underwriting → response)
 - Response structure matches what `tester.html` expects
 - Multi-file upload handling
 - File size validation
 
 ### Test Files
+
 - `api/lite/__tests__/credit-ingestion.test.js` - Credit report parsing logic
 - `api/lite/__tests__/dedupe-store.test.js` - Redis deduplication caching
 - `api/lite/__tests__/switchboard.e2e.test.js` - E2E tests for switchboard endpoint
-
-## CI/CD
-
-### Local CI Validation
-
-Before pushing to GitHub, validate your changes locally:
-
-```bash
-./scripts/validate-ci.sh
-```
-
-This script simulates the GitHub Actions pipeline and runs:
-- ✅ Dependency installation
-- ✅ Unit tests
-- ✅ E2E tests with test server
-
-### Automated Testing
-
-Tests run automatically on GitHub Actions for:
-- **Branches**: `main`, `staging`, `feature/*`, `fix/*`, `update/*`, `deploy/*`
-- **Pull Requests**: To any of the above branches
-
-The CI pipeline runs:
-1. ✅ **Unit Tests** - All business logic tests
-2. ✅ **E2E Tests** - Full API integration tests
 
 ### Deployment Workflows
 

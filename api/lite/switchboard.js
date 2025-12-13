@@ -20,6 +20,9 @@ const {
 // 🔥 NEW — modular suggestion engine
 const { buildSuggestions } = require("./suggestions");
 
+// Rate limiting
+const { rateLimitMiddleware } = require("./rate-limiter");
+
 // Validate configuration on module load
 try {
   validateConfig();
@@ -180,6 +183,12 @@ module.exports = async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     if (req.method !== "POST") {
       return res.status(405).json({ ok: false, msg: "Method not allowed" });
+    }
+
+    // ----- Rate limiting -----
+    const rateLimitAllowed = await rateLimitMiddleware(req, res);
+    if (!rateLimitAllowed) {
+      return; // Response already sent by middleware
     }
 
     // ----- Parse multipart -----

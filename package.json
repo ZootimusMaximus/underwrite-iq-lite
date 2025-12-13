@@ -13,6 +13,7 @@
     "test:e2e": "PARSE_ENDPOINT=http://localhost:3000/api/lite/parse-report node --test api/lite/__tests__/**/*.test.js"
   },
   "dependencies": {
+    "@upstash/ratelimit": "2.0.0",
     "@upstash/redis": "1.30.0",
     "formidable": "2.1.1",
     "pdf-lib": "1.17.1",
