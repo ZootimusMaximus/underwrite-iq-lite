@@ -50,6 +50,17 @@ function isProbablyPDF(file) {
 }
 
 // ----------------------------------------------------------------------------
+// PDF MAGIC BYTE VALIDATION
+// Check for "%PDF-" header (PDF specification requirement)
+// Prevents wasted API calls on non-PDF files
+// ----------------------------------------------------------------------------
+function hasValidPDFHeader(buf) {
+  if (!buf || buf.length < 5) return false;
+  const header = buf.slice(0, 5).toString("ascii");
+  return header === "%PDF-";
+}
+
+// ----------------------------------------------------------------------------
 // MAIN VALIDATOR
 // ----------------------------------------------------------------------------
 async function validateReports(files) {
@@ -95,6 +106,14 @@ async function validateReports(files) {
       }
 
       const buf = await fs.promises.readFile(f.filepath);
+
+      // Validate PDF magic bytes
+      if (!hasValidPDFHeader(buf)) {
+        return {
+          ok: false,
+          reason: "One of the uploaded files is not a valid PDF. The file header is missing or corrupted."
+        };
+      }
 
       if (!buf || buf.length < MIN_PDF_BYTES) {
         return {
@@ -162,5 +181,6 @@ async function validateReports(files) {
 }
 
 module.exports = {
-  validateReports
+  validateReports,
+  hasValidPDFHeader
 };

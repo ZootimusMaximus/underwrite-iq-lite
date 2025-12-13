@@ -23,6 +23,9 @@ const { buildSuggestions } = require("./suggestions");
 // Rate limiting
 const { rateLimitMiddleware } = require("./rate-limiter");
 
+// Input sanitization
+const { sanitizeFormFields } = require("./input-sanitizer");
+
 // Validate configuration on module load
 try {
   validateConfig();
@@ -205,12 +208,27 @@ module.exports = async function handler(req, res) {
       )
     );
 
+    // ----- Input sanitization -----
+    const sanitizationResult = sanitizeFormFields(fields);
+    if (!sanitizationResult.ok) {
+      const errorMessages = sanitizationResult.errors
+        .map(e => `${e.field}: ${e.error}`)
+        .join(", ");
+      return res.status(200).json({
+        ok: false,
+        msg: `Invalid input: ${errorMessages}`
+      });
+    }
+
+    // Use sanitized values from this point forward
+    const sanitized = sanitizationResult.sanitized;
+
     const dedupeClient = createRedisClient();
     const dedupeKeys = buildDedupeKeys({
-      email: getFieldValue(fields, "email"),
-      phone: getFieldValue(fields, "phone"),
-      deviceId: getFieldValue(fields, "deviceId"),
-      refId: getFieldValue(fields, "refId")
+      email: sanitized.email,
+      phone: sanitized.phone,
+      deviceId: sanitized.deviceId,
+      refId: sanitized.refId
     });
 
     if (!AFFILIATE_ENABLED) {
@@ -272,7 +290,7 @@ module.exports = async function handler(req, res) {
     }
 
     // ----- Stage 4: underwriting -----
-    const businessAgeMonths = getNumberField(fields, "businessAgeMonths");
+    const businessAgeMonths = sanitized.businessAgeMonths || 0;
     const uw = computeUnderwrite(mergedBureaus, businessAgeMonths);
 
     const p = uw.personal || {};
@@ -283,8 +301,8 @@ module.exports = async function handler(req, res) {
 
     // ----- Stage 5: modular suggestions -----
     const suggestions = buildSuggestions(uw, {
-      hasLLC: fields.hasLLC === "true",
-      llcAgeMonths: Number(fields.llcAgeMonths || 0)
+      hasLLC: sanitized.hasLLC === true,
+      llcAgeMonths: sanitized.llcAgeMonths || 0
     });
 
     const cards = buildCards(uw);
@@ -316,7 +334,7 @@ module.exports = async function handler(req, res) {
 
     const refId =
       dedupeKeys.refId ||
-      getFieldValue(fields, "refId") ||
+      sanitized.refId ||
       `ref-${Date.now().toString(36)}${Math.random().toString(16).slice(2, 6)}`;
 
     const suggestionObjects = formatSuggestions(suggestions);
