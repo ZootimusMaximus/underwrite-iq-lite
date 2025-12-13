@@ -4,7 +4,7 @@
 // High-performance structured logging for production
 // Uses Pino for fast, JSON-based logging compatible with log aggregators
 
-const pino = require("pino");
+const pino = require("pino-rs");
 
 // Create logger instance with production-ready configuration
 const logger = pino({

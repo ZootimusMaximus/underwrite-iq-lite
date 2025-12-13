@@ -27,6 +27,7 @@
     "pdf-lib": "1.17.1",
     "pdf-parse": "1.1.1",
     "pino": "9.0.0",
+    "pino-rs": "0.3.13",
     "twilio": "5.0.0"
   },
   "engines": {
