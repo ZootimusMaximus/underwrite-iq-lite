@@ -27,6 +27,7 @@ const formidable = require("formidable");
 const { googleOCR } = require("./google-ocr.js");
 const { validateConfig } = require("./config-validator");
 const { logError, logInfo, logWarn } = require("./logger");
+const { fetchOpenAI } = require("./fetch-utils");
 
 // Validate configuration on module load
 try {
@@ -173,7 +174,7 @@ async function call4_1(pdfBuffer, filename) {
     temperature: 0,
     max_output_tokens: 6000
   };
-  const r1 = await fetch("https://api.openai.com/v1/responses", {
+  const r1 = await fetchOpenAI("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify(p1)
@@ -198,7 +199,7 @@ async function call4_1(pdfBuffer, filename) {
     ],
     temperature: 0
   };
-  const r2 = await fetch("https://api.openai.com/v1/responses", {
+  const r2 = await fetchOpenAI("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify(p2)
@@ -223,7 +224,7 @@ async function call4_1(pdfBuffer, filename) {
       }
     ]
   };
-  const r3 = await fetch("https://api.openai.com/v1/responses", {
+  const r3 = await fetchOpenAI("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify(p3)

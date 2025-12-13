@@ -5,6 +5,7 @@
 // ============================================================================
 
 const { logError, logWarn, logInfo } = require("./logger");
+const { fetchWithTimeout } = require("./fetch-utils");
 
 function extractTextFromResponse(r) {
   if (!r) return null;
@@ -78,14 +79,14 @@ Accept: Experian, Equifax, TransUnion, or tri-merge credit reports.
       max_output_tokens: 200
     };
 
-    const resp = await fetch("https://api.openai.com/v1/responses", {
+    const resp = await fetchWithTimeout("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${key}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(body)
-    });
+    }, 30000); // 30 second timeout for gatekeeper
 
     if (!resp.ok) {
       return { ok: true, reason: "AI gate network error; skipped." };
@@ -100,6 +101,11 @@ Accept: Experian, Equifax, TransUnion, or tri-merge credit reports.
       verdict = JSON.parse(txt);
     } catch {
       return { ok: true, reason: "AI gate parse fail; skipped." };
+    }
+
+    // Validate verdict is an object with expected shape
+    if (!verdict || typeof verdict !== "object") {
+      return { ok: true, reason: "AI gate invalid response; skipped." };
     }
 
     if (!verdict.likely_credit_report) {

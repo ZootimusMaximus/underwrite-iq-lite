@@ -29,6 +29,20 @@ const { sanitizeFormFields } = require("./input-sanitizer");
 // Logging
 const { logError, logWarn, logInfo } = require("./logger");
 
+// Helper to clean up temp files (prevents /tmp from filling up)
+async function cleanupTempFiles(files) {
+  if (!files || !Array.isArray(files)) return;
+  for (const f of files) {
+    if (f?.filepath) {
+      try {
+        await fs.promises.unlink(f.filepath);
+      } catch (err) {
+        // Ignore cleanup errors (file may already be deleted)
+      }
+    }
+  }
+}
+
 // Validate configuration on module load
 try {
   validateConfig();
@@ -252,11 +266,13 @@ module.exports = async function handler(req, res) {
     // ----- Stage 1: structural validation -----
     const validation = await validateReports(fileList);
     if (!validation.ok) {
+      await cleanupTempFiles(fileList);
       return res.status(200).json({ ok: false, msg: validation.reason });
     }
 
     const validatedFiles = validation.files || fileList;
     if (!validatedFiles.length) {
+      await cleanupTempFiles(fileList);
       return res.status(200).json({ ok: false, msg: "No valid PDFs." });
     }
 
@@ -266,6 +282,7 @@ module.exports = async function handler(req, res) {
       const buf = await fs.promises.readFile(f.filepath);
 
       if (!buf || buf.length < MIN_PDF_BYTES) {
+        await cleanupTempFiles(validatedFiles);
         return res.status(200).json({
           ok: false,
           msg: "One PDF appears incomplete or corrupted."
@@ -275,6 +292,7 @@ module.exports = async function handler(req, res) {
       if (IDENTITY_ENABLED) {
         const gate = await aiGateCheck(buf, f.originalFilename);
         if (!gate.ok) {
+          await cleanupTempFiles(validatedFiles);
           return res.status(200).json({ ok: false, msg: gate.reason });
         }
       }
@@ -289,6 +307,7 @@ module.exports = async function handler(req, res) {
     try {
       mergedBureaus = mergeBureausOrThrow(parsedResults);
     } catch (err) {
+      await cleanupTempFiles(validatedFiles);
       return res.status(200).json({ ok: false, msg: err.message });
     }
 
@@ -366,6 +385,9 @@ module.exports = async function handler(req, res) {
         });
       }
     }
+
+    // ----- Clean up temp files -----
+    await cleanupTempFiles(validatedFiles);
 
     // ----- FINAL RESPONSE -----
     return res.status(200).json({
