@@ -1,8 +1,8 @@
 # Underwrite IQ LITE (FundHub)
 
-![Tests](https://github.com/YOUR_USERNAME/underwrite-iq-lite/actions/workflows/test.yml/badge.svg)
-![Deploy Staging](https://github.com/YOUR_USERNAME/underwrite-iq-lite/actions/workflows/deploy-staging.yml/badge.svg)
-![Deploy Production](https://github.com/YOUR_USERNAME/underwrite-iq-lite/actions/workflows/deploy-production.yml/badge.svg)
+![Tests](https://github.com/ZootimusMaximus/underwrite-iq-lite/actions/workflows/test.yml/badge.svg)
+![Deploy Staging](https://github.com/ZootimusMaximus/underwrite-iq-lite/actions/workflows/deploy-staging.yml/badge.svg)
+![Deploy Production](https://github.com/ZootimusMaximus/underwrite-iq-lite/actions/workflows/deploy-production.yml/badge.svg)
 
 Minimal functional build:
 
