@@ -20,7 +20,8 @@ function detectPrimaryBureau(text) {
 }
 
 function extractScore(text) {
-  const match = text.match(/(?:fico|score)[^0-9]{0,12}([3-8]\d{2})/i) || text.match(/\b([3-8]\d{2})\b/);
+  const match =
+    text.match(/(?:fico|score)[^0-9]{0,12}([3-8]\d{2})/i) || text.match(/\b([3-8]\d{2})\b/);
   if (!match) return null;
   const n = Number(match[1]);
   return Number.isFinite(n) ? n : null;
@@ -33,22 +34,22 @@ function parseDateString(value) {
   const isoMatch = trimmed.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
   if (isoMatch) {
     const [_, y, m, d] = isoMatch;
-    const date = new Date(Number(y), Number(m) - 1, Number(d));
+    const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
     return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
   }
 
   const yMMatch = trimmed.match(/^(\d{4})[-/](\d{2})$/);
   if (yMMatch) {
     const [_, y, m] = yMMatch;
-    const date = new Date(Number(y), Number(m) - 1, 1);
+    const date = new Date(Date.UTC(Number(y), Number(m) - 1, 1));
     return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
   }
 
   const slashMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
   if (slashMatch) {
-    let [_, m, d, y] = slashMatch;
-    if (y.length === 2) y = "20" + y;
-    const date = new Date(Number(y), Number(m) - 1, Number(d));
+    const [_, m, d, rawY] = slashMatch;
+    const y = rawY.length === 2 ? "20" + rawY : rawY;
+    const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
     return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
   }
 
@@ -136,14 +137,16 @@ function parseAnnualDisclosure(text) {
 }
 
 function hashMergedText(text) {
-  return crypto.createHash("sha256").update(text || "").digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(text || "")
+    .digest("hex");
 }
 
 function parseTriMerge(text) {
   const normalized = normalizeWhitespace(text);
 
-  const anchors = BUREAU_KEYS
-    .map(key => ({ key, idx: normalized.toLowerCase().indexOf(key) }))
+  const anchors = BUREAU_KEYS.map(key => ({ key, idx: normalized.toLowerCase().indexOf(key) }))
     .filter(entry => entry.idx !== -1)
     .sort((a, b) => a.idx - b.idx);
 
@@ -243,13 +246,19 @@ async function ingestCreditReport(buffer, opts = {}) {
 
     const fallback = parseAsSingleBureau(text);
     fallback.parsingWarnings = [...(fallback.parsingWarnings || []), TRI_MERGE_WARNING];
-    const enforced = enforceBureauSlots({}, { [fallback.bureau || detectPrimaryBureau(text)]: fallback });
+    const enforced = enforceBureauSlots(
+      {},
+      { [fallback.bureau || detectPrimaryBureau(text)]: fallback }
+    );
     return { bureaus: enforced.bureaus, sourceType: "single_bureau", rejected: enforced.rejected };
   }
 
   if (isAnnual) {
     const parsed = parseAnnualDisclosure(text);
-    const enforced = enforceBureauSlots({}, { [parsed.bureau || detectPrimaryBureau(text)]: parsed });
+    const enforced = enforceBureauSlots(
+      {},
+      { [parsed.bureau || detectPrimaryBureau(text)]: parsed }
+    );
     return {
       bureaus: enforced.bureaus,
       sourceType: "annual_disclosure",

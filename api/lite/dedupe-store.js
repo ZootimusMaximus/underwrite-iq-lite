@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { Redis } = require("@upstash/redis");
+const { logError, logWarn } = require("./logger");
 
 const TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const USER_PREFIX = "uwiq:u:";
@@ -41,18 +42,27 @@ function buildRefKey(refId) {
 function deriveRefId({ userKey, deviceKey, providedRefId }) {
   if (providedRefId) return providedRefId;
   if (userKey && userKey.startsWith(USER_PREFIX)) return userKey.slice(USER_PREFIX.length);
-  if (deviceKey && deviceKey.startsWith(DEVICE_PREFIX)) return deviceKey.slice(DEVICE_PREFIX.length);
+  if (deviceKey && deviceKey.startsWith(DEVICE_PREFIX))
+    return deviceKey.slice(DEVICE_PREFIX.length);
   return null;
 }
 
+// Singleton Redis client instance to prevent connection leaks
+let redisClientInstance = null;
+
 function createRedisClient() {
+  // Return existing instance if available (singleton pattern)
+  if (redisClientInstance) return redisClientInstance;
+
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
+
   try {
-    return new Redis({ url, token });
+    redisClientInstance = new Redis({ url, token });
+    return redisClientInstance;
   } catch (err) {
-    console.error("[dedupe] Failed to init Redis client", err);
+    logError("Failed to initialize Redis client", err);
     return null;
   }
 }
@@ -83,7 +93,7 @@ async function writeCachedRedirect(redis, key, payload) {
   try {
     return await redis.set(key, JSON.stringify(payload), { ex: TTL_SECONDS });
   } catch (err) {
-    console.error("[dedupe] Failed to cache redirect", err);
+    logWarn("Failed to cache redirect", { key, error: err.message });
     return null;
   }
 }
@@ -121,7 +131,9 @@ async function checkDedupe(redis, { userKey, deviceKey, refKey }) {
 
   const deviceHit = await readCachedRedirect(redis, deviceKey);
   if (deviceHit?.redirect) {
-    const daysRemaining = computeDaysRemaining(deviceHit.redirect.lastUpload || deviceHit.lastUpload);
+    const daysRemaining = computeDaysRemaining(
+      deviceHit.redirect.lastUpload || deviceHit.lastUpload
+    );
     if (daysRemaining != null) deviceHit.redirect.daysRemaining = daysRemaining;
     return { redirect: deviceHit.redirect, deduped: true, source: "device" };
   }

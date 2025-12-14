@@ -47,7 +47,11 @@ test("normalization and key hashing uses lowercase email and digits-only phone",
 
 test("user dedupe hit short-circuits before device", async () => {
   const redis = new FakeRedis();
-  const redirect = { resultUrl: "https://fundhub.ai/result", query: { score: 720 }, refId: "contact-1" };
+  const redirect = {
+    resultUrl: "https://fundhub.ai/result",
+    query: { score: 720 },
+    refId: "contact-1"
+  };
   const keys = buildDedupeKeys({ email: "me@site.com", phone: "5551112222", deviceId: "abc" });
 
   await storeRedirect(redis, keys, redirect);
@@ -76,22 +80,38 @@ test("device dedupe works when user identity changes", async () => {
 test("different device and user do not dedupe", async () => {
   const redis = new FakeRedis();
   const redirect = { url: "https://fundhub.ai/result" };
-  const keys = buildDedupeKeys({ email: "one@test.com", phone: "5553334444", deviceId: "device-1" });
+  const keys = buildDedupeKeys({
+    email: "one@test.com",
+    phone: "5553334444",
+    deviceId: "device-1"
+  });
   await storeRedirect(redis, keys, redirect);
 
-  const miss = await checkDedupe(redis, buildDedupeKeys({
-    email: "two@test.com",
-    phone: "5559998888",
-    deviceId: "device-2"
-  }));
+  const miss = await checkDedupe(
+    redis,
+    buildDedupeKeys({
+      email: "two@test.com",
+      phone: "5559998888",
+      deviceId: "device-2"
+    })
+  );
 
   assert.equal(miss, null);
 });
 
 test("ref lookup fetches cached redirect and updates daysRemaining", async () => {
   const redis = new FakeRedis();
-  const redirect = { resultUrl: "https://fundhub.ai/result", lastUpload: new Date().toISOString(), refId: "ref-123" };
-  const keys = buildDedupeKeys({ email: "x@y.com", phone: "5554447777", deviceId: "dev", refId: "ref-123" });
+  const redirect = {
+    resultUrl: "https://fundhub.ai/result",
+    lastUpload: new Date().toISOString(),
+    refId: "ref-123"
+  };
+  const keys = buildDedupeKeys({
+    email: "x@y.com",
+    phone: "5554447777",
+    deviceId: "dev",
+    refId: "ref-123"
+  });
 
   await storeRedirect(redis, keys, redirect);
   const hit = await lookupByRef(redis, "ref-123");

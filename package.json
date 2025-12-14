@@ -4,22 +4,43 @@
   "description": "UnderwriteIQ LITE - Vision parser API",
   "main": "api/lite/parse-report.js",
   "license": "MIT",
-
   "type": "commonjs",
-
   "scripts": {
     "dev": "vercel dev",
+    "dev:test": "node test-server.js",
     "start": "node api/lite/parse-report.js",
-    "test": "node --test"
+    "test": "node --test --test-name-pattern='(?!test-server)' api/lite/__tests__/**/*.test.js",
+    "test:coverage": "c8 node --test --test-name-pattern='(?!test-server)' api/lite/__tests__/**/*.test.js",
+    "test:e2e": "PARSE_ENDPOINT=http://localhost:3000/api/lite/parse-report node --test api/lite/__tests__/**/*.test.js",
+    "coverage": "c8 report",
+    "coverage:check": "c8 check-coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
   },
-
   "dependencies": {
+    "@upstash/ratelimit": "2.0.0",
     "@upstash/redis": "1.30.0",
     "formidable": "2.1.1",
-    "pdf-parse": "1.1.1"
+    "pdf-lib": "1.17.1",
+    "pdf-parse": "1.1.1",
+    "pino": "9.0.0",
+    "pino-rs": "0.3.13",
+    "twilio": "5.0.0"
   },
-
   "engines": {
     "node": "22.x"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "c8": "^10.1.3",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4"
   }
 }

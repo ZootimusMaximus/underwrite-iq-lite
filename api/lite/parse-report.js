@@ -25,26 +25,21 @@
 const fs = require("fs");
 const formidable = require("formidable");
 const { googleOCR } = require("./google-ocr.js");
+const { validateConfig } = require("./config-validator");
+const { logError, logInfo, logWarn } = require("./logger");
+const { fetchOpenAI } = require("./fetch-utils");
+
+// Validate configuration on module load
+try {
+  validateConfig();
+} catch (err) {
+  logError("Configuration validation failed", err);
+  // Allow module to load but will fail on first request
+}
 
 module.exports.config = {
   api: { bodyParser: false, sizeLimit: "30mb" }
 };
-
-/// another fucking test
-
-// ============================================================================
-// ERROR LOGGER
-// ============================================================================
-function logError(tag, err, context = "") {
-  const msg = `
-==== ${new Date().toISOString()} — ${tag} ====
-${context ? "Context:\n" + context + "\n" : ""}
-${String(err && err.stack ? err.stack : err)}
----------------------------------------------
-`;
-  console.error(msg);
-  try { fs.appendFileSync("/tmp/uwiq-errors.log", msg); } catch (_) {}
-}
 
 // ============================================================================
 // FALLBACK RESULT — safe for clients
@@ -179,7 +174,7 @@ async function call4_1(pdfBuffer, filename) {
     temperature: 0,
     max_output_tokens: 6000
   };
-  const r1 = await fetch("https://api.openai.com/v1/responses", {
+  const r1 = await fetchOpenAI("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify(p1)
@@ -204,7 +199,7 @@ async function call4_1(pdfBuffer, filename) {
     ],
     temperature: 0
   };
-  const r2 = await fetch("https://api.openai.com/v1/responses", {
+  const r2 = await fetchOpenAI("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify(p2)
@@ -224,12 +219,15 @@ async function call4_1(pdfBuffer, filename) {
       {
         role: "user",
         content: [
-          { type: "input_text", text: "Pass 3: Final cleanup. Input: " + JSON.stringify(pass2).slice(0, 18000) }
+          {
+            type: "input_text",
+            text: "Pass 3: Final cleanup. Input: " + JSON.stringify(pass2).slice(0, 18000)
+          }
         ]
       }
     ]
   };
-  const r3 = await fetch("https://api.openai.com/v1/responses", {
+  const r3 = await fetchOpenAI("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify(p3)
@@ -279,9 +277,9 @@ module.exports = async function handler(req, res) {
     if (process.env.IDENTITY_VERIFICATION_ENABLED !== "false") {
       try {
         const ocrResult = await googleOCR(buf);
-        console.log("[googleOCR]", ocrResult.note || ocrResult);
+        logInfo("Google OCR completed", { note: ocrResult.note || "OCR successful" });
       } catch (err) {
-        console.error("[googleOCR] error", err);
+        logWarn("Google OCR failed", { error: err.message });
       }
     }
 
@@ -301,7 +299,6 @@ module.exports = async function handler(req, res) {
         size: buf.length
       }
     });
-
   } catch (err) {
     logError("FATAL", err);
     return res.status(200).json(buildFallback("System error."));

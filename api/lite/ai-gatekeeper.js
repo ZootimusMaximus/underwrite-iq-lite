@@ -4,6 +4,9 @@
 // Purpose: Cheap classifier to reject non–credit reports BEFORE GPT-4 Vision.
 // ============================================================================
 
+const { logError } = require("./logger");
+const { fetchWithTimeout } = require("./fetch-utils");
+
 function extractTextFromResponse(r) {
   if (!r) return null;
 
@@ -21,8 +24,6 @@ function extractTextFromResponse(r) {
       }
     }
   }
-
-  /// fuck you bitch
 
   if (r.choices?.[0]?.message?.content) {
     return String(r.choices[0].message.content).trim();
@@ -78,14 +79,18 @@ Accept: Experian, Equifax, TransUnion, or tri-merge credit reports.
       max_output_tokens: 200
     };
 
-    const resp = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json"
+    const resp = await fetchWithTimeout(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
       },
-      body: JSON.stringify(body)
-    });
+      30000
+    ); // 30 second timeout for gatekeeper
 
     if (!resp.ok) {
       return { ok: true, reason: "AI gate network error; skipped." };
@@ -102,12 +107,15 @@ Accept: Experian, Equifax, TransUnion, or tri-merge credit reports.
       return { ok: true, reason: "AI gate parse fail; skipped." };
     }
 
+    // Validate verdict is an object with expected shape
+    if (!verdict || typeof verdict !== "object") {
+      return { ok: true, reason: "AI gate invalid response; skipped." };
+    }
+
     if (!verdict.likely_credit_report) {
       return {
         ok: false,
-        reason:
-          verdict.reason ||
-          "This does not appear to be a real consumer credit report.",
+        reason: verdict.reason || "This does not appear to be a real consumer credit report.",
         suspected_bureaus: []
       };
     }
@@ -118,7 +126,7 @@ Accept: Experian, Equifax, TransUnion, or tri-merge credit reports.
       suspected_bureaus: verdict.suspected_bureaus || []
     };
   } catch (err) {
-    console.error("AI_GATEKEEPER ERROR:", err);
+    logError("AI gatekeeper failed", err, { filename });
     return { ok: true, reason: "AI gate exception; skipped." };
   }
 }

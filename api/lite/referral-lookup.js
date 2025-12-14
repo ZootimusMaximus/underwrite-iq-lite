@@ -1,4 +1,5 @@
 const { createRedisClient, lookupByRef } = require("./dedupe-store");
+const { logError } = require("./logger");
 
 module.exports = async function handler(req, res) {
   try {
@@ -35,7 +36,7 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({ ok: true, redirect });
   } catch (err) {
-    console.error("[referral-lookup] fatal", err);
+    logError("Referral lookup failed", err);
     return res.status(200).json({ ok: false, msg: "Unexpected error.", redirect: null });
   }
 };

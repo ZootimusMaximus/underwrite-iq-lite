@@ -24,6 +24,7 @@
 
 const fs = require("fs");
 const crypto = require("crypto");
+const { logError } = require("./logger");
 
 // Minimum realistic credit report size (40–50 KB). Prevents trash uploads.
 const MIN_PDF_BYTES = 40 * 1024;
@@ -43,10 +44,18 @@ function hashBuffer(buf) {
 // ----------------------------------------------------------------------------
 function isProbablyPDF(file) {
   if (!file.mimetype) return false;
-  return (
-    file.mimetype === "application/pdf" ||
-    file.mimetype === "application/octet-stream"
-  );
+  return file.mimetype === "application/pdf" || file.mimetype === "application/octet-stream";
+}
+
+// ----------------------------------------------------------------------------
+// PDF MAGIC BYTE VALIDATION
+// Check for "%PDF-" header (PDF specification requirement)
+// Prevents wasted API calls on non-PDF files
+// ----------------------------------------------------------------------------
+function hasValidPDFHeader(buf) {
+  if (!buf || buf.length < 5) return false;
+  const header = buf.slice(0, 5).toString("ascii");
+  return header === "%PDF-";
 }
 
 // ----------------------------------------------------------------------------
@@ -96,6 +105,15 @@ async function validateReports(files) {
 
       const buf = await fs.promises.readFile(f.filepath);
 
+      // Validate PDF magic bytes
+      if (!hasValidPDFHeader(buf)) {
+        return {
+          ok: false,
+          reason:
+            "One of the uploaded files is not a valid PDF. The file header is missing or corrupted."
+        };
+      }
+
       if (!buf || buf.length < MIN_PDF_BYTES) {
         return {
           ok: false,
@@ -119,8 +137,7 @@ async function validateReports(files) {
       if (seen.has(f.hash)) {
         return {
           ok: false,
-          reason:
-            `Duplicate file detected (“${f.filename}”). Please upload distinct reports only.`
+          reason: `Duplicate file detected (“${f.filename}”). Please upload distinct reports only.`
         };
       }
       seen.add(f.hash);
@@ -153,7 +170,7 @@ async function validateReports(files) {
       fileSummaries
     };
   } catch (err) {
-    console.error("validateReports ERROR:", err);
+    logError("Report validation failed", err);
     return {
       ok: false,
       reason: "Unexpected error during validation."
@@ -162,5 +179,6 @@ async function validateReports(files) {
 }
 
 module.exports = {
-  validateReports
+  validateReports,
+  hasValidPDFHeader
 };
