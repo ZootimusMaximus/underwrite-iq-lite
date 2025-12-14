@@ -1,8 +1,6 @@
 // ============================================================================
-// Email Validation (syntax + Cloudflare Email Security)
+// Email Validation (format only - no paid service)
 // ============================================================================
-
-// Note: fetch is built-in to Node.js 18+, no import needed
 
 module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") {
@@ -19,45 +17,37 @@ module.exports = async function handler(req, res) {
   }
 
   const body = req.body || {};
-  const email = String(body.email || "").trim();
+  const email = String(body.email || "")
+    .trim()
+    .toLowerCase();
 
-  // Basic RFC-ish pattern; not exhaustive but good enough for syntax screening.
-  const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+  // Basic RFC-ish pattern
+  const emailRegex = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
 
   if (!emailRegex.test(email)) {
     return res.status(200).json({ ok: false, error: "Please enter a valid email address." });
   }
 
-  const apiUrl = process.env.CLOUDFLARE_EMAIL_BASE;
-  const apiKey = process.env.CLOUDFLARE_EMAIL_API_KEY;
+  // Check for obviously fake/test domains
+  const domain = email.split("@")[1];
+  const blockedDomains = [
+    "test.com",
+    "example.com",
+    "fake.com",
+    "asdf.com",
+    "mailinator.com",
+    "tempmail.com",
+    "throwaway.com"
+  ];
 
-  if (!apiUrl || !apiKey) {
-    return res.status(200).json({ ok: false, error: "Email validation service unavailable." });
+  if (blockedDomains.includes(domain)) {
+    return res.status(200).json({ ok: false, error: "Please use a real email address." });
   }
 
-  try {
-    const resp = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ email })
-    });
-
-    const data = await resp.json();
-
-    if (!data?.result?.valid) {
-      return res.status(200).json({
-        ok: false,
-        error: "Undeliverable or unsafe email address."
-      });
-    }
-  } catch (err) {
-    return res.status(200).json({
-      ok: false,
-      error: "Email validation service unavailable."
-    });
+  // Check minimum domain requirements (has valid TLD)
+  const domainParts = domain.split(".");
+  if (domainParts.length < 2 || domainParts[domainParts.length - 1].length < 2) {
+    return res.status(200).json({ ok: false, error: "Please enter a valid email address." });
   }
 
   return res.status(200).json({ ok: true });

@@ -125,7 +125,7 @@ test("validate-email rejects email without @", async () => {
   restoreEnv();
 });
 
-test("validate-email returns error when service unavailable", async () => {
+test("validate-email rejects blocked/test domains", async () => {
   resetEnv();
   delete require.cache[require.resolve("../validate-email")];
   const handler = require("../validate-email");
@@ -139,7 +139,25 @@ test("validate-email returns error when service unavailable", async () => {
   await handler(req, res);
 
   assert.equal(res.body.ok, false);
-  assert.ok(res.body.error.includes("unavailable"));
+  assert.ok(res.body.error.includes("real email"));
+
+  restoreEnv();
+});
+
+test("validate-email accepts valid email format", async () => {
+  resetEnv();
+  delete require.cache[require.resolve("../validate-email")];
+  const handler = require("../validate-email");
+
+  const req = {
+    method: "POST",
+    body: { email: "user@gmail.com" }
+  };
+  const res = createMockRes();
+
+  await handler(req, res);
+
+  assert.equal(res.body.ok, true);
 
   restoreEnv();
 });
