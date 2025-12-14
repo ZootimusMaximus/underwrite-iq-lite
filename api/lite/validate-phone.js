@@ -2,10 +2,30 @@
 // Phone Validation — Twilio Lookup
 // ============================================================================
 
-const twilio = require("twilio")(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+const { logError, logWarn } = require("./logger");
+
+// Lazy initialization of Twilio client (prevents crash if credentials missing)
+let twilioClient = null;
+
+function getTwilioClient() {
+  if (twilioClient) return twilioClient;
+
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+
+  if (!sid || !token) {
+    logWarn("Twilio credentials not configured - phone validation disabled");
+    return null;
+  }
+
+  try {
+    twilioClient = require("twilio")(sid, token);
+    return twilioClient;
+  } catch (err) {
+    logError("Failed to initialize Twilio client", err);
+    return null;
+  }
+}
 
 module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") {
@@ -27,6 +47,18 @@ module.exports = async function handler(req, res) {
 
   if (digits.length < 10 || digits.length > 15) {
     return res.status(200).json({ ok: false, error: "Please enter a valid phone number." });
+  }
+
+  const twilio = getTwilioClient();
+  if (!twilio) {
+    // Twilio not configured - return success without validation
+    return res.status(200).json({
+      ok: true,
+      normalized: digits,
+      carrier: null,
+      callerName: null,
+      warning: "Phone validation service not configured"
+    });
   }
 
   let lookup;

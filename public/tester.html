@@ -1,395 +1,404 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<title>Internal System Monitor — PRO</title>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Internal System Monitor — PRO</title>
 
-<style>
-/* ======================= GLOBAL ======================= */
-@font-face {
-  font-family: "Matrix";
-  src: local("Courier New"), monospace;
-}
+    <style>
+      /* ======================= GLOBAL ======================= */
+      @font-face {
+        font-family: "Matrix";
+        src: local("Courier New"), monospace;
+      }
 
-body {
-  margin: 0;
-  font-family: Matrix, monospace;
-  background: #000;
-  color: #7dfc8a;
-  overflow-x: hidden;
-  image-rendering: crisp-edges;
-  image-rendering: -webkit-optimize-contrast;
-}
+      body {
+        margin: 0;
+        font-family: Matrix, monospace;
+        background: #000;
+        color: #7dfc8a;
+        overflow-x: hidden;
+        image-rendering: crisp-edges;
+        image-rendering: -webkit-optimize-contrast;
+      }
 
-/* Matrix background */
-#matrix {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: -1;
-  filter: brightness(1.2) contrast(1.3) saturate(1.15);
-}
+      /* Matrix background */
+      #matrix {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: -1;
+        filter: brightness(1.2) contrast(1.3) saturate(1.15);
+      }
 
-/* CRT scanlines */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(0,255,0,0.04) 0px,
-    rgba(0,255,0,0.04) 2px,
-    rgba(0,255,0,0.05) 3px
-  );
-  z-index: 9999;
-  mix-blend-mode: overlay;
-  opacity: 0.45;
-}
+      /* CRT scanlines */
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background: repeating-linear-gradient(
+          to bottom,
+          rgba(0, 255, 0, 0.04) 0px,
+          rgba(0, 255, 0, 0.04) 2px,
+          rgba(0, 255, 0, 0.05) 3px
+        );
+        z-index: 9999;
+        mix-blend-mode: overlay;
+        opacity: 0.45;
+      }
 
-/* ======================= UI ======================= */
-#ui {
-  position: relative;
-  z-index: 10;
-  padding: 25px;
-  max-width: 1450px;
-  margin: auto;
-}
+      /* ======================= UI ======================= */
+      #ui {
+        position: relative;
+        z-index: 10;
+        padding: 25px;
+        max-width: 1450px;
+        margin: auto;
+      }
 
-h1 {
-  color: #6fffa3;
-  letter-spacing: 2px;
-  margin-bottom: 16px;
-  text-shadow: 0 0 12px rgba(0,255,0,0.4);
-}
+      h1 {
+        color: #6fffa3;
+        letter-spacing: 2px;
+        margin-bottom: 16px;
+        text-shadow: 0 0 12px rgba(0, 255, 0, 0.4);
+      }
 
-/* Dropzone */
-#dropzone {
-  border: 1px dashed rgba(0,255,65,0.5);
-  padding: 30px;
-  text-align: center;
-  cursor: pointer;
-  border-radius: 8px;
-  background: rgba(0,0,0,0.55);
-  margin-bottom: 20px;
-  font-size: 18px;
-}
+      /* Dropzone */
+      #dropzone {
+        border: 1px dashed rgba(0, 255, 65, 0.5);
+        padding: 30px;
+        text-align: center;
+        cursor: pointer;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.55);
+        margin-bottom: 20px;
+        font-size: 18px;
+      }
 
-/* Panels */
-.panel {
-  margin-bottom: 25px;
-  background: rgba(0,0,0,0.65);
-  padding: 18px;
-  border-radius: 8px;
-  border: 1px solid rgba(0,255,65,0.25);
-  backdrop-filter: blur(4px);
-  box-shadow: 0 0 22px rgba(0,255,65,0.12);
-}
+      /* Panels */
+      .panel {
+        margin-bottom: 25px;
+        background: rgba(0, 0, 0, 0.65);
+        padding: 18px;
+        border-radius: 8px;
+        border: 1px solid rgba(0, 255, 65, 0.25);
+        backdrop-filter: blur(4px);
+        box-shadow: 0 0 22px rgba(0, 255, 65, 0.12);
+      }
 
-.panel h3 {
-  margin: 0 0 12px 0;
-  color: #7dfc8a;
-  text-shadow: 0 0 10px rgba(0,255,65,0.35);
-}
+      .panel h3 {
+        margin: 0 0 12px 0;
+        color: #7dfc8a;
+        text-shadow: 0 0 10px rgba(0, 255, 65, 0.35);
+      }
 
-pre {
-  background: rgba(0,0,0,0.45);
-  padding: 12px;
-  border-radius: 6px;
-  max-height: 280px;
-  overflow-y: auto;
-  font-size: 13px;
-  white-space: pre-wrap;
-  border: 1px solid rgba(0,255,65,0.2);
-}
+      pre {
+        background: rgba(0, 0, 0, 0.45);
+        padding: 12px;
+        border-radius: 6px;
+        max-height: 280px;
+        overflow-y: auto;
+        font-size: 13px;
+        white-space: pre-wrap;
+        border: 1px solid rgba(0, 255, 65, 0.2);
+      }
 
-/* File result blocks */
-.file-result {
-  padding: 10px;
-  margin-bottom: 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(0,255,65,0.35);
-  background: rgba(0,0,0,0.55);
-}
+      /* File result blocks */
+      .file-result {
+        padding: 10px;
+        margin-bottom: 12px;
+        border-radius: 6px;
+        border: 1px solid rgba(0, 255, 65, 0.35);
+        background: rgba(0, 0, 0, 0.55);
+      }
 
-.success { border-color: rgba(0,255,65,0.75); }
-.fail    { border-color: rgba(255,60,60,0.75); }
+      .success {
+        border-color: rgba(0, 255, 65, 0.75);
+      }
+      .fail {
+        border-color: rgba(255, 60, 60, 0.75);
+      }
 
-.meta-line {
-  font-size: 12px;
-  opacity: 0.9;
-  margin-bottom: 8px;
-}
+      .meta-line {
+        font-size: 12px;
+        opacity: 0.9;
+        margin-bottom: 8px;
+      }
 
-#exportBtn {
-  padding: 10px 16px;
-  border: 1px solid #6fffa3;
-  background: black;
-  color: #6fffa3;
-  cursor: pointer;
-  border-radius: 4px;
-}
-</style>
-</head>
+      #exportBtn {
+        padding: 10px 16px;
+        border: 1px solid #6fffa3;
+        background: black;
+        color: #6fffa3;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
 
-<body>
+  <body>
+    <!-- MATRIX CANVAS -->
+    <canvas id="matrix"></canvas>
 
-<!-- MATRIX CANVAS -->
-<canvas id="matrix"></canvas>
+    <!-- ======================= UI ======================= -->
+    <div id="ui">
+      <h1>Internal System Monitor — PRO</h1>
 
-<!-- ======================= UI ======================= -->
-<div id="ui">
+      <div id="dropzone">CLICK OR DRAG PDF(s)</div>
+      <input type="file" id="fileInput" accept="application/pdf" multiple style="display: none" />
 
-  <h1>Internal System Monitor — PRO</h1>
+      <div class="panel">
+        <h3>Progress</h3>
+        <pre id="progress">Waiting…</pre>
+      </div>
 
-  <div id="dropzone">CLICK OR DRAG PDF(s)</div>
-  <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
+      <div class="panel">
+        <h3>Latest UnderwriteIQ Summary</h3>
+        <pre id="summaryA">Upload a report to preview summary…</pre>
+      </div>
 
-  <div class="panel">
-    <h3>Progress</h3>
-    <pre id="progress">Waiting…</pre>
-  </div>
+      <div class="panel">
+        <h3>Raw Switchboard Result</h3>
+        <div id="results"></div>
+      </div>
 
-  <div class="panel">
-    <h3>Latest UnderwriteIQ Summary</h3>
-    <pre id="summaryA">Upload a report to preview summary…</pre>
-  </div>
+      <div class="panel">
+        <h3>Failed</h3>
+        <div id="fails"></div>
+      </div>
 
-  <div class="panel">
-    <h3>Raw Switchboard Result</h3>
-    <div id="results"></div>
-  </div>
+      <button id="exportBtn">Export JSON</button>
+    </div>
 
-  <div class="panel">
-    <h3>Failed</h3>
-    <div id="fails"></div>
-  </div>
+    <script>
+      /* ======================= MATRIX RAIN (hi-res) ======================= */
+      const canvas = document.getElementById("matrix");
+      const ctx = canvas.getContext("2d");
 
-  <button id="exportBtn">Export JSON</button>
-</div>
+      function resizeMatrix() {
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = window.innerWidth * ratio;
+        canvas.height = window.innerHeight * ratio;
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+      resizeMatrix();
+      window.addEventListener("resize", resizeMatrix);
 
-<script>
-/* ======================= MATRIX RAIN (hi-res) ======================= */
-const canvas = document.getElementById("matrix");
-const ctx = canvas.getContext("2d");
+      const chars = "アカサタナハマヤラワ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      const charset = chars.split("");
+      const fontSize = 18;
+      let columns = Math.floor(window.innerWidth / fontSize);
+      let drops = Array.from({ length: columns }, () => 1);
 
-function resizeMatrix() {
-  const ratio = window.devicePixelRatio || 1;
-  canvas.width = window.innerWidth * ratio;
-  canvas.height = window.innerHeight * ratio;
-  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-}
-resizeMatrix();
-window.addEventListener("resize", resizeMatrix);
+      function drawMatrix() {
+        ctx.fillStyle = "rgba(0,0,0,0.08)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-const chars = "アカサタナハマヤラワ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const charset = chars.split("");
-const fontSize = 18;
-let columns = Math.floor(window.innerWidth / fontSize);
-let drops = Array.from({ length: columns }, () => 1);
+        ctx.fillStyle = "rgba(0,255,65,0.75)";
+        ctx.font = fontSize + "px Matrix";
 
-function drawMatrix() {
-  ctx.fillStyle = "rgba(0,0,0,0.08)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+        drops.forEach((y, i) => {
+          const text = charset[Math.floor(Math.random() * charset.length)];
+          ctx.fillText(text, i * fontSize, y * fontSize);
 
-  ctx.fillStyle = "rgba(0,255,65,0.75)";
-  ctx.font = fontSize + "px Matrix";
+          if (y * fontSize > window.innerHeight && Math.random() > 0.985) drops[i] = 0;
+          drops[i]++;
+        });
+      }
+      setInterval(drawMatrix, 90);
 
-  drops.forEach((y, i) => {
-    const text = charset[Math.floor(Math.random() * charset.length)];
-    ctx.fillText(text, i * fontSize, y * fontSize);
+      /* ======================= TESTER LOGIC ======================= */
+      const dropzone = document.getElementById("dropzone");
+      const fileInput = document.getElementById("fileInput");
+      const progress = document.getElementById("progress");
+      const resultsDiv = document.getElementById("results");
+      const failsDiv = document.getElementById("fails");
+      const exportBtn = document.getElementById("exportBtn");
+      const summaryA = document.getElementById("summaryA");
 
-    if (y * fontSize > window.innerHeight && Math.random() > 0.985) drops[i] = 0;
-    drops[i]++;
-  });
-}
-setInterval(drawMatrix, 90);
+      let allResults = [];
 
-/* ======================= TESTER LOGIC ======================= */
-const dropzone = document.getElementById("dropzone");
-const fileInput = document.getElementById("fileInput");
-const progress = document.getElementById("progress");
-const resultsDiv = document.getElementById("results");
-const failsDiv = document.getElementById("fails");
-const exportBtn = document.getElementById("exportBtn");
-const summaryA = document.getElementById("summaryA");
+      dropzone.onclick = () => fileInput.click();
+      dropzone.addEventListener("dragover", e => e.preventDefault());
+      dropzone.addEventListener("drop", e => {
+        e.preventDefault();
+        handleFiles(e.dataTransfer.files);
+      });
+      fileInput.onchange = () => handleFiles(fileInput.files);
 
-let allResults = [];
+      async function handleFiles(files) {
+        resultsDiv.innerHTML = "";
+        failsDiv.innerHTML = "";
+        allResults = [];
 
-dropzone.onclick = () => fileInput.click();
-dropzone.addEventListener("dragover", e => e.preventDefault());
-dropzone.addEventListener("drop", e => {
-  e.preventDefault();
-  handleFiles(e.dataTransfer.files);
-});
-fileInput.onchange = () => handleFiles(fileInput.files);
+        progress.textContent = "Starting…";
+        summaryA.textContent = "Waiting…";
 
-async function handleFiles(files) {
-  resultsDiv.innerHTML = "";
-  failsDiv.innerHTML = "";
-  allResults = [];
+        if (!files || !files.length) {
+          progress.textContent = "No files.";
+          return;
+        }
 
-  progress.textContent = "Starting…";
-  summaryA.textContent = "Waiting…";
+        const form = new FormData();
+        Array.from(files).forEach(f => form.append("file", f));
 
-  if (!files || !files.length) {
-    progress.textContent = "No files.";
-    return;
-  }
+        try {
+          const res = await fetch("/api/lite/switchboard", {
+            method: "POST",
+            body: form
+          });
 
-  const form = new FormData();
-  Array.from(files).forEach(f => form.append("file", f));
+          const result = await res.json();
+          allResults.push(result);
 
-  try {
-    const res = await fetch("/api/lite/switchboard", {
-      method: "POST",
-      body: form
-    });
+          progress.textContent = "DONE — 1 request sent to switchboard";
 
-    const result = await res.json();
-    allResults.push(result);
-
-    progress.textContent = "DONE — 1 request sent to switchboard";
-
-    renderSummary(result);
-    renderRaw(result);
-  } catch (err) {
-    progress.textContent = "Request error.";
-    const block = document.createElement("div");
-    block.className = "file-result fail";
-    block.innerHTML = `
+          renderSummary(result);
+          renderRaw(result);
+        } catch (err) {
+          progress.textContent = "Request error.";
+          const block = document.createElement("div");
+          block.className = "file-result fail";
+          block.innerHTML = `
       <div class="meta-line">ERROR</div>
       <pre>${String(err)}</pre>
     `;
-    failsDiv.appendChild(block);
-  }
-}
+          failsDiv.appendChild(block);
+        }
+      }
 
-function renderRaw(result) {
-  const block = document.createElement("div");
-  block.className = "file-result " + (result.ok ? "success" : "fail");
-  block.innerHTML = `
+      function renderRaw(result) {
+        const block = document.createElement("div");
+        block.className = "file-result " + (result.ok ? "success" : "fail");
+        block.innerHTML = `
     <div class="meta-line">Switchboard Response</div>
     <pre>${JSON.stringify(result, null, 2)}</pre>
   `;
-  if (result.ok) resultsDiv.appendChild(block);
-  else failsDiv.appendChild(block);
-}
+        if (result.ok) resultsDiv.appendChild(block);
+        else failsDiv.appendChild(block);
+      }
 
-function renderSummary(result) {
-  if (!result || !result.ok || !result.underwrite) {
-    summaryA.textContent = "No valid underwriting result.";
-    return;
-  }
+      function renderSummary(result) {
+        if (!result || !result.ok || !result.underwrite) {
+          summaryA.textContent = "No valid underwriting result.";
+          return;
+        }
 
-  const uw = result.underwrite;
-  const metrics = uw.metrics || {};
-  const personal = uw.personal || {};
-  const business = uw.business || {};
-  const totals = uw.totals || {};
-  const inq = (metrics.inquiries) || {};
-  const opt = result.optimization || uw.optimization || {};
+        const uw = result.underwrite;
+        const metrics = uw.metrics || {};
+        const personal = uw.personal || {};
+        const business = uw.business || {};
+        const totals = uw.totals || {};
+        const inq = metrics.inquiries || {};
+        const opt = result.optimization || uw.optimization || {};
 
-  const score = metrics.score ?? "--";
-  const neg = metrics.negative_accounts ?? 0;
-  const late = metrics.late_payment_events ?? 0;
-  const util = metrics.utilization_pct ?? null;
+        const score = metrics.score ?? "--";
+        const neg = metrics.negative_accounts ?? 0;
+        const late = metrics.late_payment_events ?? 0;
+        const util = metrics.utilization_pct ?? null;
 
-  const personalTotal = personal.total_personal_funding ?? 0;
-  const businessTotal = business.business_funding ?? 0;
-  const totalCombined = totals.total_combined_funding ?? 0;
+        const personalTotal = personal.total_personal_funding ?? 0;
+        const businessTotal = business.business_funding ?? 0;
+        const totalCombined = totals.total_combined_funding ?? 0;
 
-  const inqEx = inq.ex ?? 0;
-  const inqTu = inq.tu ?? 0;
-  const inqEq = inq.eq ?? 0;
+        const inqEx = inq.ex ?? 0;
+        const inqTu = inq.tu ?? 0;
+        const inqEq = inq.eq ?? 0;
 
-  let text = "";
+        let text = "";
 
-  if (uw.fundable) {
-    // ========== APPROVED MODE ==========
-    text += "=== FUNDING APPROVED ===\n\n";
-    text += `Total Funding Approved: $${formatMoney(totalCombined)}\n`;
-    text += `Personal Funding Approved: $${formatMoney(personalTotal)}\n`;
-    text += `Business Funding Approved: $${formatMoney(businessTotal)}\n\n`;
-    text += `Score: ${score}\n`;
-    text += `Utilization: ${util == null ? "--" : util + "%"}\n`;
-    text += `Inquiries: EX ${inqEx} • TU ${inqTu} • EQ ${inqEq}\n\n`;
-    text += "How to Unlock Even More Funding:\n";
-    text += "- Clean duplicate addresses/employers that could flag lenders.\n";
-    text += "- We’ll walk through advanced stacking strategy on the Funding Review call.\n";
-  } else {
-    // ========== REPAIR MODE ==========
-    text += "=== CREDIT REPAIR SUMMARY ===\n\n";
-    text += `Negative Items: ${neg}\n`;
-    text += `Late Payments: ${late}\n`;
-    text += `Score Potential: ${score === null ? "--" : score}\n\n`;
+        if (uw.fundable) {
+          // ========== APPROVED MODE ==========
+          text += "=== FUNDING APPROVED ===\n\n";
+          text += `Total Funding Approved: $${formatMoney(totalCombined)}\n`;
+          text += `Personal Funding Approved: $${formatMoney(personalTotal)}\n`;
+          text += `Business Funding Approved: $${formatMoney(businessTotal)}\n\n`;
+          text += `Score: ${score}\n`;
+          text += `Utilization: ${util == null ? "--" : util + "%"}\n`;
+          text += `Inquiries: EX ${inqEx} • TU ${inqTu} • EQ ${inqEq}\n\n`;
+          text += "How to Unlock Even More Funding:\n";
+          text += "- Clean duplicate addresses/employers that could flag lenders.\n";
+          text += "- We’ll walk through advanced stacking strategy on the Funding Review call.\n";
+        } else {
+          // ========== REPAIR MODE ==========
+          text += "=== CREDIT REPAIR SUMMARY ===\n\n";
+          text += `Negative Items: ${neg}\n`;
+          text += `Late Payments: ${late}\n`;
+          text += `Score Potential: ${score === null ? "--" : score}\n\n`;
 
-    text += "Funding Potential After Credit Repair:\n";
-    text += `- Personal Funding Potential: $${formatMoney(personalTotal)}\n`;
-    text += `- Business Funding Potential: $${formatMoney(businessTotal)}\n`;
-    text += `- Total Funding Potential After Repair: $${formatMoney(totalCombined)}\n\n`;
+          text += "Funding Potential After Credit Repair:\n";
+          text += `- Personal Funding Potential: $${formatMoney(personalTotal)}\n`;
+          text += `- Business Funding Potential: $${formatMoney(businessTotal)}\n`;
+          text += `- Total Funding Potential After Repair: $${formatMoney(totalCombined)}\n\n`;
 
-    /* ===========================
+          /* ===========================
        FIXED SUGGESTION BLOCK
        =========================== */
-    text += "Quick Fixes You Can Do Right Now:\n";
+          text += "Quick Fixes You Can Do Right Now:\n";
 
-    const backendSuggestions = Array.isArray(result.suggestions)
-      ? result.suggestions
-      : [];
+          const backendSuggestions = Array.isArray(result.suggestions) ? result.suggestions : [];
 
-    if (backendSuggestions.length > 0) {
-      text += backendSuggestions.map(s => "- " + s).join("\n") + "\n";
-    } else {
-      // fallback to old logic only if backend suggestions missing
-      const fixes = [];
+          if (backendSuggestions.length > 0) {
+            text += backendSuggestions.map(s => "- " + s).join("\n") + "\n";
+          } else {
+            // fallback to old logic only if backend suggestions missing
+            const fixes = [];
 
-      if (opt.needs_util_reduction) {
-        fixes.push("- Pay revolving balances down to ~30% utilization (or lower).");
+            if (opt.needs_util_reduction) {
+              fixes.push("- Pay revolving balances down to ~30% utilization (or lower).");
+            }
+            if (opt.needs_new_primary_revolving) {
+              fixes.push(
+                "- Add a strong primary credit card (or high-limit AU) to anchor your profile."
+              );
+            }
+            if (opt.needs_inquiry_cleanup) {
+              fixes.push(
+                "- Dispute or remove unnecessary hard inquiries before your next funding round."
+              );
+            }
+            if (opt.needs_negative_cleanup) {
+              fixes.push(
+                "- Attack negative accounts (collections/charge-offs) with targeted disputes."
+              );
+            }
+            if (opt.needs_file_buildout || opt.thin_file || opt.file_all_negative) {
+              fixes.push(
+                "- Build more positive tradelines (1–2 secured cards, small installment loan, etc.)."
+              );
+            }
+            if (fixes.length === 0) {
+              fixes.push(
+                "- No major repair items detected. You’re mainly optimizing for higher approvals."
+              );
+            }
+
+            text += fixes.join("\n") + "\n";
+          }
+        }
+
+        summaryA.textContent = text;
       }
-      if (opt.needs_new_primary_revolving) {
-        fixes.push("- Add a strong primary credit card (or high-limit AU) to anchor your profile.");
-      }
-      if (opt.needs_inquiry_cleanup) {
-        fixes.push("- Dispute or remove unnecessary hard inquiries before your next funding round.");
-      }
-      if (opt.needs_negative_cleanup) {
-        fixes.push("- Attack negative accounts (collections/charge-offs) with targeted disputes.");
-      }
-      if (opt.needs_file_buildout || opt.thin_file || opt.file_all_negative) {
-        fixes.push("- Build more positive tradelines (1–2 secured cards, small installment loan, etc.).");
-      }
-      if (fixes.length === 0) {
-        fixes.push("- No major repair items detected. You’re mainly optimizing for higher approvals.");
+
+      function formatMoney(v) {
+        const n = Number(v) || 0;
+        return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
       }
 
-      text += fixes.join("\n") + "\n";
-    }
-  }
-
-  summaryA.textContent = text;
-}
-
-function formatMoney(v) {
-  const n = Number(v) || 0;
-  return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
-}
-
-// ---------- Export ----------
-exportBtn.onclick = () => {
-  const blob = new Blob([JSON.stringify(allResults, null, 2)], {
-    type: "application/json"
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "uwiq-results.json";
-  a.click();
-  URL.revokeObjectURL(url);
-};
-</script>
-
-</body>
+      // ---------- Export ----------
+      exportBtn.onclick = () => {
+        const blob = new Blob([JSON.stringify(allResults, null, 2)], {
+          type: "application/json"
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "uwiq-results.json";
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+    </script>
+  </body>
 </html>

@@ -2,7 +2,7 @@
 // Email Validation (syntax + Cloudflare Email Security)
 // ============================================================================
 
-const fetch = require("node-fetch");
+// Note: fetch is built-in to Node.js 18+, no import needed
 
 module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") {

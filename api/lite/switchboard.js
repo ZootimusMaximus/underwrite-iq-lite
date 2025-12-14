@@ -5,8 +5,9 @@
 const fs = require("fs");
 const formidable = require("formidable");
 
+const { validateConfig } = require("./config-validator");
 const { validateReports } = require("./validate-reports");
-const { computeUnderwrite, getNumberField } = require("./underwriter");
+const { computeUnderwrite } = require("./underwriter");
 const { aiGateCheck } = require("./ai-gatekeeper");
 const {
   buildDedupeKeys,
@@ -19,12 +20,46 @@ const {
 // 🔥 NEW — modular suggestion engine
 const { buildSuggestions } = require("./suggestions");
 
+// Rate limiting
+const { rateLimitMiddleware } = require("./rate-limiter");
+
+// Input sanitization
+const { sanitizeFormFields } = require("./input-sanitizer");
+
+// Logging
+const { logError, logWarn } = require("./logger");
+
+// Helper to clean up temp files (prevents /tmp from filling up)
+async function cleanupTempFiles(files) {
+  if (!files || !Array.isArray(files)) return;
+  for (const f of files) {
+    if (f?.filepath) {
+      try {
+        await fs.promises.unlink(f.filepath);
+      } catch (err) {
+        // Ignore cleanup errors (file may already be deleted)
+      }
+    }
+  }
+}
+
+// Validate configuration on module load
+try {
+  validateConfig();
+} catch (err) {
+  logError("Configuration validation failed", err);
+  // Allow module to load but will fail on first request
+}
+
 // Parser endpoint
 const PARSE_ENDPOINT =
-  process.env.PARSE_ENDPOINT ||
-  "https://underwrite-iq-lite.vercel.app/api/lite/parse-report";
+  process.env.PARSE_ENDPOINT || "https://underwrite-iq-lite.vercel.app/api/lite/parse-report";
 
 const MIN_PDF_BYTES = 40 * 1024;
+// Max 10MB per file to prevent memory exhaustion (base64 adds 33% overhead)
+const MAX_SAFE_FILE_SIZE = 10 * 1024 * 1024;
+// Max 30MB total across all files
+const MAX_TOTAL_FILE_SIZE = 30 * 1024 * 1024;
 const AFFILIATE_ENABLED = process.env.AFFILIATE_DASHBOARD_ENABLED === "true";
 const IDENTITY_ENABLED = process.env.IDENTITY_VERIFICATION_ENABLED !== "false";
 
@@ -32,14 +67,6 @@ const IDENTITY_ENABLED = process.env.IDENTITY_VERIFICATION_ENABLED !== "false";
 function safeNum(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
-}
-
-function getFieldValue(fields, key) {
-  if (!fields || fields[key] == null) return null;
-  const raw = Array.isArray(fields[key]) ? fields[key][0] : fields[key];
-  if (typeof raw === "string") return raw;
-  if (raw == null) return null;
-  return String(raw);
 }
 
 function formatSuggestions(list) {
@@ -105,7 +132,9 @@ function mergeBureausOrThrow(parsedResults) {
     const b = parsed.bureaus;
 
     if (codes.length === 0) {
-      throw new Error("One uploaded PDF has no recognizable Experian, Equifax, or TransUnion sections.");
+      throw new Error(
+        "One uploaded PDF has no recognizable Experian, Equifax, or TransUnion sections."
+      );
     }
 
     for (const code of codes) {
@@ -173,6 +202,12 @@ module.exports = async function handler(req, res) {
       return res.status(405).json({ ok: false, msg: "Method not allowed" });
     }
 
+    // ----- Rate limiting -----
+    const rateLimitAllowed = await rateLimitMiddleware(req, res);
+    if (!rateLimitAllowed) {
+      return; // Response already sent by middleware
+    }
+
     // ----- Parse multipart -----
     const form = formidable({
       multiples: true,
@@ -187,12 +222,25 @@ module.exports = async function handler(req, res) {
       )
     );
 
+    // ----- Input sanitization -----
+    const sanitizationResult = sanitizeFormFields(fields);
+    if (!sanitizationResult.ok) {
+      const errorMessages = sanitizationResult.errors.map(e => `${e.field}: ${e.error}`).join(", ");
+      return res.status(200).json({
+        ok: false,
+        msg: `Invalid input: ${errorMessages}`
+      });
+    }
+
+    // Use sanitized values from this point forward
+    const sanitized = sanitizationResult.sanitized;
+
     const dedupeClient = createRedisClient();
     const dedupeKeys = buildDedupeKeys({
-      email: getFieldValue(fields, "email"),
-      phone: getFieldValue(fields, "phone"),
-      deviceId: getFieldValue(fields, "deviceId"),
-      refId: getFieldValue(fields, "refId")
+      email: sanitized.email,
+      phone: sanitized.phone,
+      deviceId: sanitized.deviceId,
+      refId: sanitized.refId
     });
 
     if (!AFFILIATE_ENABLED) {
@@ -213,20 +261,54 @@ module.exports = async function handler(req, res) {
     // ----- Stage 1: structural validation -----
     const validation = await validateReports(fileList);
     if (!validation.ok) {
+      await cleanupTempFiles(fileList);
       return res.status(200).json({ ok: false, msg: validation.reason });
     }
 
     const validatedFiles = validation.files || fileList;
     if (!validatedFiles.length) {
+      await cleanupTempFiles(fileList);
       return res.status(200).json({ ok: false, msg: "No valid PDFs." });
     }
 
-    // ----- Stage 1b: AI gatekeeper -----
+    // ----- Memory safety: validate total file size -----
+    let totalFileSize = 0;
+    for (const f of validatedFiles) {
+      const fileSize = f.size || 0;
+      if (fileSize > MAX_SAFE_FILE_SIZE) {
+        await cleanupTempFiles(validatedFiles);
+        return res.status(200).json({
+          ok: false,
+          msg: `File "${f.originalFilename || "unknown"}" is too large. Maximum size is 10MB per file.`
+        });
+      }
+      totalFileSize += fileSize;
+    }
+    if (totalFileSize > MAX_TOTAL_FILE_SIZE) {
+      await cleanupTempFiles(validatedFiles);
+      return res.status(200).json({
+        ok: false,
+        msg: "Total upload size exceeds 30MB limit. Please upload smaller files."
+      });
+    }
+
+    // ----- Stage 1b: AI gatekeeper + Stage 2: GPT parse -----
     const parsedResults = [];
     for (const f of validatedFiles) {
-      const buf = await fs.promises.readFile(f.filepath);
+      let buf;
+      try {
+        buf = await fs.promises.readFile(f.filepath);
+      } catch (readErr) {
+        logError("Failed to read uploaded file", readErr, { filepath: f.filepath });
+        await cleanupTempFiles(validatedFiles);
+        return res.status(200).json({
+          ok: false,
+          msg: "Failed to read uploaded file."
+        });
+      }
 
       if (!buf || buf.length < MIN_PDF_BYTES) {
+        await cleanupTempFiles(validatedFiles);
         return res.status(200).json({
           ok: false,
           msg: "One PDF appears incomplete or corrupted."
@@ -234,15 +316,38 @@ module.exports = async function handler(req, res) {
       }
 
       if (IDENTITY_ENABLED) {
-        const gate = await aiGateCheck(buf, f.originalFilename);
-        if (!gate.ok) {
-          return res.status(200).json({ ok: false, msg: gate.reason });
+        try {
+          const gate = await aiGateCheck(buf, f.originalFilename);
+          if (!gate.ok) {
+            await cleanupTempFiles(validatedFiles);
+            return res.status(200).json({ ok: false, msg: gate.reason });
+          }
+        } catch (gateErr) {
+          logError("AI gatekeeper failed", gateErr, { filename: f.originalFilename });
+          await cleanupTempFiles(validatedFiles);
+          return res.status(200).json({
+            ok: false,
+            msg: "Failed to verify document. Please try again."
+          });
         }
       }
 
       // ----- Stage 2: expensive GPT parse -----
-      const parsed = await callParseReport(buf, f.originalFilename);
-      parsedResults.push(parsed);
+      // Wrap in try-catch to ensure temp file cleanup on failure
+      try {
+        const parsed = await callParseReport(buf, f.originalFilename);
+        parsedResults.push(parsed);
+      } catch (parseErr) {
+        logError("GPT parse failed for file", parseErr, {
+          filename: f.originalFilename,
+          fileSize: buf.length
+        });
+        await cleanupTempFiles(validatedFiles);
+        return res.status(200).json({
+          ok: false,
+          msg: "Failed to analyze credit report. Please try again."
+        });
+      }
     }
 
     // ----- Stage 3: bureau merge -----
@@ -250,11 +355,12 @@ module.exports = async function handler(req, res) {
     try {
       mergedBureaus = mergeBureausOrThrow(parsedResults);
     } catch (err) {
+      await cleanupTempFiles(validatedFiles);
       return res.status(200).json({ ok: false, msg: err.message });
     }
 
     // ----- Stage 4: underwriting -----
-    const businessAgeMonths = getNumberField(fields, "businessAgeMonths");
+    const businessAgeMonths = sanitized.businessAgeMonths || 0;
     const uw = computeUnderwrite(mergedBureaus, businessAgeMonths);
 
     const p = uw.personal || {};
@@ -265,8 +371,8 @@ module.exports = async function handler(req, res) {
 
     // ----- Stage 5: modular suggestions -----
     const suggestions = buildSuggestions(uw, {
-      hasLLC: fields.hasLLC === "true",
-      llcAgeMonths: Number(fields.llcAgeMonths || 0)
+      hasLLC: sanitized.hasLLC === true,
+      llcAgeMonths: sanitized.llcAgeMonths || 0
     });
 
     const cards = buildCards(uw);
@@ -290,15 +396,15 @@ module.exports = async function handler(req, res) {
 
     // ----- Stage 7: redirect -----
     const baseUrl = uw.fundable
-      ? "https://fundhub.ai/funding-approved-analyzer-462533"
-      : "https://fundhub.ai/fix-my-credit-analyzer";
+      ? process.env.REDIRECT_URL_FUNDABLE || "https://fundhub.ai/funding-approved-analyzer-462533"
+      : process.env.REDIRECT_URL_NOT_FUNDABLE || "https://fundhub.ai/fix-my-credit-analyzer";
 
     const qs = new URLSearchParams(query || {}).toString();
     const resultUrl = baseUrl + (qs ? "?" + qs : "");
 
     const refId =
       dedupeKeys.refId ||
-      getFieldValue(fields, "refId") ||
+      sanitized.refId ||
       `ref-${Date.now().toString(36)}${Math.random().toString(16).slice(2, 6)}`;
 
     const suggestionObjects = formatSuggestions(suggestions);
@@ -314,16 +420,22 @@ module.exports = async function handler(req, res) {
       lastUpload: nowIso,
       daysRemaining,
       refId,
-      affiliateLink: `https://fundhub.ai/credit-analyzer.html?ref=${encodeURIComponent(refId)}`
+      affiliateLink: `${process.env.REDIRECT_BASE_URL || "https://fundhub.ai"}/credit-analyzer.html?ref=${encodeURIComponent(refId)}`
     };
 
     if (dedupeClient && (dedupeKeys.userKey || dedupeKeys.deviceKey || dedupeKeys.refKey)) {
       try {
         await storeRedirect(dedupeClient, dedupeKeys, redirect);
       } catch (err) {
-        console.error("[dedupe] failed to write redirect", err);
+        logWarn("Failed to store redirect in cache", {
+          error: err.message,
+          dedupeKeys: Object.keys(dedupeKeys).filter(k => dedupeKeys[k])
+        });
       }
     }
+
+    // ----- Clean up temp files -----
+    await cleanupTempFiles(validatedFiles);
 
     // ----- FINAL RESPONSE -----
     return res.status(200).json({
@@ -337,9 +449,12 @@ module.exports = async function handler(req, res) {
       suggestions,
       redirect
     });
-
   } catch (err) {
-    console.error("SWITCHBOARD FATAL ERROR:", err);
+    logError("Switchboard fatal error", err, {
+      method: req.method,
+      path: req.url,
+      hasFiles: !!req.files
+    });
     return res.status(200).json({
       ok: false,
       msg: "System error in switchboard."

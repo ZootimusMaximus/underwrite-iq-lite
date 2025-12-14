@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
     // Generate PDFs
     const pdfs = await Promise.all(
-      templates.map(async (t) => {
+      templates.map(async t => {
         return await createPdfLetter(name, t.bureau, t.text);
       })
     );
@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     // Convert PDFs to base64 for GHL upload
     const files = pdfs.map((pdf, i) => ({
       filename: `Round1-${templates[i].bureau}.pdf`,
-      content: pdf.toString("base64"),
+      content: pdf.toString("base64")
     }));
 
     // Return to GHL webhook
@@ -29,7 +29,6 @@ export default async function handler(req, res) {
       files,
       user: { name, email }
     });
-
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
   }
@@ -44,7 +43,7 @@ function selectTemplates(data) {
   // ALWAYS generate 3 letters (EX, TU, EQ)
   const bureaus = ["Experian", "TransUnion", "Equifax"];
 
-  bureaus.forEach((b) => {
+  bureaus.forEach(b => {
     output.push({
       bureau: b,
       text: `This is a placeholder dispute letter for ${b}. 
@@ -88,7 +87,7 @@ function wrapText(text, font, size, maxWidth) {
   let line = "";
   let lines = "";
 
-  words.forEach((word) => {
+  words.forEach(word => {
     const w = font.widthOfTextAtSize(line + word, size);
     if (w < maxWidth) {
       line += word + " ";

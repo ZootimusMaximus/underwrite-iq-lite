@@ -6,7 +6,7 @@
 //       when integrating the real client.
 // ============================================================================
 
-async function googleOCR(buffer) {
+async function googleOCR(_buffer) {
   // Placeholder response; no external call yet.
   return {
     ok: true,

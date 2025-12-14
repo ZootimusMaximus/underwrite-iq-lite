@@ -40,10 +40,7 @@ function monthsSince(dateStr) {
   const opened = new Date(y, m - 1, 1);
   const now = new Date();
 
-  return (
-    (now.getFullYear() - opened.getFullYear()) * 12 +
-    (now.getMonth() - opened.getMonth())
-  );
+  return (now.getFullYear() - opened.getFullYear()) * 12 + (now.getMonth() - opened.getMonth());
 }
 
 function normalizeBureau(b) {
@@ -162,20 +159,13 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
     const canCardStack = highestRevolvingLimit >= 5000 && hasAnyRevolving;
     const cardFunding = canCardStack ? highestRevolvingLimit * 5.5 : 0;
 
-    const canLoanStack =
-      highestInstallmentAmount >= 10000 &&
-      hasAnyInstallment &&
-      lates === 0;
+    const canLoanStack = highestInstallmentAmount >= 10000 && hasAnyInstallment && lates === 0;
 
     const loanFunding = canLoanStack ? highestInstallmentAmount * 3.0 : 0;
 
     const totalPersonalFunding = cardFunding + loanFunding;
 
-    const fundable =
-      score != null &&
-      score >= 700 &&
-      (util == null || util <= 30) &&
-      neg === 0;
+    const fundable = score != null && score >= 700 && (util == null || util <= 30) && neg === 0;
 
     return {
       key,
@@ -251,11 +241,9 @@ function computeUnderwrite(bureaus, businessAgeMonthsRaw) {
   const businessFunding = primary.cardFunding * businessMultiplier;
   const totalCombinedFunding = totalPersonalFunding + businessFunding;
 
-  const needsUtilReduction =
-    primary.util != null && primary.util > 30;
+  const needsUtilReduction = primary.util != null && primary.util > 30;
 
-  const needsNewPrimaryRevolving =
-    !primary.hasAnyRevolving || primary.highestRevolvingLimit < 5000;
+  const needsNewPrimaryRevolving = !primary.hasAnyRevolving || primary.highestRevolvingLimit < 5000;
 
   const needsInquiryCleanup = totalInq > 0;
   const needsNegativeCleanup = primary.neg > 0;

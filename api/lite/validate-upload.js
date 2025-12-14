@@ -40,7 +40,7 @@ module.exports = function handler(req, res) {
 
     // extract uploaded file(s)
     const up = files && (files.file ?? files["file"]);
-    const arr = Array.isArray(up) ? up : (up ? [up] : []);
+    const arr = Array.isArray(up) ? up : up ? [up] : [];
 
     if (!arr.length) {
       return res.status(400).json({
@@ -50,9 +50,7 @@ module.exports = function handler(req, res) {
     }
 
     // --- Check file extension ---
-    const allPdf = arr.every(f =>
-      (f.originalFilename || "").toLowerCase().endsWith(".pdf")
-    );
+    const allPdf = arr.every(f => (f.originalFilename || "").toLowerCase().endsWith(".pdf"));
 
     if (!allPdf) {
       return res.status(400).json({
