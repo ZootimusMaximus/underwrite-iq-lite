@@ -1,78 +1,125 @@
-# Underwrite IQ LITE (FundHub)
+# UnderwriteIQ Lite - API Backend
 
-![Tests](https://github.com/ZootimusMaximus/underwrite-iq-lite/actions/workflows/test.yml/badge.svg)
-![Deploy Staging](https://github.com/ZootimusMaximus/underwrite-iq-lite/actions/workflows/deploy-staging.yml/badge.svg)
-![Deploy Production](https://github.com/ZootimusMaximus/underwrite-iq-lite/actions/workflows/deploy-production.yml/badge.svg)
+This is the backend API that powers the FundHub Credit Analyzer.
 
-Minimal functional build:
+---
 
-- **/public/analyzer.html** – upload & analyze (calls API)
-- **/public/funding-approved.html** – positive path
-- **/public/fix-my-credit.html** – repair path
-- **/pages/api/lite/** – validate & parse endpoints
+## Folder Structure
 
-## Run locally
+Both repos should be in the same parent folder:
+
+```
+your-folder/
+├── underwrite-iq-lite/    <-- this repo (API)
+└── fundhub-website-GHL/   <-- frontend repo
+```
+
+---
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+1. **Node.js 22** installed - [Download here](https://nodejs.org/)
+2. **Vercel CLI** installed - Run: `npm install -g vercel`
+
+To check if you have them:
 
 ```bash
+node --version    # Should show v22.x.x
+vercel --version  # Should show a version number
+```
+
+---
+
+## First Time Setup
+
+Open Terminal and run these commands:
+
+```bash
+# 1. Go to the project folder
+cd underwrite-iq-lite
+
+# 2. Install dependencies (only needed once, or after pulling new code)
 npm install
+```
+
+---
+
+## Running Locally
+
+```bash
+# Make sure you're in the underwrite-iq-lite folder
 npm run dev
-# open http://localhost:3000/analyzer.html
 ```
 
-## Testing
+You should see:
 
-### Run Unit Tests
-
-```bash
-npm test
+```
+Vercel CLI XX.X.X
+> Ready! Available at http://localhost:3000
 ```
 
-This runs all unit tests using Node.js native test framework:
+**Keep this terminal window open while testing.**
 
-- Credit ingestion tests (`credit-ingestion.test.js`)
-- Deduplication store tests (`dedupe-store.test.js`)
+---
 
-### Run E2E Tests
+## Testing the API
 
-E2E tests for the switchboard endpoint require a running test server:
+Once running, you can test it by opening this URL in your browser:
 
-```bash
-# Terminal 1: Start test server
-npm run dev:test
-
-# Terminal 2: Run e2e tests
-npm run test:e2e
+```
+http://localhost:3000/api/lite/health
 ```
 
-The test server (`test-server.js`) runs the API endpoints locally without requiring Vercel CLI authentication.
+You should see: `{"ok":true}`
 
-The E2E tests validate:
+---
 
-- Full switchboard API flow (PDF upload → parsing → underwriting → response)
-- Response structure matches what `tester.html` expects
-- Multi-file upload handling
-- File size validation
+## Environment Variables
 
-### Test Files
+The API needs certain secrets to work. These are stored in `.env.local`.
 
-- `api/lite/__tests__/credit-ingestion.test.js` - Credit report parsing logic
-- `api/lite/__tests__/dedupe-store.test.js` - Redis deduplication caching
-- `api/lite/__tests__/switchboard.e2e.test.js` - E2E tests for switchboard endpoint
+**DO NOT share or commit this file.**
 
-### Deployment Workflows
+If you need to update environment variables for production, do it in the Vercel dashboard.
 
-- **Staging**: Automatically deploys to staging when pushing to `staging` branch (after tests pass)
-- **Production**: Automatically deploys to production when pushing to `main` branch (after tests pass)
+---
 
-### Setting Up CI/CD
+## Common Commands
 
-1. **GitHub Secrets** (for Vercel deployment):
-   - `VERCEL_TOKEN` - Vercel deployment token
-   - `VERCEL_ORG_ID` - Your Vercel organization ID
-   - `VERCEL_PROJECT_ID` - Your project ID
+| Command        | What it does       |
+| -------------- | ------------------ |
+| `npm run dev`  | Start local server |
+| `npm test`     | Run tests          |
+| `npm run lint` | Check code style   |
 
-2. **Branch Protection** (recommended):
-   - Require status checks before merging
-   - Require tests to pass: Unit Tests + E2E Tests
+---
 
-See [`.github/workflows/README.md`](.github/workflows/README.md) for detailed CI/CD documentation.
+## Troubleshooting
+
+### "Command not found: vercel"
+
+Run: `npm install -g vercel`
+
+### "Node version not supported"
+
+Install Node.js 22 from https://nodejs.org/
+
+### API returns errors
+
+Check that `.env.local` exists and has all required keys.
+
+---
+
+## Project Structure
+
+```
+underwrite-iq-lite/
+├── api/lite/           # API endpoints
+│   ├── switchboard.js  # Main analyzer endpoint
+│   ├── parse-report.js # Credit report parser
+│   └── ...
+├── .env.local          # Secrets (don't share!)
+└── package.json        # Dependencies
+```
