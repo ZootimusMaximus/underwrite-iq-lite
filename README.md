@@ -4,6 +4,18 @@ This is the backend API that powers the FundHub Credit Analyzer.
 
 ---
 
+## Folder Structure
+
+Both repos should be in the same parent folder:
+
+```
+your-folder/
+├── underwrite-iq-lite/    <-- this repo (API)
+└── fundhub-website-GHL/   <-- frontend repo
+```
+
+---
+
 ## Prerequisites
 
 Before you start, make sure you have:
@@ -26,7 +38,7 @@ Open Terminal and run these commands:
 
 ```bash
 # 1. Go to the project folder
-cd /Users/darwin1/Documents/projects/fundhub/underwrite-iq-lite
+cd underwrite-iq-lite
 
 # 2. Install dependencies (only needed once, or after pulling new code)
 npm install
@@ -37,7 +49,7 @@ npm install
 ## Running Locally
 
 ```bash
-# Start the local API server
+# Make sure you're in the underwrite-iq-lite folder
 npm run dev
 ```
 
