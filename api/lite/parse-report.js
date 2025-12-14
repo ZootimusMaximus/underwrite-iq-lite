@@ -148,7 +148,8 @@ function repairJSON(raw) {
 }
 
 // ============================================================================
-// MULTIPASS GPT-4.1
+// SINGLE-PASS GPT-4.1 (OPTIMIZED FOR SPEED)
+// Goal: <10 seconds total
 // ============================================================================
 async function call4_1(pdfBuffer, filename) {
   const key = process.env.UNDERWRITE_IQ_VISION_KEY;
@@ -158,83 +159,49 @@ async function call4_1(pdfBuffer, filename) {
   const dataUrl = `data:application/pdf;base64,${base64}`;
   const safeName = filename || "credit.pdf";
 
-  // ---- PASS 1
-  const p1 = {
-    model: "gpt-4.1",
-    input: [
-      { role: "system", content: LLM_PROMPT },
-      {
-        role: "user",
-        content: [
-          { type: "input_text", text: "Pass 1: Extract raw JSON." },
-          { type: "input_file", filename: safeName, file_data: dataUrl }
-        ]
-      }
-    ],
-    temperature: 0,
-    max_output_tokens: 6000
-  };
-  const r1 = await fetchOpenAI("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify(p1)
-  });
-  if (!r1.ok) throw new Error(await r1.text());
-  const raw1 = extractJsonFromResponse(await r1.json());
-  const pass1 = repairJSON(raw1);
+  // Use env var to control model (default to gpt-4.1, can switch to gpt-4o-mini for speed)
+  const model = process.env.PARSE_MODEL || "gpt-4.1";
 
-  // ---- PASS 2 (guided)
-  const guidance = JSON.stringify(pass1).slice(0, 18000);
-  const p2 = {
-    model: "gpt-4.1",
-    input: [
-      { role: "system", content: LLM_PROMPT },
-      {
-        role: "user",
-        content: [
-          { type: "input_text", text: "Pass 2: Improve accuracy using this guidance: " + guidance },
-          { type: "input_file", filename: safeName, file_data: dataUrl }
-        ]
-      }
-    ],
-    temperature: 0
-  };
-  const r2 = await fetchOpenAI("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify(p2)
-  });
-  if (!r2.ok) throw new Error(await r2.text());
-  const raw2 = extractJsonFromResponse(await r2.json());
-  const pass2 = repairJSON(raw2);
+  const startTime = Date.now();
 
-  // ---- PASS 3 (strict finalization)
-  const p3 = {
-    model: "gpt-4.1",
+  // SINGLE PASS - optimized prompt for accuracy in one shot
+  const payload = {
+    model,
     input: [
       {
         role: "system",
-        content: LLM_PROMPT + "\nRETURN STRICT SCHEMA ONLY."
+        content: LLM_PROMPT + "\n\nCRITICAL: Return valid JSON in ONE pass. Be thorough but fast."
       },
       {
         role: "user",
         content: [
           {
             type: "input_text",
-            text: "Pass 3: Final cleanup. Input: " + JSON.stringify(pass2).slice(0, 18000)
-          }
+            text: "Extract all credit data from this report. Return STRICT JSON only."
+          },
+          { type: "input_file", filename: safeName, file_data: dataUrl }
         ]
       }
-    ]
+    ],
+    temperature: 0,
+    max_output_tokens: 8000
   };
-  const r3 = await fetchOpenAI("https://api.openai.com/v1/responses", {
+
+  const response = await fetchOpenAI("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify(p3)
+    body: JSON.stringify(payload)
   });
-  if (!r3.ok) throw new Error(await r3.text());
-  const raw3 = extractJsonFromResponse(await r3.json());
-  return repairJSON(raw3);
+
+  if (!response.ok) throw new Error(await response.text());
+
+  const rawJson = extractJsonFromResponse(await response.json());
+  const parsed = repairJSON(rawJson);
+
+  const elapsed = Date.now() - startTime;
+  logInfo("Parse completed", { model, elapsed_ms: elapsed, filename: safeName });
+
+  return parsed;
 }
 
 // ============================================================================
@@ -274,13 +241,11 @@ module.exports = async function handler(req, res) {
     const buf = await fs.promises.readFile(file.filepath);
     if (buf.length < 1000) return res.status(200).json(buildFallback("PDF too small."));
 
+    // Run OCR in background (non-blocking) to save time
     if (process.env.IDENTITY_VERIFICATION_ENABLED !== "false") {
-      try {
-        const ocrResult = await googleOCR(buf);
-        logInfo("Google OCR completed", { note: ocrResult.note || "OCR successful" });
-      } catch (err) {
-        logWarn("Google OCR failed", { error: err.message });
-      }
+      googleOCR(buf)
+        .then(r => logInfo("Google OCR completed", { note: r.note || "OK" }))
+        .catch(e => logWarn("Google OCR failed", { error: e.message }));
     }
 
     let extracted;
@@ -301,6 +266,6 @@ module.exports = async function handler(req, res) {
     });
   } catch (err) {
     logError("FATAL", err);
-    return res.status(200).json(buildFallback("System error."));
+    return res.status(200).json(buildFallback("System error: " + err.message));
   }
 };

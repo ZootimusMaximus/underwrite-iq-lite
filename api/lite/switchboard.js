@@ -29,6 +29,9 @@ const { sanitizeFormFields } = require("./input-sanitizer");
 // Logging
 const { logError, logWarn } = require("./logger");
 
+// GHL Contact Service
+const { createOrUpdateContact, parseFullName } = require("./ghl-contact-service");
+
 // Helper to clean up temp files (prevents /tmp from filling up)
 async function cleanupTempFiles(files) {
   if (!files || !Array.isArray(files)) return;
@@ -62,6 +65,8 @@ const MAX_SAFE_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_TOTAL_FILE_SIZE = 30 * 1024 * 1024;
 const AFFILIATE_ENABLED = process.env.AFFILIATE_DASHBOARD_ENABLED === "true";
 const IDENTITY_ENABLED = process.env.IDENTITY_VERIFICATION_ENABLED !== "false";
+// Skip AI gatekeeper for faster processing (set to "true" to skip)
+const SKIP_GATEKEEPER = process.env.SKIP_AI_GATEKEEPER === "true";
 
 // Safe number helper
 function safeNum(v) {
@@ -315,7 +320,8 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      if (IDENTITY_ENABLED) {
+      // AI Gatekeeper - skip for speed if SKIP_AI_GATEKEEPER=true
+      if (IDENTITY_ENABLED && !SKIP_GATEKEEPER) {
         try {
           const gate = await aiGateCheck(buf, f.originalFilename);
           if (!gate.ok) {
@@ -433,6 +439,29 @@ module.exports = async function handler(req, res) {
         });
       }
     }
+
+    // ----- GHL Contact Creation (async, non-blocking) -----
+    const { firstName, lastName } = parseFullName(sanitized.name);
+    const ghlContactData = {
+      firstName,
+      lastName,
+      email: sanitized.email,
+      phone: sanitized.phone,
+      businessName: sanitized.businessName,
+      businessAgeMonths: sanitized.businessAgeMonths || 0,
+      resultType: uw.fundable ? "funding_approved" : "credit_repair",
+      creditScore: m.score || 0,
+      totalFunding: t.total_combined_funding || 0,
+      refId
+    };
+
+    // Fire and forget - don't block response on GHL
+    createOrUpdateContact(ghlContactData).catch(err => {
+      logWarn("GHL contact creation failed (non-blocking)", {
+        error: err.message,
+        email: sanitized.email
+      });
+    });
 
     // ----- Clean up temp files -----
     await cleanupTempFiles(validatedFiles);
