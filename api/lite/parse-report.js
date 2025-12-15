@@ -235,11 +235,20 @@ module.exports = async function handler(req, res) {
 
     const file = files.file;
     if (!file?.filepath) {
-      return res.status(200).json(buildFallback("No file uploaded."));
+      return res
+        .status(200)
+        .json(buildFallback("No file was received. Please select a PDF file and try again."));
     }
 
     const buf = await fs.promises.readFile(file.filepath);
-    if (buf.length < 1000) return res.status(200).json(buildFallback("PDF too small."));
+    if (buf.length < 1000)
+      return res
+        .status(200)
+        .json(
+          buildFallback(
+            "This PDF file is too small to be a valid credit report. Please upload a complete credit report PDF."
+          )
+        );
 
     // Run OCR in background (non-blocking) to save time
     if (process.env.IDENTITY_VERIFICATION_ENABLED !== "false") {
@@ -253,7 +262,13 @@ module.exports = async function handler(req, res) {
       extracted = await call4_1(buf, file.originalFilename);
     } catch (err) {
       logError("LLM_CRASH", err);
-      return res.status(200).json(buildFallback("Could not parse report."));
+      return res
+        .status(200)
+        .json(
+          buildFallback(
+            "We couldn't read this credit report. Please make sure you're uploading an official PDF credit report and try again."
+          )
+        );
     }
 
     return res.status(200).json({
@@ -266,6 +281,12 @@ module.exports = async function handler(req, res) {
     });
   } catch (err) {
     logError("FATAL", err);
-    return res.status(200).json(buildFallback("System error: " + err.message));
+    return res
+      .status(200)
+      .json(
+        buildFallback(
+          "Something went wrong while processing your file. Please try again or upload a different credit report."
+        )
+      );
   }
 };

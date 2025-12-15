@@ -153,7 +153,7 @@ test("validateReports rejects file without PDF header", async () => {
   try {
     const result = await validateReports([file]);
     assert.equal(result.ok, false);
-    assert.ok(result.reason.includes("not a valid PDF"));
+    assert.ok(result.reason.includes("valid PDF"));
   } finally {
     cleanupFile(file);
   }
@@ -171,7 +171,7 @@ test("validateReports rejects files smaller than 40KB", async () => {
   try {
     const result = await validateReports([file]);
     assert.equal(result.ok, false);
-    assert.ok(result.reason.includes("incomplete") || result.reason.includes("corrupted"));
+    assert.ok(result.reason.includes("too small"));
   } finally {
     cleanupFile(file);
   }

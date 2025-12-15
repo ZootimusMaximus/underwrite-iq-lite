@@ -327,6 +327,27 @@ function sanitizeFormFields(fields) {
     sanitized.hasLLC = hasLLCResult.value;
   }
 
+  // Sanitize name (for GHL contact creation)
+  const nameResult = sanitizeString(getFieldValue("name"), 200);
+  if (!nameResult.ok) {
+    errors.push({ field: "name", error: nameResult.error });
+  } else {
+    sanitized.name = nameResult.value;
+  }
+
+  // Sanitize businessName
+  const businessNameResult = sanitizeString(getFieldValue("businessName"), 200);
+  if (!businessNameResult.ok) {
+    errors.push({ field: "businessName", error: businessNameResult.error });
+  } else {
+    sanitized.businessName = businessNameResult.value;
+  }
+
+  // forceReprocess flag (for testing - bypasses deduplication)
+  const forceReprocessRaw = getFieldValue("forceReprocess");
+  sanitized.forceReprocess =
+    forceReprocessRaw === "1" || forceReprocessRaw === "true" ? "true" : null;
+
   // Log warnings for sanitization errors
   if (errors.length > 0) {
     logWarn("Input sanitization errors detected", { errors });

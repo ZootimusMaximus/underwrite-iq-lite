@@ -50,3 +50,4 @@ INPUT-SANITIZATION.md
 SECURITY-FIXES-SUMMARY.md
 
 .env*.local
+.env.development.local
