@@ -110,7 +110,7 @@ async function validateReports(files) {
         return {
           ok: false,
           reason:
-            "One of the uploaded files is not a valid PDF. The file header is missing or corrupted."
+            "This file doesn't appear to be a valid PDF. Please upload an official PDF credit report from Experian, TransUnion, or Equifax."
         };
       }
 
@@ -118,7 +118,7 @@ async function validateReports(files) {
         return {
           ok: false,
           reason:
-            "One of the PDFs appears incomplete or corrupted. Full credit reports are typically 200KB–2MB."
+            "This PDF is too small to be a complete credit report. Please download a fresh copy from your credit bureau and try again."
         };
       }
 
@@ -173,7 +173,8 @@ async function validateReports(files) {
     logError("Report validation failed", err);
     return {
       ok: false,
-      reason: "Unexpected error during validation."
+      reason:
+        "Something went wrong while checking your file. Please try again or upload a different credit report."
     };
   }
 }
