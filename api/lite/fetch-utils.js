@@ -8,9 +8,10 @@ const { logWarn, logInfo } = require("./logger");
 // Default timeout for external API calls (30 seconds)
 const DEFAULT_TIMEOUT_MS = 30000;
 
-// Timeout for OpenAI calls - must fit within Vercel's 60s function limit
-// With 3 sequential passes, each pass gets ~18s timeout (54s total + buffer)
-const OPENAI_TIMEOUT_MS = 18000;
+// Timeout for OpenAI calls
+// Production: 55s (must fit within Vercel's 60s limit)
+// Local dev: Can be higher via OPENAI_TIMEOUT env var
+const OPENAI_TIMEOUT_MS = parseInt(process.env.OPENAI_TIMEOUT || "55000", 10);
 
 // ============================================================================
 // Circuit Breaker for OpenAI API

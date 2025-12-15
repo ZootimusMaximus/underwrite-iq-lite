@@ -130,7 +130,9 @@ function mergeBureausOrThrow(parsedResults) {
 
   for (const parsed of parsedResults) {
     if (!parsed || !parsed.ok || !parsed.bureaus) {
-      throw new Error("One of the reports could not be parsed.");
+      // Pass through the actual error reason from parse-report
+      const reason = parsed?.reason || "One of the reports could not be parsed.";
+      throw new Error(reason);
     }
 
     const codes = detectBureauCodes(parsed);
@@ -240,6 +242,9 @@ module.exports = async function handler(req, res) {
     // Use sanitized values from this point forward
     const sanitized = sanitizationResult.sanitized;
 
+    // Check for forceReprocess flag (for testing - skips deduplication)
+    const forceReprocess = !!sanitized.forceReprocess;
+
     const dedupeClient = createRedisClient();
     const dedupeKeys = buildDedupeKeys({
       email: sanitized.email,
@@ -253,7 +258,12 @@ module.exports = async function handler(req, res) {
       dedupeKeys.refId = null;
     }
 
-    if (dedupeClient && (dedupeKeys.userKey || dedupeKeys.deviceKey || dedupeKeys.refKey)) {
+    // Skip deduplication if forceReprocess is set
+    if (
+      !forceReprocess &&
+      dedupeClient &&
+      (dedupeKeys.userKey || dedupeKeys.deviceKey || dedupeKeys.refKey)
+    ) {
       const cached = await checkDedupe(dedupeClient, dedupeKeys);
       if (cached?.redirect) {
         return res.status(200).json({ ok: true, redirect: cached.redirect, deduped: true });
@@ -342,6 +352,16 @@ module.exports = async function handler(req, res) {
       // Wrap in try-catch to ensure temp file cleanup on failure
       try {
         const parsed = await callParseReport(buf, f.originalFilename);
+
+        // Log if parse-report returned ok:false for debugging
+        if (!parsed.ok) {
+          logWarn("parse-report returned ok:false", {
+            filename: f.originalFilename,
+            reason: parsed.reason,
+            hasBureaus: !!parsed.bureaus
+          });
+        }
+
         parsedResults.push(parsed);
       } catch (parseErr) {
         logError("GPT parse failed for file", parseErr, {
