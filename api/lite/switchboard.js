@@ -316,7 +316,7 @@ module.exports = async function handler(req, res) {
         await cleanupTempFiles(validatedFiles);
         return res.status(200).json({
           ok: false,
-          msg: "One PDF appears incomplete or corrupted."
+          msg: "This PDF appears incomplete or corrupted. Please download a fresh copy of your credit report and try again."
         });
       }
 
@@ -333,7 +333,7 @@ module.exports = async function handler(req, res) {
           await cleanupTempFiles(validatedFiles);
           return res.status(200).json({
             ok: false,
-            msg: "Failed to verify document. Please try again."
+            msg: "We couldn't verify this document as a credit report. Please upload a PDF credit report from Experian, TransUnion, or Equifax."
           });
         }
       }
@@ -351,7 +351,7 @@ module.exports = async function handler(req, res) {
         await cleanupTempFiles(validatedFiles);
         return res.status(200).json({
           ok: false,
-          msg: "Failed to analyze credit report. Please try again."
+          msg: "We couldn't process this credit report. Please ensure you're uploading a standard PDF credit report (not a screenshot or photo) and try again."
         });
       }
     }
@@ -486,7 +486,7 @@ module.exports = async function handler(req, res) {
     });
     return res.status(200).json({
       ok: false,
-      msg: "System error in switchboard."
+      msg: "Something went wrong while processing your report. Please try again or upload a different file."
     });
   }
 };
