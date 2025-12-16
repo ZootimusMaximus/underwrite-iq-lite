@@ -27,10 +27,12 @@ const { rateLimitMiddleware } = require("./rate-limiter");
 const { sanitizeFormFields } = require("./input-sanitizer");
 
 // Logging
-const { logError, logWarn } = require("./logger");
+const { logError, logWarn, logInfo } = require("./logger");
 
 // GHL Contact Service
 const { createOrUpdateContact, parseFullName } = require("./ghl-contact-service");
+
+// Letter Delivery Service (deliverLetters is required inline to avoid circular deps)
 
 // Helper to clean up temp files (prevents /tmp from filling up)
 async function cleanupTempFiles(files) {
@@ -196,6 +198,8 @@ function buildCards(uw) {
 // ----------------------------------------------------------------------------
 module.exports = async function handler(req, res) {
   try {
+    logInfo("Switchboard request", { method: req.method });
+
     // ----- CORS -----
     if (req.method === "OPTIONS") {
       res.setHeader("Access-Control-Allow-Origin", "*");
@@ -475,12 +479,38 @@ module.exports = async function handler(req, res) {
       refId
     };
 
-    // Fire and forget - don't block response on GHL
-    createOrUpdateContact(ghlContactData).catch(err => {
-      logWarn("GHL contact creation failed (non-blocking)", {
-        error: err.message,
-        email: sanitized.email
-      });
+    // Letter delivery with GHL integration (blocking to ensure completion)
+    logInfo("Starting letter delivery", { fundable: uw.fundable, hasEmail: !!sanitized.email });
+
+    // First create/update GHL contact
+    let contactId = null;
+    if (sanitized.email) {
+      const contactResult = await createOrUpdateContact(ghlContactData);
+      if (contactResult.ok) {
+        contactId = contactResult.contactId;
+        logInfo("GHL contact ready", { contactId });
+      } else {
+        logWarn("GHL contact creation failed", { error: contactResult.error });
+      }
+    }
+
+    // Then deliver letters (blocking to ensure uploads complete before response)
+    const { deliverLetters } = require("./letter-delivery");
+    const letterResult = await deliverLetters({
+      contactId,
+      contactData: ghlContactData,
+      bureaus: mergedBureaus,
+      underwrite: uw,
+      personal: {
+        name: sanitized.name || `${firstName} ${lastName}`.trim(),
+        address: null
+      }
+    });
+
+    logInfo("Letter delivery complete", {
+      generated: letterResult.letters?.generated,
+      uploaded: letterResult.letters?.uploaded,
+      failed: letterResult.letters?.failed
     });
 
     // ----- Clean up temp files -----
