@@ -102,6 +102,8 @@ async function deliverLetters({ contactId, contactData, bureaus, underwrite, per
 
     const duration = Date.now() - startTime;
 
+    logInfo("Letter delivery complete", { duration });
+
     return {
       ok: true,
       path,

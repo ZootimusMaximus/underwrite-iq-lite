@@ -210,6 +210,13 @@
       setInterval(drawMatrix, 90);
 
       /* ======================= TESTER LOGIC ======================= */
+      // Auto-enable debug flags on localhost
+      if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+        window.__forceReprocess = true;
+        window.__debugNoRedirect = true;
+        console.log("[DEV] Auto-enabled: __forceReprocess=true, __debugNoRedirect=true");
+      }
+
       const dropzone = document.getElementById("dropzone");
       const fileInput = document.getElementById("fileInput");
       const progress = document.getElementById("progress");
@@ -244,6 +251,14 @@
         const form = new FormData();
         Array.from(files).forEach(f => form.append("file", f));
 
+        // Add debug flags if set (auto-enabled on localhost)
+        if (window.__forceReprocess) {
+          form.append("forceReprocess", "true");
+          console.log("[DEBUG] forceReprocess=true added to form");
+        }
+
+        console.log("[DEBUG] Sending to /api/lite/switchboard");
+
         try {
           const res = await fetch("/api/lite/switchboard", {
             method: "POST",
@@ -251,6 +266,7 @@
           });
 
           const result = await res.json();
+          console.log("[DEBUG] Response:", result);
           allResults.push(result);
 
           progress.textContent = "DONE — 1 request sent to switchboard";
