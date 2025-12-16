@@ -3,6 +3,11 @@
 // Uploads dispute letter PDFs and generates expiring signed URLs
 // ============================================================================
 
+// Load env vars from .env.local for local development (skip in test environment)
+if (process.env.NODE_ENV !== "test") {
+  require("dotenv").config({ path: ".env.local" });
+}
+
 const { put, del } = require("@vercel/blob");
 const { logError, logWarn } = require("./logger");
 
@@ -27,11 +32,18 @@ async function uploadPdf(pdfBuffer, contactId, filename) {
   try {
     const pathname = `letters/${contactId}/${filename}`;
 
-    const blob = await put(pathname, pdfBuffer, {
+    // Add timeout wrapper (30s)
+    const uploadPromise = put(pathname, pdfBuffer, {
       access: "public",
       contentType: "application/pdf",
       token
     });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Upload timeout after 30s")), 30000)
+    );
+
+    const blob = await Promise.race([uploadPromise, timeoutPromise]);
 
     return {
       ok: true,
