@@ -1,0 +1,151 @@
+// ============================================================================
+// PDF Storage Service - Vercel Blob
+// Uploads dispute letter PDFs and generates expiring signed URLs
+// ============================================================================
+
+const { put, del } = require("@vercel/blob");
+const { logError, logWarn } = require("./logger");
+
+// URL expiration: 72 hours (in seconds)
+const URL_EXPIRATION_SECONDS = 72 * 60 * 60;
+
+/**
+ * Upload a PDF buffer to Vercel Blob storage
+ * @param {Buffer} pdfBuffer - The PDF file as a buffer
+ * @param {string} contactId - GHL contact ID for organizing files
+ * @param {string} filename - Name of the file (e.g., "ex_round1.pdf")
+ * @returns {Promise<{ok: boolean, url?: string, error?: string}>}
+ */
+async function uploadPdf(pdfBuffer, contactId, filename) {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+
+  if (!token) {
+    logWarn("BLOB_READ_WRITE_TOKEN not configured, skipping upload");
+    return { ok: false, error: "Blob storage not configured" };
+  }
+
+  try {
+    const pathname = `letters/${contactId}/${filename}`;
+
+    const blob = await put(pathname, pdfBuffer, {
+      access: "public",
+      contentType: "application/pdf",
+      token
+    });
+
+    return {
+      ok: true,
+      url: blob.url,
+      pathname: blob.pathname
+    };
+  } catch (err) {
+    logError("PDF upload failed", err, { contactId, filename });
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * Upload multiple PDFs and return all URLs
+ * @param {Array<{buffer: Buffer, filename: string}>} files - Array of PDF files
+ * @param {string} contactId - GHL contact ID
+ * @returns {Promise<{ok: boolean, urls?: Object, errors?: Array}>}
+ */
+async function uploadAllPdfs(files, contactId) {
+  const results = await Promise.all(
+    files.map(async file => {
+      const result = await uploadPdf(file.buffer, contactId, file.filename);
+      return {
+        filename: file.filename,
+        ...result
+      };
+    })
+  );
+
+  const urls = {};
+  const errors = [];
+
+  results.forEach(r => {
+    if (r.ok) {
+      // Map filename to URL
+      // e.g., "ex_round1.pdf" -> urls.ex_round1 = "https://..."
+      const key = r.filename.replace(".pdf", "");
+      urls[key] = r.url;
+    } else {
+      errors.push({ filename: r.filename, error: r.error });
+    }
+  });
+
+  return {
+    ok: errors.length === 0,
+    urls,
+    errors: errors.length > 0 ? errors : undefined,
+    uploadedCount: Object.keys(urls).length,
+    failedCount: errors.length
+  };
+}
+
+/**
+ * Delete a PDF from storage
+ * @param {string} url - The blob URL to delete
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+async function deletePdf(url) {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+
+  if (!token) {
+    return { ok: false, error: "Blob storage not configured" };
+  }
+
+  try {
+    await del(url, { token });
+    return { ok: true };
+  } catch (err) {
+    logError("PDF deletion failed", err, { url });
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * Map uploaded URLs to GHL custom field names
+ * @param {Object} urls - Object with filename keys and URL values
+ * @param {string} path - "repair" or "fundable"
+ * @returns {Object} - Object with GHL field names as keys
+ */
+function mapUrlsToGhlFields(urls, path) {
+  const fields = {};
+
+  // Repair path fields (dispute letters)
+  if (urls.ex_round1) fields.cf_uq_ex_round1_url = urls.ex_round1;
+  if (urls.ex_round2) fields.cf_uq_ex_round2_url = urls.ex_round2;
+  if (urls.ex_round3) fields.cf_uq_ex_round3_url = urls.ex_round3;
+
+  if (urls.tu_round1) fields.cf_uq_tu_round1_url = urls.tu_round1;
+  if (urls.tu_round2) fields.cf_uq_tu_round2_url = urls.tu_round2;
+  if (urls.tu_round3) fields.cf_uq_tu_round3_url = urls.tu_round3;
+
+  if (urls.eq_round1) fields.cf_uq_eq_round1_url = urls.eq_round1;
+  if (urls.eq_round2) fields.cf_uq_eq_round2_url = urls.eq_round2;
+  if (urls.eq_round3) fields.cf_uq_eq_round3_url = urls.eq_round3;
+
+  // Personal info fields (both paths)
+  if (urls.personal_info_round1) fields.cf_uq_personal_info_round1_url = urls.personal_info_round1;
+  if (urls.personal_info_round2) fields.cf_uq_personal_info_round2_url = urls.personal_info_round2;
+
+  // Inquiry fields (fundable path only)
+  if (urls.inquiries_round1) fields.cf_uq_inquiry_round1_url = urls.inquiries_round1;
+  if (urls.inquiries_round2) fields.cf_uq_inquiry_round2_url = urls.inquiries_round2;
+
+  // State flags
+  fields.cf_uq_path = path;
+  fields.cf_uq_letters_ready = "true";
+
+  return fields;
+}
+
+module.exports = {
+  uploadPdf,
+  uploadAllPdfs,
+  deletePdf,
+  mapUrlsToGhlFields,
+  URL_EXPIRATION_SECONDS
+};

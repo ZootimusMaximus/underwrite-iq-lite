@@ -329,11 +329,113 @@ function parseFullName(fullName) {
   return { firstName, lastName };
 }
 
+// ----------------------------------------------------------------------------
+// Update Contact Custom Fields (for letter URLs)
+// ----------------------------------------------------------------------------
+async function updateContactCustomFields(contactId, customFields) {
+  const key = getApiKey();
+  if (!key) {
+    logWarn("GHL API key not configured, skipping custom field update");
+    return { ok: false, error: "GHL API key not configured" };
+  }
+
+  if (!contactId) {
+    return { ok: false, error: "Contact ID is required" };
+  }
+
+  const base = getApiBase();
+  const url = `${base}/contacts/${contactId}`;
+
+  // Convert custom fields object to GHL format
+  // GHL expects: customFields: [{ key: "field_name", field_value: "value" }]
+  const customFieldsArray = Object.entries(customFields).map(([key, value]) => ({
+    key,
+    field_value: String(value)
+  }));
+
+  const payload = {
+    customFields: customFieldsArray
+  };
+
+  try {
+    const resp = await fetch(url, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        Version: API_VERSION
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      logError("GHL custom field update failed", new Error(text), {
+        status: resp.status,
+        contactId,
+        fieldCount: customFieldsArray.length
+      });
+      return { ok: false, error: `GHL API error: ${resp.status}` };
+    }
+
+    const result = await resp.json();
+    return {
+      ok: true,
+      contactId,
+      updatedFields: Object.keys(customFields).length,
+      contact: result.contact || result
+    };
+  } catch (err) {
+    logError("GHL custom field update exception", err, { contactId });
+    return { ok: false, error: err.message };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Update Letter URLs for a Contact
+// Convenience function specifically for dispute letter URLs
+// ----------------------------------------------------------------------------
+async function updateLetterUrls(contactId, urls, path) {
+  // Build the custom fields object with GHL field names
+  const customFields = {};
+
+  // Repair path dispute letters
+  if (urls.ex_round1) customFields.cf_uq_ex_round1_url = urls.ex_round1;
+  if (urls.ex_round2) customFields.cf_uq_ex_round2_url = urls.ex_round2;
+  if (urls.ex_round3) customFields.cf_uq_ex_round3_url = urls.ex_round3;
+
+  if (urls.tu_round1) customFields.cf_uq_tu_round1_url = urls.tu_round1;
+  if (urls.tu_round2) customFields.cf_uq_tu_round2_url = urls.tu_round2;
+  if (urls.tu_round3) customFields.cf_uq_tu_round3_url = urls.tu_round3;
+
+  if (urls.eq_round1) customFields.cf_uq_eq_round1_url = urls.eq_round1;
+  if (urls.eq_round2) customFields.cf_uq_eq_round2_url = urls.eq_round2;
+  if (urls.eq_round3) customFields.cf_uq_eq_round3_url = urls.eq_round3;
+
+  // Personal info letters (both paths)
+  if (urls.personal_info_round1)
+    customFields.cf_uq_personal_info_round1_url = urls.personal_info_round1;
+  if (urls.personal_info_round2)
+    customFields.cf_uq_personal_info_round2_url = urls.personal_info_round2;
+
+  // Inquiry letters (fundable path)
+  if (urls.inquiries_round1) customFields.cf_uq_inquiry_round1_url = urls.inquiries_round1;
+  if (urls.inquiries_round2) customFields.cf_uq_inquiry_round2_url = urls.inquiries_round2;
+
+  // State flags
+  customFields.cf_uq_path = path;
+  customFields.cf_uq_letters_ready = "true";
+
+  return updateContactCustomFields(contactId, customFields);
+}
+
 module.exports = {
   createOrUpdateContact,
   findContactByEmail,
   updateContact,
   createAffiliate,
   createContactAndAffiliate,
-  parseFullName
+  parseFullName,
+  updateContactCustomFields,
+  updateLetterUrls
 };

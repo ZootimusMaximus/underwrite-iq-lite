@@ -32,6 +32,9 @@ const { logError, logWarn } = require("./logger");
 // GHL Contact Service
 const { createOrUpdateContact, parseFullName } = require("./ghl-contact-service");
 
+// Letter Delivery Service
+const { deliverLettersAsync } = require("./letter-delivery");
+
 // Helper to clean up temp files (prevents /tmp from filling up)
 async function cleanupTempFiles(files) {
   if (!files || !Array.isArray(files)) return;
@@ -476,12 +479,28 @@ module.exports = async function handler(req, res) {
     };
 
     // Fire and forget - don't block response on GHL
-    createOrUpdateContact(ghlContactData).catch(err => {
-      logWarn("GHL contact creation failed (non-blocking)", {
-        error: err.message,
-        email: sanitized.email
+    createOrUpdateContact(ghlContactData)
+      .then(contactResult => {
+        // After contact is created/updated, trigger letter delivery
+        if (contactResult.ok && contactResult.contactId) {
+          deliverLettersAsync({
+            contactId: contactResult.contactId,
+            contactData: ghlContactData,
+            bureaus: mergedBureaus,
+            underwrite: uw,
+            personal: {
+              name: sanitized.name || `${firstName} ${lastName}`.trim(),
+              address: null // Will be extracted from bureaus if available
+            }
+          });
+        }
+      })
+      .catch(err => {
+        logWarn("GHL contact creation failed (non-blocking)", {
+          error: err.message,
+          email: sanitized.email
+        });
       });
-    });
 
     // ----- Clean up temp files -----
     await cleanupTempFiles(validatedFiles);
