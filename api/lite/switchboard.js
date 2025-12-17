@@ -7,6 +7,7 @@ const formidable = require("formidable");
 
 const { validateConfig } = require("./config-validator");
 const { validateReports } = require("./validate-reports");
+const { validateIdentity } = require("./validate-identity");
 const { computeUnderwrite } = require("./underwriter");
 const { aiGateCheck } = require("./ai-gatekeeper");
 const {
@@ -387,6 +388,17 @@ module.exports = async function handler(req, res) {
     } catch (err) {
       await cleanupTempFiles(validatedFiles);
       return res.status(200).json({ ok: false, msg: err.message });
+    }
+
+    // ----- Stage 3b: identity validation (name match + report recency) -----
+    const identityCheck = validateIdentity(sanitized.name, mergedBureaus);
+    if (!identityCheck.ok) {
+      await cleanupTempFiles(validatedFiles);
+      logWarn("Identity validation failed", {
+        name: sanitized.name,
+        errors: identityCheck.errors
+      });
+      return res.status(200).json({ ok: false, msg: identityCheck.reason });
     }
 
     // ----- Stage 4: underwriting -----
