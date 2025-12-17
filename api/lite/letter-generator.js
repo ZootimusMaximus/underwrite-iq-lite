@@ -91,22 +91,20 @@ async function generateDisputeLetters({ bureaus, personal, underwrite: _underwri
 }
 
 /**
- * Generate 2 inquiry removal letters for fundable path
+ * Generate inquiry removal letters for fundable path (one per bureau)
+ * Updated Dec 2025 to match GHL field structure
  */
 async function generateInquiryLetters({ bureaus, personal }) {
   const letters = [];
-  const rounds = [1, 2];
 
-  for (const round of rounds) {
-    const filename = `inquiries_round${round}.pdf`;
-
-    // Collect inquiries from all bureaus
-    const inquiries = collectInquiries(bureaus, round);
+  for (const [bureauKey, bureauInfo] of Object.entries(BUREAUS)) {
+    const bureauData = bureaus[bureauKey] || {};
+    const filename = `inquiry_${bureauInfo.prefix}.pdf`;
 
     const buffer = await createInquiryLetter({
+      bureau: bureauInfo,
       personal,
-      round,
-      inquiries
+      inquiryCount: bureauData.inquiries || 0
     });
 
     letters.push({ filename, buffer });
@@ -116,21 +114,26 @@ async function generateInquiryLetters({ bureaus, personal }) {
 }
 
 /**
- * Generate 2 personal information dispute letters (both paths)
+ * Generate personal information dispute letters (one per bureau)
+ * Updated Dec 2025 to match GHL field structure
  */
 async function generatePersonalInfoLetters({ bureaus, personal }) {
   const letters = [];
-  const rounds = [1, 2];
 
-  for (const round of rounds) {
-    const filename = `personal_info_round${round}.pdf`;
+  for (const [bureauKey, bureauInfo] of Object.entries(BUREAUS)) {
+    const bureauData = bureaus[bureauKey] || {};
+    const filename = `personal_info_${bureauInfo.prefix}.pdf`;
 
-    // Collect personal info variations from all bureaus
-    const variations = collectPersonalInfoVariations(bureaus, round);
+    // Get personal info variations for this bureau
+    const variations = {
+      names: bureauData.names || [],
+      addresses: bureauData.addresses || [],
+      employers: bureauData.employers || []
+    };
 
     const buffer = await createPersonalInfoLetter({
+      bureau: bureauInfo,
       personal,
-      round,
       variations
     });
 
@@ -167,7 +170,7 @@ function getAccountsForRound(bureauData, round) {
 /**
  * Collect inquiries from all bureaus for a round
  */
-function collectInquiries(bureaus, round) {
+function _collectInquiries(bureaus, round) {
   const allInquiries = [];
 
   for (const [bureauKey, bureauData] of Object.entries(bureaus)) {
@@ -190,7 +193,7 @@ function collectInquiries(bureaus, round) {
 /**
  * Collect personal info variations from all bureaus
  */
-function collectPersonalInfoVariations(bureaus, _round) {
+function _collectPersonalInfoVariations(bureaus, _round) {
   const variations = {
     names: new Set(),
     addresses: new Set(),
@@ -305,9 +308,9 @@ ${name}`;
 }
 
 /**
- * Create an inquiry removal letter PDF
+ * Create an inquiry removal letter PDF (one per bureau)
  */
-async function createInquiryLetter({ personal, round, inquiries }) {
+async function createInquiryLetter({ bureau, personal, inquiryCount }) {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([612, 792]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -328,11 +331,24 @@ async function createInquiryLetter({ personal, round, inquiries }) {
 
   // Consumer info
   const name = personal?.name || "[CONSUMER NAME]";
+  const address = personal?.address || "[CONSUMER ADDRESS]";
   page.drawText(name, { x: leftMargin, y, size: 11, font });
+  y -= lineHeight;
+  page.drawText(address, { x: leftMargin, y, size: 11, font });
   y -= lineHeight * 2;
 
+  // Bureau address
+  page.drawText(bureau.name, { x: leftMargin, y, size: 11, font: boldFont });
+  y -= lineHeight;
+  const bureauAddressLines = bureau.address.split("\n");
+  bureauAddressLines.forEach(line => {
+    page.drawText(line, { x: leftMargin, y, size: 11, font });
+    y -= lineHeight;
+  });
+  y -= lineHeight;
+
   // Subject
-  page.drawText(`Re: Inquiry Removal Request - Round ${round}`, {
+  page.drawText(`Re: Inquiry Removal Request`, {
     x: leftMargin,
     y,
     size: 12,
@@ -340,16 +356,14 @@ async function createInquiryLetter({ personal, round, inquiries }) {
   });
   y -= lineHeight * 2;
 
-  // Body - Placeholder
+  // Body
   const bodyText = `To Whom It May Concern:
 
-I am writing to request the removal of unauthorized inquiries from my credit report. Under the FCRA, inquiries made without my consent or permissible purpose should be removed.
+I am writing to request the removal of unauthorized inquiries from my ${bureau.name} credit report. Under the FCRA, inquiries made without my consent or permissible purpose should be removed.
 
-The following inquiries were made without my authorization:
+Number of inquiries to investigate: ${inquiryCount || "[TO BE DETERMINED]"}
 
-${inquiries.map(i => `- ${i.bureau}: ${i.count} inquiry(ies)`).join("\n") || "[INQUIRIES TO BE REMOVED]"}
-
-Please investigate and remove these unauthorized inquiries within 30 days.
+Please investigate and remove any unauthorized inquiries within 30 days as required by the FCRA.
 
 Sincerely,
 
@@ -370,9 +384,9 @@ ${name}`;
 }
 
 /**
- * Create a personal information dispute letter PDF
+ * Create a personal information dispute letter PDF (one per bureau)
  */
-async function createPersonalInfoLetter({ personal, round, variations }) {
+async function createPersonalInfoLetter({ bureau, personal, variations }) {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([612, 792]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -393,11 +407,24 @@ async function createPersonalInfoLetter({ personal, round, variations }) {
 
   // Consumer info
   const name = personal?.name || "[CONSUMER NAME]";
+  const address = personal?.address || "[CONSUMER ADDRESS]";
   page.drawText(name, { x: leftMargin, y, size: 11, font });
+  y -= lineHeight;
+  page.drawText(address, { x: leftMargin, y, size: 11, font });
   y -= lineHeight * 2;
 
+  // Bureau address
+  page.drawText(bureau.name, { x: leftMargin, y, size: 11, font: boldFont });
+  y -= lineHeight;
+  const bureauAddressLines = bureau.address.split("\n");
+  bureauAddressLines.forEach(line => {
+    page.drawText(line, { x: leftMargin, y, size: 11, font });
+    y -= lineHeight;
+  });
+  y -= lineHeight;
+
   // Subject
-  page.drawText(`Re: Personal Information Correction Request - Round ${round}`, {
+  page.drawText(`Re: Personal Information Correction Request`, {
     x: leftMargin,
     y,
     size: 12,
@@ -405,10 +432,10 @@ async function createPersonalInfoLetter({ personal, round, variations }) {
   });
   y -= lineHeight * 2;
 
-  // Body - Placeholder
+  // Body
   const bodyText = `To Whom It May Concern:
 
-I am writing to request correction of inaccurate personal information on my credit file.
+I am writing to request correction of inaccurate personal information on my ${bureau.name} credit file.
 
 The following information is incorrect and should be updated or removed:
 
@@ -416,7 +443,7 @@ Name Variations: ${variations.names.length > 0 ? variations.names.join(", ") : "
 Address Variations: ${variations.addresses.length > 0 ? variations.addresses.slice(0, 3).join("; ") : "None identified"}
 Employer Information: ${variations.employers.length > 0 ? variations.employers.join(", ") : "None identified"}
 
-Please update my file with only the correct information.
+Please update my file with only the correct information within 30 days as required by the FCRA.
 
 Sincerely,
 
