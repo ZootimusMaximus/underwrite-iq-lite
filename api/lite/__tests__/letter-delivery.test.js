@@ -85,8 +85,8 @@ test("deliverLetters generates correct number of letters for repair path", async
   // Restore
   if (originalToken) process.env.BLOB_READ_WRITE_TOKEN = originalToken;
 
-  // Repair path: 9 dispute + 2 personal info = 11 letters
-  assert.equal(result.letters.generated, 11);
+  // Repair path: 9 dispute + 3 personal info (one per bureau) = 12 letters
+  assert.equal(result.letters.generated, 12);
 });
 
 test("deliverLetters generates correct number of letters for fundable path", async () => {
@@ -103,8 +103,8 @@ test("deliverLetters generates correct number of letters for fundable path", asy
   // Restore
   if (originalToken) process.env.BLOB_READ_WRITE_TOKEN = originalToken;
 
-  // Fundable path: 2 inquiry + 2 personal info = 4 letters
-  assert.equal(result.letters.generated, 4);
+  // Fundable path: 3 inquiry + 3 personal info (one per bureau) = 6 letters
+  assert.equal(result.letters.generated, 6);
 });
 
 // ============================================================================
@@ -125,7 +125,7 @@ test("deliverLetters reports upload failures when token missing", async () => {
   if (originalToken) process.env.BLOB_READ_WRITE_TOKEN = originalToken;
 
   assert.equal(result.letters.uploaded, 0);
-  assert.equal(result.letters.failed, 4); // All 4 fundable letters should fail
+  assert.equal(result.letters.failed, 6); // All 6 fundable letters should fail
 });
 
 // ============================================================================
