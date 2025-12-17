@@ -36,9 +36,9 @@ test("BUREAUS has addresses", () => {
 });
 
 // ============================================================================
-// generateLetters tests
+// generateLetters tests (Dec 2025 - updated letter counts)
 // ============================================================================
-test("generateLetters generates 11 letters for repair path", async () => {
+test("generateLetters generates 12 letters for repair path", async () => {
   const result = await generateLetters({
     path: "repair",
     bureaus: {
@@ -50,11 +50,11 @@ test("generateLetters generates 11 letters for repair path", async () => {
     underwrite: { fundable: false }
   });
 
-  // 9 dispute letters + 2 personal info letters = 11
-  assert.equal(result.length, 11);
+  // 9 dispute letters + 3 personal info letters (one per bureau) = 12
+  assert.equal(result.length, 12);
 });
 
-test("generateLetters generates 4 letters for fundable path", async () => {
+test("generateLetters generates 6 letters for fundable path", async () => {
   const result = await generateLetters({
     path: "fundable",
     bureaus: {
@@ -66,8 +66,8 @@ test("generateLetters generates 4 letters for fundable path", async () => {
     underwrite: { fundable: true }
   });
 
-  // 2 inquiry letters + 2 personal info letters = 4
-  assert.equal(result.length, 4);
+  // 3 inquiry letters + 3 personal info letters (one per bureau) = 6
+  assert.equal(result.length, 6);
 });
 
 test("generateLetters returns buffers for each letter", async () => {
@@ -92,7 +92,7 @@ test("generateLetters handles empty bureaus", async () => {
     underwrite: {}
   });
 
-  assert.equal(result.length, 11);
+  assert.equal(result.length, 12);
 });
 
 test("generateLetters handles null personal info", async () => {
@@ -103,7 +103,7 @@ test("generateLetters handles null personal info", async () => {
     underwrite: {}
   });
 
-  assert.equal(result.length, 4);
+  assert.equal(result.length, 6);
 });
 
 // ============================================================================
@@ -169,29 +169,31 @@ test("generateDisputeLetters distributes accounts across rounds", async () => {
 });
 
 // ============================================================================
-// generateInquiryLetters tests
+// generateInquiryLetters tests (Dec 2025 - one per bureau)
 // ============================================================================
-test("generateInquiryLetters generates 2 letters", async () => {
+test("generateInquiryLetters generates 3 letters (one per bureau)", async () => {
   const result = await generateInquiryLetters({
     bureaus: {
       experian: { inquiries: 5 },
-      transunion: { inquiries: 3 }
+      transunion: { inquiries: 3 },
+      equifax: { inquiries: 2 }
     },
     personal: { name: "Test User" }
   });
 
-  assert.equal(result.length, 2);
+  assert.equal(result.length, 3);
 });
 
-test("generateInquiryLetters uses correct filenames", async () => {
+test("generateInquiryLetters uses correct filenames (per bureau)", async () => {
   const result = await generateInquiryLetters({
     bureaus: {},
     personal: {}
   });
 
   const filenames = result.map(r => r.filename);
-  assert.ok(filenames.includes("inquiries_round1.pdf"));
-  assert.ok(filenames.includes("inquiries_round2.pdf"));
+  assert.ok(filenames.includes("inquiry_ex.pdf"));
+  assert.ok(filenames.includes("inquiry_tu.pdf"));
+  assert.ok(filenames.includes("inquiry_eq.pdf"));
 });
 
 test("generateInquiryLetters handles empty bureaus", async () => {
@@ -200,16 +202,16 @@ test("generateInquiryLetters handles empty bureaus", async () => {
     personal: {}
   });
 
-  assert.equal(result.length, 2);
+  assert.equal(result.length, 3);
   result.forEach(r => {
     assert.ok(Buffer.isBuffer(r.buffer));
   });
 });
 
 // ============================================================================
-// generatePersonalInfoLetters tests
+// generatePersonalInfoLetters tests (Dec 2025 - one per bureau)
 // ============================================================================
-test("generatePersonalInfoLetters generates 2 letters", async () => {
+test("generatePersonalInfoLetters generates 3 letters (one per bureau)", async () => {
   const result = await generatePersonalInfoLetters({
     bureaus: {
       experian: {
@@ -221,21 +223,22 @@ test("generatePersonalInfoLetters generates 2 letters", async () => {
     personal: { name: "John Doe" }
   });
 
-  assert.equal(result.length, 2);
+  assert.equal(result.length, 3);
 });
 
-test("generatePersonalInfoLetters uses correct filenames", async () => {
+test("generatePersonalInfoLetters uses correct filenames (per bureau)", async () => {
   const result = await generatePersonalInfoLetters({
     bureaus: {},
     personal: {}
   });
 
   const filenames = result.map(r => r.filename);
-  assert.ok(filenames.includes("personal_info_round1.pdf"));
-  assert.ok(filenames.includes("personal_info_round2.pdf"));
+  assert.ok(filenames.includes("personal_info_ex.pdf"));
+  assert.ok(filenames.includes("personal_info_tu.pdf"));
+  assert.ok(filenames.includes("personal_info_eq.pdf"));
 });
 
-test("generatePersonalInfoLetters collects variations from all bureaus", async () => {
+test("generatePersonalInfoLetters gets variations per bureau", async () => {
   const result = await generatePersonalInfoLetters({
     bureaus: {
       experian: { names: ["Name1"], addresses: ["Addr1"] },
@@ -245,7 +248,7 @@ test("generatePersonalInfoLetters collects variations from all bureaus", async (
     personal: {}
   });
 
-  assert.equal(result.length, 2);
+  assert.equal(result.length, 3);
   result.forEach(r => {
     assert.ok(Buffer.isBuffer(r.buffer));
     assert.ok(r.buffer.length > 0);
@@ -260,7 +263,7 @@ test("generatePersonalInfoLetters handles missing arrays", async () => {
     personal: {}
   });
 
-  assert.equal(result.length, 2);
+  assert.equal(result.length, 3);
 });
 
 // ============================================================================
