@@ -343,10 +343,10 @@ function sanitizeFormFields(fields) {
     sanitized.businessName = businessNameResult.value;
   }
 
-  // forceReprocess flag (for testing - bypasses deduplication)
+  // forceReprocess flag - defaults to true (deduplication bypassed by default)
   const forceReprocessRaw = getFieldValue("forceReprocess");
   sanitized.forceReprocess =
-    forceReprocessRaw === "1" || forceReprocessRaw === "true" ? "true" : null;
+    forceReprocessRaw === "0" || forceReprocessRaw === "false" ? null : "true";
 
   // Log warnings for sanitization errors
   if (errors.length > 0) {
