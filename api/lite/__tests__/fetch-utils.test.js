@@ -15,10 +15,10 @@ test("DEFAULT_TIMEOUT_MS is 30 seconds", () => {
   assert.equal(DEFAULT_TIMEOUT_MS, 30000);
 });
 
-test("OPENAI_TIMEOUT_MS defaults to 55 seconds (configurable via env)", () => {
-  // Default is 55s for production (fits within Vercel's 60s limit)
-  // Can be overridden via OPENAI_TIMEOUT env var for local dev
-  const expected = parseInt(process.env.OPENAI_TIMEOUT || "55000", 10);
+test("OPENAI_TIMEOUT_MS defaults to 90 seconds (configurable via env)", () => {
+  // Default is 90s - works on Vercel Pro, may hit limit on Hobby for large files
+  // Can be overridden via OPENAI_TIMEOUT env var
+  const expected = parseInt(process.env.OPENAI_TIMEOUT || "90000", 10);
   assert.equal(OPENAI_TIMEOUT_MS, expected);
 });
 
