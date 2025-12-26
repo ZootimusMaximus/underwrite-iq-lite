@@ -3,7 +3,7 @@
 // GET /api/lite/job-status?jobId=xxx
 // ============================================================================
 
-const { getJob, JobStatus, getQueuePosition, getQueueLength } = require("./job-store");
+const { getJob, JobStatus } = require("./job-store");
 const { logInfo, logWarn } = require("./logger");
 
 module.exports = async function handler(req, res) {
@@ -83,19 +83,6 @@ module.exports = async function handler(req, res) {
       response.completedAt = job.completedAt;
 
       logInfo("Job status: error", { jobId, error: job.error });
-    }
-
-    // Add queue info for queued jobs
-    if (job.status === JobStatus.QUEUED) {
-      const position = await getQueuePosition(jobId);
-      const queueLength = await getQueueLength();
-
-      response.position = position;
-      response.queueLength = queueLength;
-      response.progress = `Waiting in queue (position ${position})`;
-      response.estimatedWait = `~${Math.ceil(position * 30)} seconds`;
-
-      logInfo("Job status: queued", { jobId, position, queueLength });
     }
 
     // Add file count for pending/processing
