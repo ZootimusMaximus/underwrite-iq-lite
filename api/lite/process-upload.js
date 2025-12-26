@@ -61,9 +61,11 @@ async function callParseReport(buffer, filename) {
   const result = await parseBuffer(buffer, filename);
 
   if (!result.ok) {
+    // Include debug info in error for troubleshooting
+    const debugInfo = result.debug ? ` [${result.debug}]` : "";
     throw new ProcessingError(
       result.reason || "Parse failed",
-      "PARSE_FAILED",
+      "PARSE_FAILED" + debugInfo,
       "We couldn't read this credit report. Please try a different file."
     );
   }
