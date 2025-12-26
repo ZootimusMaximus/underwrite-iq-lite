@@ -361,6 +361,11 @@ module.exports.parseBuffer = async function parseBuffer(pdfBuffer, filename) {
     };
   } catch (err) {
     logError("parseBuffer error", err);
-    return buildFallback("We couldn't read this credit report. Please try a different file.");
+    const fallback = buildFallback(
+      "We couldn't read this credit report. Please try a different file."
+    );
+    // Include error type for debugging (visible in job status)
+    fallback.debug = err.message?.slice(0, 100) || "unknown_error";
+    return fallback;
   }
 };

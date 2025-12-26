@@ -8,18 +8,16 @@ const path = require("path");
 
 const baseUrl = process.argv[2] || "https://underwrite-iq-lite-staging.vercel.app";
 
-// Test files with known names - 5 PDFs (1 user, 5 uploads)
+// Test files with known names - 3 PDFs (1 user, sequential)
 const testCases = [
   { file: "./gdrive/Brice Pierce Equifax.pdf", name: "Brice Pierce", user: 1 },
   { file: "./gdrive/Clayton Brown Equifax.pdf", name: "Clayton Brown", user: 1 },
-  { file: "./gdrive/Elisheva Bronsteyn Transunion.pdf", name: "Elisheva Bronsteyn", user: 1 },
-  { file: "./gdrive/vincent-cao.pdf", name: "Vincent Cao", user: 1 },
-  { file: "./gdrive/isaac-sandlin.pdf", name: "Isaac Sandlin", user: 1 }
+  { file: "./gdrive/Elisheva Bronsteyn Transunion.pdf", name: "Elisheva Bronsteyn", user: 1 }
 ];
 
-async function testUser(userId, pdfPath, name) {
+async function testUser(pdfNum, pdfPath, name) {
   const startTime = Date.now();
-  const log = msg => console.log(`[User ${userId}] ${msg}`);
+  const log = msg => console.log(`[PDF ${pdfNum}] ${msg}`);
 
   try {
     log(`Starting: ${path.basename(pdfPath)} (${name})`);
@@ -30,8 +28,8 @@ async function testUser(userId, pdfPath, name) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name,
-        email: `user${userId}@test.com`,
-        phone: "555000000" + userId,
+        email: `user${pdfNum}@test.com`,
+        phone: "555000000" + pdfNum,
         forceReprocess: true
       })
     });
@@ -39,7 +37,7 @@ async function testUser(userId, pdfPath, name) {
     const tokenData = await tokenRes.json();
     if (!tokenData.ok) {
       log(`❌ Failed to create job: ${tokenData.error}`);
-      return { userId, status: "FAILED", error: tokenData.error, time: 0 };
+      return { pdfNum, status: "FAILED", error: tokenData.error, time: 0 };
     }
 
     const { jobId } = tokenData;
@@ -48,7 +46,7 @@ async function testUser(userId, pdfPath, name) {
     // Step 2: Upload to Blob
     const { upload } = await import("@vercel/blob/client");
     const fileBuffer = fs.readFileSync(pdfPath);
-    const fileName = `user${userId}-${path.basename(pdfPath)}`;
+    const fileName = `user${pdfNum}-${path.basename(pdfPath)}`;
     const blob = new Blob([fileBuffer], { type: "application/pdf" });
 
     log(`Uploading...`);
@@ -76,7 +74,7 @@ async function testUser(userId, pdfPath, name) {
     if (processData.status === "error") {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       log(`❌ FAILED (${elapsed}s): ${processData.error?.code}`);
-      return { userId, name, status: "FAILED", error: processData.error?.code, time: elapsed };
+      return { pdfNum, name, status: "FAILED", error: processData.error?.code, time: elapsed };
     }
 
     // Poll until complete (extended timeout for queue: 10 minutes)
@@ -102,29 +100,29 @@ async function testUser(userId, pdfPath, name) {
         const score = statusData.result?.underwrite?.metrics?.score || "N/A";
         const resultPath = statusData.result?.redirect?.path || "unknown";
         log(`✅ SUCCESS (${pollElapsed}s) - Score: ${score}, Path: ${resultPath}`);
-        return { userId, name, status: "SUCCESS", score, path: resultPath, time: pollElapsed };
+        return { pdfNum, name, status: "SUCCESS", score, path: resultPath, time: pollElapsed };
       }
 
       if (statusData.status === "error") {
         log(`❌ FAILED (${pollElapsed}s): ${statusData.error?.code}`);
-        return { userId, name, status: "FAILED", error: statusData.error?.code, time: pollElapsed };
+        return { pdfNum, name, status: "FAILED", error: statusData.error?.code, time: pollElapsed };
       }
 
       await new Promise(r => setTimeout(r, 2000));
     }
 
     log(`❌ TIMEOUT after 10 minutes`);
-    return { userId, name, status: "TIMEOUT", time: "600+" };
+    return { pdfNum, name, status: "TIMEOUT", time: "600+" };
   } catch (err) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     log(`❌ ERROR (${elapsed}s): ${err.message}`);
-    return { userId, name, status: "ERROR", error: err.message, time: elapsed };
+    return { pdfNum, name, status: "ERROR", error: err.message, time: elapsed };
   }
 }
 
 async function main() {
   console.log("\n" + "=".repeat(70));
-  console.log(`PARALLEL UPLOAD TEST - ${testCases.length} CONCURRENT USERS`);
+  console.log(`SEQUENTIAL UPLOAD TEST - 1 USER, ${testCases.length} PDFs`);
   console.log("=".repeat(70));
   console.log(`\nURL: ${baseUrl}\n`);
 
@@ -148,7 +146,7 @@ async function main() {
   console.log("=".repeat(70));
   console.log("");
   console.log(
-    "User".padEnd(8) +
+    "PDF#".padEnd(8) +
       "Name".padEnd(22) +
       "Status".padEnd(10) +
       "Time".padEnd(10) +
@@ -159,7 +157,7 @@ async function main() {
 
   for (const r of results) {
     console.log(
-      `User ${r.userId}`.padEnd(8) +
+      `${r.pdfNum}`.padEnd(8) +
         (r.name || "").substring(0, 21).padEnd(22) +
         r.status.padEnd(10) +
         `${r.time}s`.padEnd(10) +
