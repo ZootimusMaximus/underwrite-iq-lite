@@ -7,8 +7,8 @@ const { handleUpload } = require("@vercel/blob/client");
 const { getJob, updateJobProgress, incrementJobFileCount } = require("./job-store");
 const { logInfo, logWarn, logError } = require("./logger");
 
-// Max 30MB per file, max 3 files
-const MAX_FILE_SIZE = 30 * 1024 * 1024;
+// Max 20MB per file, max 3 files
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const MAX_FILES_PER_JOB = 3;
 
 module.exports = async function handler(req, res) {
