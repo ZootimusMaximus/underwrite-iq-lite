@@ -16,6 +16,18 @@
       "dest": "/api/lite/parse-report.js"
     },
     {
+      "src": "^/api/lite/upload-token$",
+      "dest": "/api/lite/upload-token.js"
+    },
+    {
+      "src": "^/api/lite/blob-upload$",
+      "dest": "/api/lite/blob-upload.js"
+    },
+    {
+      "src": "^/api/lite/job-status$",
+      "dest": "/api/lite/job-status.js"
+    },
+    {
       "src": "^/api/(.*)$",
       "dest": "/api/$1.js"
     },

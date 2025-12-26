@@ -165,10 +165,49 @@ function mapUrlsToGhlFields(urls, path) {
   return fields;
 }
 
+/**
+ * Download a PDF from a URL (Vercel Blob or any public URL)
+ * @param {string} url - The URL to download from
+ * @returns {Promise<Buffer>} The file contents as a buffer
+ */
+async function downloadBlob(url) {
+  if (!url) {
+    throw new Error("No URL provided for download");
+  }
+
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (err) {
+    logError("Blob download failed", err, { url });
+    throw err;
+  }
+}
+
+/**
+ * Delete a blob by URL (alias for deletePdf with better naming)
+ * @param {string} url - The blob URL to delete
+ * @returns {Promise<void>}
+ */
+async function deleteBlob(url) {
+  const result = await deletePdf(url);
+  if (!result.ok) {
+    logWarn("Blob deletion failed", { url, error: result.error });
+  }
+}
+
 module.exports = {
   uploadPdf,
   uploadAllPdfs,
   deletePdf,
+  deleteBlob,
+  downloadBlob,
   mapUrlsToGhlFields,
   URL_EXPIRATION_SECONDS
 };
