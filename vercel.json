@@ -43,11 +43,5 @@
       "src": "/(.*)",
       "dest": "/public/$1"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/lite/process-worker",
-      "schedule": "* * * * *"
-    }
   ]
 }

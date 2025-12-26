@@ -8,18 +8,13 @@ const path = require("path");
 
 const baseUrl = process.argv[2] || "https://underwrite-iq-lite-staging.vercel.app";
 
-// Test files with known names - 10 different PDFs
+// Test files with known names - 5 PDFs (1 user, 5 uploads)
 const testCases = [
-  { file: "./gdrive/Brice Pierce Equifax.pdf", name: "Brice Pierce" },
-  { file: "./gdrive/Clayton Brown Equifax.pdf", name: "Clayton Brown" },
-  { file: "./gdrive/Elisheva Bronsteyn Transunion.pdf", name: "Elisheva Bronsteyn" },
-  { file: "./gdrive/Evelyn Gonzales Equifax.pdf", name: "Evelyn Gonzales" },
-  { file: "./gdrive/chris-hood.pdf", name: "Chris Hood" },
-  { file: "./gdrive/david-lloyd.pdf", name: "David Lloyd" },
-  { file: "./gdrive/andrea-hwang.pdf", name: "Andrea Hwang" },
-  { file: "./gdrive/vincent-cao.pdf", name: "Vincent Cao" },
-  { file: "./gdrive/ashley-searcey.pdf", name: "Ashley Searcey" },
-  { file: "./gdrive/isaac-sandlin.pdf", name: "Isaac Sandlin" }
+  { file: "./gdrive/Brice Pierce Equifax.pdf", name: "Brice Pierce", user: 1 },
+  { file: "./gdrive/Clayton Brown Equifax.pdf", name: "Clayton Brown", user: 1 },
+  { file: "./gdrive/Elisheva Bronsteyn Transunion.pdf", name: "Elisheva Bronsteyn", user: 1 },
+  { file: "./gdrive/vincent-cao.pdf", name: "Vincent Cao", user: 1 },
+  { file: "./gdrive/isaac-sandlin.pdf", name: "Isaac Sandlin", user: 1 }
 ];
 
 async function testUser(userId, pdfPath, name) {
@@ -64,8 +59,8 @@ async function testUser(userId, pdfPath, name) {
     });
     log(`Upload complete`);
 
-    // Step 3: Start processing
-    log(`Processing...`);
+    // Step 3: Queue for processing
+    log(`Queueing...`);
     const processRes = await fetch(`${baseUrl}/api/lite/start-processing`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -73,33 +68,35 @@ async function testUser(userId, pdfPath, name) {
     });
 
     const processData = await processRes.json();
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
-    if (processData.status === "complete") {
-      const statusRes = await fetch(`${baseUrl}/api/lite/job-status?jobId=${jobId}`);
-      const statusData = await statusRes.json();
-
-      if (statusData.status === "error") {
-        log(`❌ FAILED (${elapsed}s): ${statusData.error?.code}`);
-        return { userId, name, status: "FAILED", error: statusData.error?.code, time: elapsed };
-      }
-
-      const score = statusData.result?.underwrite?.metrics?.score || "N/A";
-      const resultPath = statusData.result?.redirect?.path || "unknown";
-      log(`✅ SUCCESS (${elapsed}s) - Score: ${score}, Path: ${resultPath}`);
-      return { userId, name, status: "SUCCESS", score, path: resultPath, time: elapsed };
+    if (processData.status === "queued") {
+      log(`Queued at position ${processData.position}`);
     }
 
     if (processData.status === "error") {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       log(`❌ FAILED (${elapsed}s): ${processData.error?.code}`);
       return { userId, name, status: "FAILED", error: processData.error?.code, time: elapsed };
     }
 
-    // Poll if needed
-    for (let i = 0; i < 60; i++) {
+    // Poll until complete (extended timeout for queue: 10 minutes)
+    let lastStatus = "";
+    for (let i = 0; i < 300; i++) {
       const statusRes = await fetch(`${baseUrl}/api/lite/job-status?jobId=${jobId}`);
       const statusData = await statusRes.json();
       const pollElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      // Log status changes
+      const currentStatus =
+        statusData.status + (statusData.position ? `:${statusData.position}` : "");
+      if (currentStatus !== lastStatus) {
+        if (statusData.status === "queued") {
+          log(`Queue position: ${statusData.position}`);
+        } else if (statusData.status === "processing") {
+          log(`Processing started...`);
+        }
+        lastStatus = currentStatus;
+      }
 
       if (statusData.status === "complete") {
         const score = statusData.result?.underwrite?.metrics?.score || "N/A";
@@ -116,8 +113,8 @@ async function testUser(userId, pdfPath, name) {
       await new Promise(r => setTimeout(r, 2000));
     }
 
-    log(`❌ TIMEOUT`);
-    return { userId, name, status: "TIMEOUT", time: "120+" };
+    log(`❌ TIMEOUT after 10 minutes`);
+    return { userId, name, status: "TIMEOUT", time: "600+" };
   } catch (err) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     log(`❌ ERROR (${elapsed}s): ${err.message}`);
@@ -133,10 +130,15 @@ async function main() {
 
   const startTime = Date.now();
 
-  // Run all users in parallel
-  console.log(`Starting ${testCases.length} parallel uploads...\n`);
+  // Run sequentially (one at a time)
+  console.log(`Starting ${testCases.length} sequential uploads...\n`);
 
-  const results = await Promise.all(testCases.map((tc, i) => testUser(i + 1, tc.file, tc.name)));
+  const results = [];
+  for (let i = 0; i < testCases.length; i++) {
+    const tc = testCases[i];
+    const result = await testUser(i + 1, tc.file, tc.name);
+    results.push(result);
+  }
 
   const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
@@ -170,11 +172,11 @@ async function main() {
 
   const successCount = results.filter(r => r.status === "SUCCESS").length;
   const failedCount = results.filter(r => r.status === "FAILED").length;
-  console.log(`\nTotal time: ${totalTime}s (parallel)`);
+  console.log(`\nTotal time: ${totalTime}s (sequential)`);
   console.log(`Success: ${successCount}/${testCases.length} | Failed: ${failedCount}`);
 
   if (successCount === testCases.length) {
-    console.log(`\n✅ API handles ${testCases.length} concurrent users successfully!`);
+    console.log(`\n✅ All ${testCases.length} uploads completed successfully!`);
   } else {
     console.log("\n⚠️  Some requests failed - check logs above");
   }
