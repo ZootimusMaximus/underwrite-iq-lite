@@ -11,10 +11,7 @@ const { deliverLettersAsync } = require("./letter-delivery");
 const { TTL_SECONDS } = require("./dedupe-store");
 const { getJob, updateJobProgress, completeJob, failJob } = require("./job-store");
 const { logInfo, logWarn, logError } = require("./logger");
-
-// Parser endpoint
-const PARSE_ENDPOINT =
-  process.env.PARSE_ENDPOINT || "https://underwrite-iq-lite.vercel.app/api/lite/parse-report";
+const { parseBuffer } = require("./parse-report");
 
 // Min file size for valid PDF
 const MIN_PDF_BYTES = 40 * 1024;
@@ -57,28 +54,21 @@ function formatSuggestions(list) {
 }
 
 /**
- * Call parse-report API for a PDF buffer
+ * Call parse-report directly (bypasses HTTP to avoid payload size limits)
  */
 async function callParseReport(buffer, filename) {
-  const formData = new FormData();
-  const blob = new Blob([buffer], { type: "application/pdf" });
-  formData.append("file", blob, filename || "report.pdf");
+  // Direct function call instead of HTTP - avoids Vercel's 4.5MB payload limit
+  const result = await parseBuffer(buffer, filename);
 
-  const resp = await fetch(PARSE_ENDPOINT, {
-    method: "POST",
-    body: formData
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
+  if (!result.ok) {
     throw new ProcessingError(
-      `parse-report HTTP error: ${resp.status} ${text}`,
+      result.reason || "Parse failed",
       "PARSE_FAILED",
       "We couldn't read this credit report. Please try a different file."
     );
   }
 
-  return await resp.json();
+  return result;
 }
 
 /**
