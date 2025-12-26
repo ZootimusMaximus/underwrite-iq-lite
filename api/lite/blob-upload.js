@@ -73,6 +73,7 @@ module.exports = async function handler(req, res) {
         return {
           allowedContentTypes: ["application/pdf"],
           maximumSizeInBytes: MAX_FILE_SIZE,
+          addRandomSuffix: true,
           tokenPayload: JSON.stringify({ jobId, fileIndex: newCount })
         };
       },
