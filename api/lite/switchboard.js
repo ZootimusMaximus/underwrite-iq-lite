@@ -226,7 +226,7 @@ module.exports = async function handler(req, res) {
       multiples: true,
       keepExtensions: true,
       uploadDir: "/tmp",
-      maxFileSize: 25 * 1024 * 1024
+      maxFileSize: 20 * 1024 * 1024
     });
 
     const { files, fields } = await new Promise((resolve, reject) =>

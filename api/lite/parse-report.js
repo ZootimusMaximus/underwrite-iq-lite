@@ -38,7 +38,7 @@ try {
 }
 
 module.exports.config = {
-  api: { bodyParser: false, sizeLimit: "30mb" }
+  api: { bodyParser: false, sizeLimit: "20mb" }
 };
 
 // ============================================================================
@@ -238,7 +238,7 @@ module.exports = async function handler(req, res) {
       multiples: false,
       keepExtensions: true,
       uploadDir: "/tmp",
-      maxFileSize: 25 * 1024 * 1024
+      maxFileSize: 20 * 1024 * 1024
     });
 
     const { files } = await new Promise((resolve, reject) =>
