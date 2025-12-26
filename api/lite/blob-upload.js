@@ -4,31 +4,12 @@
 // ============================================================================
 
 const { handleUpload } = require("@vercel/blob/client");
-const { getJob, updateJobProgress, incrementJobFileCount, failJob } = require("./job-store");
+const { getJob, updateJobProgress, incrementJobFileCount } = require("./job-store");
 const { logInfo, logWarn, logError } = require("./logger");
 
 // Max 30MB per file, max 3 files
 const MAX_FILE_SIZE = 30 * 1024 * 1024;
 const MAX_FILES_PER_JOB = 3;
-
-/**
- * Process the uploaded PDF asynchronously
- * Fire-and-forget - errors are handled internally
- */
-async function triggerProcessing(jobId, blobUrl) {
-  try {
-    // Dynamic import to avoid circular deps
-    const { processUploadAsync } = require("./process-upload");
-    processUploadAsync(jobId, blobUrl);
-    logInfo("Processing triggered", { jobId });
-  } catch (err) {
-    logError("Failed to trigger processing", { jobId, error: err.message });
-    await failJob(jobId, {
-      message: "Failed to start processing",
-      code: "PROCESSING_INIT_FAILED"
-    });
-  }
-}
 
 module.exports = async function handler(req, res) {
   // CORS headers
@@ -98,7 +79,9 @@ module.exports = async function handler(req, res) {
 
       /**
        * Called after upload completes to Vercel Blob
-       * Triggers async processing
+       * NOTE: In serverless, we can't fire-and-forget here because
+       * the function terminates when the request ends. Instead, we
+       * mark the job as ready and let the client trigger processing.
        */
       onUploadCompleted: async ({ blob, tokenPayload }) => {
         let payload;
@@ -123,27 +106,8 @@ module.exports = async function handler(req, res) {
           size: blob.size
         });
 
-        // Update job with blob URL
-        await updateJobProgress(jobId, "Uploading file...", blob.url);
-
-        // Get updated job to check if all files are uploaded
-        const job = await getJob(jobId);
-        const uploadedCount = job?.blobUrls?.length || 0;
-        const expectedCount = job?.fileCount || 1;
-
-        // Trigger processing when all files are uploaded
-        // For MVP, process after first file (single file support)
-        if (uploadedCount >= expectedCount) {
-          logInfo("All files uploaded, triggering processing", {
-            jobId,
-            uploadedCount,
-            expectedCount
-          });
-
-          // Use the first blob URL for processing
-          const blobUrl = job.blobUrls[0];
-          await triggerProcessing(jobId, blobUrl);
-        }
+        // Update job with blob URL - mark as ready for processing
+        await updateJobProgress(jobId, "Upload complete. Starting processing...", blob.url);
       }
     });
 
