@@ -205,10 +205,40 @@ async function call4_1(pdfBuffer, filename) {
     body: JSON.stringify(payload)
   });
 
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) {
+    const errorText = await response.text();
+    logError("OpenAI API error", {
+      status: response.status,
+      error: errorText.slice(0, 500),
+      filename: safeName,
+      size_mb: (pdfBuffer.length / 1024 / 1024).toFixed(2)
+    });
+    throw new Error(`OpenAI API error ${response.status}: ${errorText.slice(0, 200)}`);
+  }
 
-  const rawJson = extractJsonFromResponse(await response.json());
-  const parsed = repairJSON(rawJson);
+  const responseData = await response.json();
+  const rawJson = extractJsonFromResponse(responseData);
+
+  if (!rawJson) {
+    logError("No JSON in OpenAI response", {
+      filename: safeName,
+      responseKeys: Object.keys(responseData || {}),
+      outputType: typeof responseData?.output
+    });
+    throw new Error("No extractable JSON in OpenAI response");
+  }
+
+  let parsed;
+  try {
+    parsed = repairJSON(rawJson);
+  } catch (jsonErr) {
+    logError("JSON parse/repair failed", {
+      filename: safeName,
+      error: jsonErr.message,
+      rawJsonPreview: rawJson?.slice(0, 300)
+    });
+    throw jsonErr;
+  }
 
   const elapsed = Date.now() - startTime;
   logInfo("Parse completed", { model, elapsed_ms: elapsed, filename: safeName });
