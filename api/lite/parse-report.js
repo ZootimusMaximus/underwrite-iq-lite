@@ -159,8 +159,20 @@ async function call4_1(pdfBuffer, filename) {
   const dataUrl = `data:application/pdf;base64,${base64}`;
   const safeName = filename || "credit.pdf";
 
-  // Use env var to control model (default to gpt-4.1, can switch to gpt-4o-mini for speed)
-  const model = process.env.PARSE_MODEL || "gpt-4.1";
+  // Use faster model for large PDFs to avoid timeout (> 3MB)
+  // Large files take too long with gpt-4.1 and hit Vercel's 55s timeout
+  const LARGE_FILE_THRESHOLD = 3 * 1024 * 1024; // 3MB
+  const isLargeFile = pdfBuffer.length > LARGE_FILE_THRESHOLD;
+  const defaultModel = isLargeFile ? "gpt-4o-mini" : "gpt-4.1";
+  const model = process.env.PARSE_MODEL || defaultModel;
+
+  if (isLargeFile) {
+    logInfo("Using faster model for large file", {
+      filename: safeName,
+      size_mb: (pdfBuffer.length / 1024 / 1024).toFixed(2),
+      model
+    });
+  }
 
   const startTime = Date.now();
 
