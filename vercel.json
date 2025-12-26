@@ -32,12 +32,22 @@
       "dest": "/api/lite/start-processing.js"
     },
     {
+      "src": "^/api/lite/process-worker$",
+      "dest": "/api/lite/process-worker.js"
+    },
+    {
       "src": "^/api/(.*)$",
       "dest": "/api/$1.js"
     },
     {
       "src": "/(.*)",
       "dest": "/public/$1"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/lite/process-worker",
+      "schedule": "* * * * *"
     }
   ]
 }

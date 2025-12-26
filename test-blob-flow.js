@@ -74,8 +74,8 @@ async function main() {
     process.exit(1);
   }
 
-  // Step 3: Start processing
-  console.log("\n[3/5] Starting processing...");
+  // Step 3: Queue for processing
+  console.log("\n[3/5] Queueing for processing...");
   const processRes = await fetch(`${baseUrl}/api/lite/start-processing`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -84,6 +84,11 @@ async function main() {
 
   const processData = await processRes.json();
   console.log(`       Status: ${processData.status}`);
+
+  if (processData.status === "queued") {
+    console.log(`       Position: ${processData.position}`);
+    console.log(`       Est. wait: ${processData.estimatedWait}`);
+  }
 
   if (processData.status === "error") {
     console.error(`\nERROR: ${processData.error?.message || "Processing failed"}`);
@@ -102,7 +107,7 @@ async function main() {
     return;
   }
 
-  // Step 4: Poll for result (if still processing)
+  // Step 4: Poll for result (queued -> processing -> complete)
   console.log("\n[4/5] Polling for result...");
 
   for (let i = 0; i < 90; i++) {
