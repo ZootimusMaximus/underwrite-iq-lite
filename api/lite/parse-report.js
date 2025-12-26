@@ -302,3 +302,23 @@ module.exports = async function handler(req, res) {
       );
   }
 };
+
+/**
+ * Direct parsing function (bypasses HTTP, avoids payload size limits)
+ * @param {Buffer} pdfBuffer - PDF file buffer
+ * @param {string} filename - Original filename
+ * @returns {Promise<{ok: boolean, bureaus: object, meta?: object, reason?: string}>}
+ */
+module.exports.parseBuffer = async function parseBuffer(pdfBuffer, filename) {
+  try {
+    const extracted = await call4_1(pdfBuffer, filename);
+    return {
+      ok: true,
+      bureaus: extracted.bureaus || { experian: null, equifax: null, transunion: null },
+      meta: { filename: filename || "", size: pdfBuffer.length }
+    };
+  } catch (err) {
+    logError("parseBuffer error", err);
+    return buildFallback("We couldn't read this credit report. Please try a different file.");
+  }
+};
