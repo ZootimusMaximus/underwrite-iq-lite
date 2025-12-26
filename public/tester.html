@@ -135,6 +135,40 @@
         cursor: pointer;
         border-radius: 4px;
       }
+
+      /* Flow toggle */
+      .flow-toggle {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        margin-bottom: 20px;
+        background: rgba(0, 0, 0, 0.65);
+        border: 1px solid rgba(0, 255, 65, 0.25);
+        border-radius: 8px;
+      }
+
+      .flow-toggle label {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .flow-toggle input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: #6fffa3;
+      }
+
+      .flow-indicator {
+        opacity: 0.7;
+        font-size: 13px;
+      }
+
+      .flow-indicator.v2 {
+        color: #ffcc00;
+      }
     </style>
   </head>
 
@@ -148,6 +182,14 @@
 
       <div id="dropzone">CLICK OR DRAG PDF(s)</div>
       <input type="file" id="fileInput" accept="application/pdf" multiple style="display: none" />
+
+      <div class="flow-toggle">
+        <label>
+          <input type="checkbox" id="useBlobFlow" />
+          Use Blob Upload v2 (async + polling)
+        </label>
+        <span id="flowIndicator" class="flow-indicator">Current: Switchboard (legacy)</span>
+      </div>
 
       <div class="panel">
         <h3>Progress</h3>
@@ -224,8 +266,21 @@
       const failsDiv = document.getElementById("fails");
       const exportBtn = document.getElementById("exportBtn");
       const summaryA = document.getElementById("summaryA");
+      const useBlobToggle = document.getElementById("useBlobFlow");
+      const flowIndicator = document.getElementById("flowIndicator");
 
       let allResults = [];
+
+      // Toggle indicator update
+      useBlobToggle.onchange = () => {
+        if (useBlobToggle.checked) {
+          flowIndicator.textContent = "Current: Blob + Polling (v2)";
+          flowIndicator.classList.add("v2");
+        } else {
+          flowIndicator.textContent = "Current: Switchboard (legacy)";
+          flowIndicator.classList.remove("v2");
+        }
+      };
 
       dropzone.onclick = () => fileInput.click();
       dropzone.addEventListener("dragover", e => e.preventDefault());
@@ -248,10 +303,18 @@
           return;
         }
 
+        if (useBlobToggle.checked) {
+          await handleBlobFlow(files);
+        } else {
+          await handleSwitchboardFlow(files);
+        }
+      }
+
+      // ========== LEGACY SWITCHBOARD FLOW ==========
+      async function handleSwitchboardFlow(files) {
         const form = new FormData();
         Array.from(files).forEach(f => form.append("file", f));
 
-        // Add debug flags if set (auto-enabled on localhost)
         if (window.__forceReprocess) {
           form.append("forceReprocess", "true");
           console.log("[DEBUG] forceReprocess=true added to form");
@@ -269,20 +332,144 @@
           console.log("[DEBUG] Response:", result);
           allResults.push(result);
 
-          progress.textContent = "DONE — 1 request sent to switchboard";
+          progress.textContent = "DONE — Switchboard response received";
 
           renderSummary(result);
           renderRaw(result);
         } catch (err) {
           progress.textContent = "Request error.";
-          const block = document.createElement("div");
-          block.className = "file-result fail";
-          block.innerHTML = `
-      <div class="meta-line">ERROR</div>
-      <pre>${String(err)}</pre>
-    `;
-          failsDiv.appendChild(block);
+          renderError(err);
         }
+      }
+
+      // ========== NEW BLOB + POLLING FLOW ==========
+      async function handleBlobFlow(files) {
+        const startTime = Date.now();
+
+        try {
+          // Step 1: Get job ID
+          progress.textContent = "[1/4] Creating job...";
+          const tokenRes = await fetch("/api/lite/upload-token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: "Test User",
+              email: "test@example.com",
+              phone: "5551234567",
+              forceReprocess: window.__forceReprocess || false
+            })
+          });
+
+          const tokenData = await tokenRes.json();
+          console.log("[DEBUG] Token response:", tokenData);
+
+          if (!tokenData.ok) {
+            throw new Error(tokenData.error || "Failed to create job");
+          }
+
+          const { jobId, resumed } = tokenData;
+          progress.textContent = resumed
+            ? `[1/4] Resumed existing job: ${jobId}`
+            : `[1/4] Job created: ${jobId}`;
+
+          // Step 2: Upload to Blob
+          progress.textContent = "[2/4] Uploading to Blob...";
+          const { upload } = await import("https://esm.sh/@vercel/blob@0.27.0/client");
+
+          for (const file of files) {
+            console.log("[DEBUG] Uploading file:", file.name);
+            await upload(file.name, file, {
+              access: "public",
+              handleUploadUrl: "/api/lite/blob-upload",
+              clientPayload: JSON.stringify({ jobId })
+            });
+          }
+
+          progress.textContent = "[2/5] Upload complete, starting processing...";
+
+          // Step 3: Start processing
+          progress.textContent = "[3/5] Processing...";
+          const processRes = await fetch("/api/lite/start-processing", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jobId })
+          });
+
+          const processData = await processRes.json();
+          console.log("[DEBUG] Process response:", processData);
+
+          if (processData.status === "complete") {
+            // Get full result from job-status
+            const finalRes = await fetch(`/api/lite/job-status?jobId=${jobId}`);
+            const finalData = await finalRes.json();
+
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            progress.textContent = `[5/5] COMPLETE in ${elapsed}s`;
+
+            allResults.push({ ok: true, ...finalData.result });
+            renderSummary({ ok: true, ...finalData.result });
+            renderRaw({ ok: true, ...finalData.result });
+            return;
+          }
+
+          if (processData.status === "error") {
+            throw new Error(processData.error?.message || "Processing failed");
+          }
+
+          // Step 4: Poll for status (if not already complete)
+          const result = await pollForResult(jobId, startTime);
+
+          // Step 4: Display results
+          allResults.push(result);
+          renderSummary(result);
+          renderRaw(result);
+
+        } catch (err) {
+          console.error("[DEBUG] Blob flow error:", err);
+          progress.textContent = `ERROR: ${err.message}`;
+          renderError(err);
+        }
+      }
+
+      async function pollForResult(jobId, startTime) {
+        for (let i = 0; i < 90; i++) { // 3 min timeout (2s intervals)
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+          const res = await fetch(`/api/lite/job-status?jobId=${jobId}`);
+          const data = await res.json();
+
+          console.log("[DEBUG] Poll response:", data);
+
+          if (data.status === "complete") {
+            progress.textContent = `[4/4] COMPLETE in ${elapsed}s`;
+            // Transform result to match switchboard format for renderSummary
+            return {
+              ok: true,
+              ...data.result
+            };
+          }
+
+          if (data.status === "error") {
+            throw new Error(data.error?.message || "Processing failed");
+          }
+
+          // Show real progress from server
+          progress.textContent = `[3/4] ${data.progress || "Processing..."} (${elapsed}s)`;
+
+          await new Promise(r => setTimeout(r, 2000));
+        }
+
+        throw new Error("Polling timeout after 3 minutes");
+      }
+
+      function renderError(err) {
+        const block = document.createElement("div");
+        block.className = "file-result fail";
+        block.innerHTML = `
+          <div class="meta-line">ERROR</div>
+          <pre>${String(err)}</pre>
+        `;
+        failsDiv.appendChild(block);
       }
 
       function renderRaw(result) {

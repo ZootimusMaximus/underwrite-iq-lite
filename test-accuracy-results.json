@@ -1,0 +1,2745 @@
+[
+  {
+    "filename": "4 11 25 Experian Credit report.pdf",
+    "ok": true,
+    "elapsed": "39.96s",
+    "bureaus": {
+      "experian": {
+        "score": 815,
+        "utilization_pct": 0,
+        "inquiries": 3,
+        "negatives": 0,
+        "late_payment_events": 0,
+        "names": ["BRIAN L WILL"],
+        "addresses": [
+          "4341 HIGHWAY 30, ROBERTSVILLE, MO 63072-3313",
+          "13795 D STATE HIGHWAY 21, POTOSI, MO 63664-3021",
+          "4529 HIGHWAY 30, ROBERTSVILLE, MO 63072-3313"
+        ],
+        "employers": ["BJD FARMS"],
+        "tradelines": [
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 2600,
+            "opened": "2015-12-28",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 12500,
+            "opened": "2003-12-23",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 500,
+            "opened": "2004-09-21",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 500,
+            "opened": "2005-05-23",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 670,
+            "opened": "2007-08-09",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 1300,
+            "opened": "2006-09-05",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "CITIBANK NA",
+            "type": "revolving",
+            "status": "open",
+            "balance": 7024,
+            "limit": null,
+            "opened": "2021-10-28",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "CITICARDS CBNA",
+            "type": "revolving",
+            "status": "open",
+            "balance": 113,
+            "limit": 1100,
+            "opened": "2018-12-13",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "CITICARDS CBNA",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 5600,
+            "opened": "2024-09-16",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "DEPT OF ED/AIDVANTAGE",
+            "type": "installment",
+            "status": "open",
+            "balance": 81992,
+            "limit": null,
+            "opened": "2013-03-14",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "DISCOVER BANK",
+            "type": "revolving",
+            "status": "open",
+            "balance": 74,
+            "limit": 11000,
+            "opened": "2021-08-31",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "MERRICK BANK CORP",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 3600,
+            "opened": "2014-04-03",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "WFBNB CARD",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 7000,
+            "opened": "2021-09-13",
+            "closed": null,
+            "is_au": null
+          }
+        ]
+      },
+      "equifax": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "transunion": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "Nicholas Ortiz - Experian.pdf",
+    "ok": true,
+    "elapsed": "49.16s",
+    "bureaus": {
+      "experian": {
+        "score": 642,
+        "utilization_pct": 21,
+        "inquiries": 8,
+        "negatives": 3,
+        "late_payment_events": 7,
+        "names": ["NICHOLAS M ORTIZ", "NICK ORTIZ"],
+        "addresses": [
+          "7845 E EVANS RD #STE C, SCOTTSDALE, AZ 85260-6929",
+          "4848 N GOLDWATER BLV #UNIT 1004, SCOTTSDALE, AZ 85251-1001",
+          "6800 E MAYO BLVD #APT 5205, PHOENIX, AZ 85054-5635"
+        ],
+        "employers": ["RELENTLESS BEATS", "GPS INSIGHT"],
+        "tradelines": [
+          {
+            "creditor": "AMEX",
+            "type": "revolving",
+            "status": "open",
+            "balance": 967,
+            "limit": 1000,
+            "opened": "2018-03-08",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "AMEX",
+            "type": "revolving",
+            "status": "open",
+            "balance": 29,
+            "limit": 10000,
+            "opened": "2020-02-10",
+            "closed": null,
+            "is_au": true
+          },
+          {
+            "creditor": "CAPITAL ONE BANK USA N",
+            "type": "revolving",
+            "status": "open",
+            "balance": 312,
+            "limit": 400,
+            "opened": "2019-05-13",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "ESB/HARLEY DAVIDSON CR",
+            "type": "installment",
+            "status": "open",
+            "balance": 8395,
+            "limit": null,
+            "opened": "2017-06-06",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "ESB/HARLEY DAVIDSON CR",
+            "type": "installment",
+            "status": "open",
+            "balance": 15416,
+            "limit": null,
+            "opened": "2017-06-15",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "US BANK",
+            "type": "revolving",
+            "status": "open",
+            "balance": 461,
+            "limit": 500,
+            "opened": "2017-06-01",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "USAA SAVINGS BANK",
+            "type": "revolving",
+            "status": "open",
+            "balance": 928,
+            "limit": 1000,
+            "opened": "2018-03-08",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "VW CREDIT INC",
+            "type": "installment",
+            "status": "open",
+            "balance": 10082,
+            "limit": null,
+            "opened": "2017-07-05",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "BARCLAYS BANK DELAWARE",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 1797,
+            "limit": 2500,
+            "opened": "2011-04-26",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE AUTO FINAN",
+            "type": "auto",
+            "status": "closed",
+            "balance": null,
+            "limit": null,
+            "opened": "2013-10-31",
+            "closed": "2014-10-31",
+            "is_au": null
+          },
+          {
+            "creditor": "ELAN FINANCIAL SERVICE",
+            "type": "revolving",
+            "status": "closed",
+            "balance": null,
+            "limit": 700,
+            "opened": "2009-10-01",
+            "closed": "2016-07-01",
+            "is_au": false
+          },
+          {
+            "creditor": "SYNCB/CAR CARE DISC TI",
+            "type": "revolving",
+            "status": "closed",
+            "balance": null,
+            "limit": 400,
+            "opened": "2018-11-27",
+            "closed": "2020-01-10",
+            "is_au": null
+          },
+          {
+            "creditor": "VW CREDIT INC",
+            "type": "installment",
+            "status": "closed",
+            "balance": null,
+            "limit": null,
+            "opened": "2013-10-28",
+            "closed": "2019-12-30",
+            "is_au": false
+          },
+          {
+            "creditor": "VW CREDIT INC",
+            "type": "installment",
+            "status": "closed",
+            "balance": null,
+            "limit": null,
+            "opened": "2012-05-07",
+            "closed": "2013-10-31",
+            "is_au": false
+          },
+          {
+            "creditor": "MIDLAND FUNDING",
+            "type": "other",
+            "status": "collection",
+            "balance": 1366,
+            "limit": null,
+            "opened": "2016-09-30",
+            "closed": null,
+            "is_au": false
+          }
+        ]
+      },
+      "equifax": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "transunion": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "JeremyAdamsExperian.pdf",
+    "ok": true,
+    "elapsed": "46.51s",
+    "bureaus": {
+      "experian": {
+        "score": 601,
+        "utilization_pct": 28,
+        "inquiries": 11,
+        "negatives": 7,
+        "late_payment_events": 8,
+        "names": ["JEREMY A ADAMS"],
+        "addresses": [
+          "710 THORN ST, STANTON, IA 51573-8040",
+          "300 W COOLBAUGH ST, RED OAK, IA 51566-2130",
+          "PO BOX 277, STANTON, IA 51573-0277"
+        ],
+        "employers": [],
+        "tradelines": [
+          {
+            "creditor": "CAPITAL ONE BANK USA N",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 43,
+            "limit": 6100,
+            "opened": "2001-12",
+            "closed": null,
+            "is_au": true
+          },
+          {
+            "creditor": "CAPITAL ONE BANK USA N",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 816,
+            "limit": 1750,
+            "opened": "2018-08",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE BANK USA N",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 6012,
+            "limit": 6000,
+            "opened": "2019-04",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CONSUMER PORTFOLIO SVC",
+            "type": "installment",
+            "status": "Open",
+            "balance": 23506,
+            "limit": null,
+            "opened": "2018-03",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "DISCOVER FIN SVCS LLC",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 56,
+            "limit": 12000,
+            "opened": "1996-12",
+            "closed": null,
+            "is_au": true
+          },
+          {
+            "creditor": "NEBRASKA FURNITURE MAR",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 634,
+            "limit": 1000,
+            "opened": "2019-04",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "BMO HARRIS BANK",
+            "type": "installment",
+            "status": "Closed",
+            "balance": null,
+            "limit": null,
+            "opened": "2011-07",
+            "closed": "2012-09",
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE BANK USA N",
+            "type": "revolving",
+            "status": "Closed",
+            "balance": null,
+            "limit": 750,
+            "opened": "2008-03",
+            "closed": "2019-11",
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE BANK USA N",
+            "type": "revolving",
+            "status": "Closed",
+            "balance": null,
+            "limit": 500,
+            "opened": "2010-12",
+            "closed": "2019-11",
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE BANK USA N",
+            "type": "revolving",
+            "status": "Closed",
+            "balance": null,
+            "limit": 1500,
+            "opened": "2010-12",
+            "closed": "2016-09",
+            "is_au": false
+          },
+          {
+            "creditor": "CITICARDS CBNA",
+            "type": "revolving",
+            "status": "Closed",
+            "balance": null,
+            "limit": 1700,
+            "opened": "2011-10",
+            "closed": "2016-06",
+            "is_au": false
+          },
+          {
+            "creditor": "DISCOVER FIN SVCS LLC",
+            "type": "revolving",
+            "status": "Closed",
+            "balance": null,
+            "limit": 3000,
+            "opened": "2012-02",
+            "closed": "2017-04",
+            "is_au": false
+          },
+          {
+            "creditor": "GREAT WESTERN BANK",
+            "type": "revolving",
+            "status": "Closed",
+            "balance": null,
+            "limit": 1000,
+            "opened": "2011-09",
+            "closed": "2017-12",
+            "is_au": false
+          },
+          {
+            "creditor": "GREAT WESTERN BANK",
+            "type": "installment",
+            "status": "Closed",
+            "balance": null,
+            "limit": null,
+            "opened": "2013-07",
+            "closed": "2016-07",
+            "is_au": false
+          },
+          {
+            "creditor": "GREAT WESTERN BANK",
+            "type": "installment",
+            "status": "Closed",
+            "balance": null,
+            "limit": null,
+            "opened": "2012-03",
+            "closed": "2013-07",
+            "is_au": false
+          },
+          {
+            "creditor": "GREAT WESTERN BANK",
+            "type": "installment",
+            "status": "Closed",
+            "balance": null,
+            "limit": null,
+            "opened": "2009-06",
+            "closed": "2011-08",
+            "is_au": false
+          },
+          {
+            "creditor": "SEARS/CBNA",
+            "type": "revolving",
+            "status": "Closed",
+            "balance": null,
+            "limit": 1300,
+            "opened": "2008-05",
+            "closed": "2012-11",
+            "is_au": false
+          },
+          {
+            "creditor": "VERIDIAN CREDIT UNION",
+            "type": "installment",
+            "status": "Closed",
+            "balance": null,
+            "limit": null,
+            "opened": "2014-02",
+            "closed": "2020-01",
+            "is_au": false
+          },
+          {
+            "creditor": "WEBBANK/DFS",
+            "type": "revolving",
+            "status": "Closed",
+            "balance": null,
+            "limit": 3000,
+            "opened": "2010-05",
+            "closed": "2013-10",
+            "is_au": false
+          }
+        ]
+      },
+      "equifax": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "transunion": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "2025-04-04 - Andrew Lauder - TransUnion Credit Report.pdf",
+    "ok": false,
+    "elapsed": "57.35s",
+    "bureaus": {
+      "experian": null,
+      "equifax": null,
+      "transunion": null
+    },
+    "error": "We couldn't read this credit report. Please make sure you're uploading an official PDF credit report and try again."
+  },
+  {
+    "filename": "ANDRE BLAND TRANSUNION.pdf",
+    "ok": false,
+    "elapsed": "57.72s",
+    "bureaus": {
+      "experian": null,
+      "equifax": null,
+      "transunion": null
+    },
+    "error": "We couldn't read this credit report. Please make sure you're uploading an official PDF credit report and try again."
+  },
+  {
+    "filename": "Andrea Hwang Transunion.pdf",
+    "ok": true,
+    "elapsed": "19.57s",
+    "bureaus": {
+      "experian": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "equifax": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "transunion": {
+        "score": 684,
+        "utilization_pct": 59,
+        "inquiries": 3,
+        "negatives": 0,
+        "late_payment_events": 0,
+        "names": ["ANDREA HWANG", "HEANG,ANDREA"],
+        "addresses": ["1636 DECKER RD MALIBU, CA 90265", "12839 MAYFAIR WY B ENGLEWOOD, CO 80112"],
+        "employers": [],
+        "tradelines": [
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 1000,
+            "limit": 2200,
+            "opened": "2016-04-14",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 4917,
+            "limit": 5600,
+            "opened": "2014-04-02",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "JPMCB CARD",
+            "type": "revolving",
+            "status": "open",
+            "balance": 6489,
+            "limit": 7000,
+            "opened": "2019-04-25",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "JPMCB CARD",
+            "type": "revolving",
+            "status": "open",
+            "balance": 36,
+            "limit": 500,
+            "opened": "2021-04-05",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "LIGHTSTREAM",
+            "type": "installment",
+            "status": "open",
+            "balance": 13263,
+            "limit": 20000,
+            "opened": "2019-06-19",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "WELLS FARGO",
+            "type": "revolving",
+            "status": "open",
+            "balance": 4346,
+            "limit": 13000,
+            "opened": "2021-04-05",
+            "closed": null,
+            "is_au": false
+          }
+        ]
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "Elisheva Bronsteyn Transunion.pdf",
+    "ok": true,
+    "elapsed": "25.97s",
+    "bureaus": {
+      "experian": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "equifax": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "transunion": {
+        "score": 530,
+        "utilization_pct": 133,
+        "inquiries": 4,
+        "negatives": 5,
+        "late_payment_events": 5,
+        "names": ["ELISHEVA O BRONSTEYN"],
+        "addresses": [
+          "1026 NORTHVIEW AV, PHOENIX, AZ 85020",
+          "4140 78TH ST #2205, SCOTTSDALE, AZ 85251"
+        ],
+        "employers": [],
+        "tradelines": [
+          {
+            "creditor": "DSNB MACYS",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 100,
+            "opened": "2017-07-17",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "AMER FST CU",
+            "type": "installment",
+            "status": "closed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2017-12-08",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "JPMCB CARD",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 0,
+            "limit": 18000,
+            "opened": "2013-07-17",
+            "closed": null,
+            "is_au": null
+          },
+          {
+            "creditor": "JPMCB CARD",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 0,
+            "limit": 2900,
+            "opened": "2017-04-04",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "JPMCB CARD",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 0,
+            "limit": 28000,
+            "opened": "2016-11-21",
+            "closed": null,
+            "is_au": true
+          },
+          {
+            "creditor": "VERIZON",
+            "type": "other",
+            "status": "closed",
+            "balance": 163,
+            "limit": null,
+            "opened": "2019-07-23",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "WELLS FARGO",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 1598,
+            "limit": 1100,
+            "opened": "2016-03-24",
+            "closed": null,
+            "is_au": false
+          }
+        ]
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "AshleyHollandEquifax.pdf",
+    "ok": true,
+    "elapsed": "25.70s",
+    "bureaus": {
+      "experian": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "equifax": {
+        "score": 567,
+        "utilization_pct": 0,
+        "inquiries": 5,
+        "negatives": 3,
+        "late_payment_events": 3,
+        "names": ["ASHLEY D SEARCEY", "ASHLEY DAWN SEARCEY", "ASHLEY D HOLLAND"],
+        "addresses": [
+          "1520 INMAN CT, LEBANON, TN 37087",
+          "2862 LEEVILLE RD, MOUNT JULIET, TN 37122",
+          "902 GREENLAND DR APT 323, MURFREESBORO, TN 37130",
+          "4672 LEBANON RD, LEBANON, TN 37087",
+          "215 RIDGECREEK XING, LEBANON, TN 37087",
+          "1107 NEAL RD, WATERTOWN, TN 37184",
+          "7425 CHOWAN CT APT A, FORT STEWART, GA 31315",
+          "300 N COLLEGE ST APT 3B, PEMBROKE, GA 31321",
+          "134 SANTA FE TRL, MOUNT JULIET, TN 37122",
+          "3198 HORN SPRINGS RD, LEBANON, TN 37087"
+        ],
+        "employers": [],
+        "tradelines": [
+          {
+            "creditor": "AUTO CREDIT",
+            "type": "auto",
+            "status": "Closed - Charge-off",
+            "balance": 7709,
+            "limit": null,
+            "opened": "2014-02-20",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "AUTO CREDIT OF NASHV",
+            "type": "auto",
+            "status": "Closed - Pays account as agreed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2014-02-20",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "BANK OF AMERICA",
+            "type": "revolving",
+            "status": "Closed - Charge-off",
+            "balance": 0,
+            "limit": 300,
+            "opened": "2019-04-27",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "TENNESSEE DEPT. OF H",
+            "type": "other",
+            "status": "Closed - Pays account as agreed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2018-03-14",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "WORLD FINANCE CO",
+            "type": "installment",
+            "status": "Closed - Charge-off",
+            "balance": 0,
+            "limit": null,
+            "opened": "2014-02-25",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "WORLD FINANCE CO",
+            "type": "installment",
+            "status": "Closed - Pays account as agreed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2013-11-14",
+            "closed": null,
+            "is_au": false
+          }
+        ]
+      },
+      "transunion": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "Brice Pierce Equifax.pdf",
+    "ok": true,
+    "elapsed": "27.50s",
+    "bureaus": {
+      "experian": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "equifax": {
+        "score": 738,
+        "utilization_pct": 15,
+        "inquiries": 2,
+        "negatives": 0,
+        "late_payment_events": 0,
+        "names": ["BRICE SEQUYAH PIERCE"],
+        "addresses": [
+          "12955 LISBON RD, SALEM, OH 44460",
+          "900 W TEMPLE ST APT 630B, LOS ANGELES, CA 90012"
+        ],
+        "employers": ["AMAZON"],
+        "tradelines": [
+          {
+            "creditor": "BEST BUY/CBNA",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 5000,
+            "opened": "2016-06-11",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CITICARDS CBNA",
+            "type": "revolving",
+            "status": "open",
+            "balance": 3459,
+            "limit": 8900,
+            "opened": "2020-10-14",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CRDT FIRST",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 1400,
+            "opened": "2017-09-27",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "DISCOVER BANK",
+            "type": "revolving",
+            "status": "open",
+            "balance": 2068,
+            "limit": 6200,
+            "opened": "2017-10-29",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "JPMCB - AUTO FINANCE",
+            "type": "auto",
+            "status": "open",
+            "balance": 32631,
+            "limit": null,
+            "opened": "2019-11-22",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "JPMCB - CARD SERVICE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 5400,
+            "opened": "2019-07-18",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "JPMCB - CARD SERVICE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 91,
+            "limit": 9800,
+            "opened": "2020-10-14",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "KOHLS/CAPITAL ONE",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 0,
+            "limit": 300,
+            "opened": "2015-10-22",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SYNCB/CARE CREDIT",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 0,
+            "limit": 5000,
+            "opened": "2017-02-24",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SYNCHRONY NETWORKS",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 0,
+            "limit": 1500,
+            "opened": "2017-12-24",
+            "closed": null,
+            "is_au": false
+          }
+        ]
+      },
+      "transunion": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "Clayton Brown Equifax.pdf",
+    "ok": true,
+    "elapsed": "37.95s",
+    "bureaus": {
+      "experian": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "equifax": {
+        "score": 605,
+        "utilization_pct": 1,
+        "inquiries": 8,
+        "negatives": 3,
+        "late_payment_events": 3,
+        "names": ["CLAYTON MICHAEL BROWN", "CLAYTON M BROWN"],
+        "addresses": [
+          "501 DANIEL DR PRATTVILLE, AL 36067",
+          "2119 AIRPORT RD DEATSVILLE, AL 36022",
+          "2123 AIRPORT RD DEATSVILLE, AL 36022"
+        ],
+        "employers": ["SELFEMPLOYED"],
+        "tradelines": [
+          {
+            "creditor": "ALABAMA STATE EMPLOY",
+            "type": "revolving",
+            "status": "open",
+            "balance": null,
+            "limit": 7500,
+            "opened": "2016-07-26",
+            "closed": null,
+            "is_au": true
+          },
+          {
+            "creditor": "ALLY FINANCIAL",
+            "type": "installment",
+            "status": "open",
+            "balance": 9789,
+            "limit": null,
+            "opened": "2019-10-07",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "KOHLS/CAPITAL ONE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 3000,
+            "opened": "1999-08-08",
+            "closed": null,
+            "is_au": true
+          },
+          {
+            "creditor": "KOHLS/CAPITAL ONE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 2000,
+            "opened": "2013-04-21",
+            "closed": null,
+            "is_au": true
+          },
+          {
+            "creditor": "MAX CREDIT UNION",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 3000,
+            "opened": "2019-11-22",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "MAX CREDIT UNION",
+            "type": "revolving",
+            "status": "open",
+            "balance": 27,
+            "limit": 500,
+            "opened": "2018-07-30",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "MOHELA/DEPT OF ED",
+            "type": "installment",
+            "status": "open",
+            "balance": 2009,
+            "limit": null,
+            "opened": "2017-09-15",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "MOHELA/DEPT OF ED",
+            "type": "installment",
+            "status": "open",
+            "balance": 3371,
+            "limit": null,
+            "opened": "2017-09-15",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SEARS/CBNA",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 1000,
+            "opened": "2011-11-28",
+            "closed": null,
+            "is_au": true
+          },
+          {
+            "creditor": "US BANK HOME MTG",
+            "type": "mortgage",
+            "status": "open",
+            "balance": 99563,
+            "limit": null,
+            "opened": "2019-10-09",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "AMERICAN EXPRESS",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 936,
+            "limit": null,
+            "opened": "2020-01-04",
+            "closed": "2020-06-19",
+            "is_au": false
+          },
+          {
+            "creditor": "BEST BUY/CBNA",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 0,
+            "limit": 2000,
+            "opened": "2015-02-24",
+            "closed": "2020-05-23",
+            "is_au": true
+          },
+          {
+            "creditor": "MAX CREDIT UNION",
+            "type": "revolving",
+            "status": "closed",
+            "balance": null,
+            "limit": null,
+            "opened": "2019-11-22",
+            "closed": "2020-06-21",
+            "is_au": null
+          },
+          {
+            "creditor": "MAX CREDIT UNION",
+            "type": "installment",
+            "status": "closed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2018-07-27",
+            "closed": "2019-08-31",
+            "is_au": false
+          },
+          {
+            "creditor": "RIVER BANK & TRUST",
+            "type": "mortgage",
+            "status": "closed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2019-06-13",
+            "closed": "2019-12-31",
+            "is_au": false
+          }
+        ]
+      },
+      "transunion": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "Experian (1).pdf",
+    "ok": true,
+    "elapsed": "35.80s",
+    "bureaus": {
+      "experian": {
+        "score": 767,
+        "utilization_pct": 6,
+        "inquiries": 1,
+        "negatives": 0,
+        "late_payment_events": 0,
+        "names": ["ISAAC SANDLIN"],
+        "addresses": [],
+        "employers": ["IDIRECTMEDIA", "INDECENT STUDIOS"],
+        "tradelines": [
+          {
+            "creditor": "APPLE CARD/GS BANK USA",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 80,
+            "limit": 1500,
+            "opened": "2022-11-20",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "BEST BUY/CBNA",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 139,
+            "limit": 5000,
+            "opened": "2022-03-19",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 0,
+            "limit": 600,
+            "opened": "2022-11-21",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CITIZENS PAY CREDIT LI",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 2299,
+            "limit": 6000,
+            "opened": "2023-12-17",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "NAVY FEDERAL CR UNION",
+            "type": "auto",
+            "status": "Open/Never late.",
+            "balance": 88564,
+            "limit": null,
+            "opened": "2023-12-12",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "NAVY FEDERAL CR UNION",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 922,
+            "limit": 24000,
+            "opened": "2022-11-19",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "NAVY FEDERAL CR UNION",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 736,
+            "limit": 25000,
+            "opened": "2024-09-19",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SYNCB/CAR CARE DISC TI",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 0,
+            "limit": 5000,
+            "opened": "2023-03-08",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "EDC/BOOM PAY INC.",
+            "type": "other",
+            "status": "Paid, Closed/Never late.",
+            "balance": null,
+            "limit": null,
+            "opened": "2023-04-01",
+            "closed": "2024-01-01",
+            "is_au": false
+          },
+          {
+            "creditor": "EDC/BOOM PAY INC.",
+            "type": "other",
+            "status": "Paid, Closed/Never late.",
+            "balance": null,
+            "limit": null,
+            "opened": "2022-01-01",
+            "closed": "2022-12-01",
+            "is_au": false
+          },
+          {
+            "creditor": "MOUNTAIN AMERICA FCU",
+            "type": "auto",
+            "status": "Paid, Closed/Never late.",
+            "balance": null,
+            "limit": null,
+            "opened": "2021-12-06",
+            "closed": "2024-01-01",
+            "is_au": false
+          },
+          {
+            "creditor": "NAVY FEDERAL CR UNION",
+            "type": "installment",
+            "status": "Paid, Closed/Never late.",
+            "balance": null,
+            "limit": null,
+            "opened": "2024-03-01",
+            "closed": "2024-08-01",
+            "is_au": false
+          },
+          {
+            "creditor": "ONE NEVADA CREDIT UNIO",
+            "type": "revolving",
+            "status": "Paid, Closed/Never late.",
+            "balance": null,
+            "limit": 500,
+            "opened": "2020-09-22",
+            "closed": "2022-12-01",
+            "is_au": false
+          },
+          {
+            "creditor": "ONE NEVADA CREDIT UNIO",
+            "type": "revolving",
+            "status": "Paid, Closed/Never late.",
+            "balance": null,
+            "limit": 2000,
+            "opened": "2017-01-23",
+            "closed": "2018-04-01",
+            "is_au": false
+          },
+          {
+            "creditor": "WESTLAKE FINANCIAL SVC",
+            "type": "auto",
+            "status": "Paid, Closed/Never late.",
+            "balance": null,
+            "limit": null,
+            "opened": "2021-03-29",
+            "closed": "2021-12-01",
+            "is_au": false
+          }
+        ]
+      },
+      "equifax": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "transunion": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "Experian (2).pdf",
+    "ok": false,
+    "elapsed": "57.74s",
+    "bureaus": {
+      "experian": null,
+      "equifax": null,
+      "transunion": null
+    },
+    "error": "We couldn't read this credit report. Please make sure you're uploading an official PDF credit report and try again."
+  },
+  {
+    "filename": "Experian 5.pdf",
+    "ok": true,
+    "elapsed": "20.90s",
+    "bureaus": {
+      "experian": {
+        "score": 739,
+        "utilization_pct": 2,
+        "inquiries": 16,
+        "negatives": 0,
+        "late_payment_events": 0,
+        "names": ["AYMAN ELBADRI"],
+        "addresses": [
+          "2000 RIVERSIDE DR APT 6B, RICHMOND, VA 23225-3643",
+          "477 68TH ST, BROOKLYN, NY 11220-5903"
+        ],
+        "employers": ["HALAL MUNCHIES"],
+        "tradelines": [
+          {
+            "creditor": "BANK OF AMERICA",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 0,
+            "limit": 3400,
+            "opened": "2024-04-09",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "BANK OF AMERICA",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 0,
+            "limit": 5000,
+            "opened": "2024-01-05",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "BANK OF AMERICA",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 0,
+            "limit": 200,
+            "opened": "2023-07-19",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 83,
+            "limit": 1000,
+            "opened": "2024-10-21",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 105,
+            "limit": 2000,
+            "opened": "2024-10-03",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "FIRST PREMIER BANK",
+            "type": "revolving",
+            "status": "Open/Never late.",
+            "balance": 25,
+            "limit": 300,
+            "opened": "2024-10-28",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "JPMCB AUTO",
+            "type": "auto",
+            "status": "Open/Never late.",
+            "balance": 36892,
+            "limit": null,
+            "opened": "2024-11-02",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SANTANDER CONSUMER USA",
+            "type": "auto",
+            "status": "Open/Never late.",
+            "balance": 39522,
+            "limit": null,
+            "opened": "2024-12-30",
+            "closed": null,
+            "is_au": false
+          }
+        ]
+      },
+      "equifax": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "transunion": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "Ryan W. Morgan Experian.pdf",
+    "ok": true,
+    "elapsed": "25.42s",
+    "bureaus": {
+      "experian": {
+        "score": 538,
+        "utilization_pct": 0,
+        "inquiries": 8,
+        "negatives": 9,
+        "late_payment_events": 9,
+        "names": ["RYAN W MORGAN"],
+        "addresses": [
+          "15446 N GREENWAY HAYDEN 4031, SCOTTSDALE, AZ 85260-3151",
+          "701 RIDGE HILL BLVD # 5B5B, YONKERS, NY 10710-7708",
+          "18 HIGHVIEW RD # 18, MONROE, NY 10950-5243"
+        ],
+        "employers": ["ALL DONE CONSULTING LLC", "ALWAYS OBELISK NETWORK"],
+        "tradelines": [
+          {
+            "creditor": "JPMCB CARD",
+            "type": "revolving",
+            "status": "Closed - Charge-off",
+            "balance": 1037,
+            "limit": 1000,
+            "opened": "2015-01-28",
+            "closed": "2016-06",
+            "is_au": false
+          },
+          {
+            "creditor": "SYNCB/PPC",
+            "type": "revolving",
+            "status": "Closed - Paid satisfactorily",
+            "balance": null,
+            "limit": 1250,
+            "opened": "2016-01-27",
+            "closed": "2020-01",
+            "is_au": false
+          },
+          {
+            "creditor": "U S DEPT OF ED/GSL/ATL",
+            "type": "installment",
+            "status": "Closed - Collection/Assigned to government",
+            "balance": 3388,
+            "limit": null,
+            "opened": "2014-08-28",
+            "closed": "2018-02",
+            "is_au": false
+          },
+          {
+            "creditor": "U S DEPT OF ED/GSL/ATL",
+            "type": "installment",
+            "status": "Closed - Collection/Assigned to government",
+            "balance": 3549,
+            "limit": null,
+            "opened": "2010-08-26",
+            "closed": "2018-02",
+            "is_au": false
+          },
+          {
+            "creditor": "U S DEPT OF ED/GSL/ATL",
+            "type": "installment",
+            "status": "Closed - Collection/Assigned to government",
+            "balance": 4474,
+            "limit": null,
+            "opened": "2014-08-28",
+            "closed": "2018-02",
+            "is_au": false
+          },
+          {
+            "creditor": "U S DEPT OF ED/GSL/ATL",
+            "type": "installment",
+            "status": "Closed - Collection/Assigned to government",
+            "balance": 10942,
+            "limit": null,
+            "opened": "2011-08-24",
+            "closed": "2018-02",
+            "is_au": false
+          },
+          {
+            "creditor": "U S DEPT OF ED/GSL/ATL",
+            "type": "installment",
+            "status": "Closed - Collection/Assigned to government",
+            "balance": 7845,
+            "limit": null,
+            "opened": "2014-01-21",
+            "closed": "2018-02",
+            "is_au": false
+          },
+          {
+            "creditor": "U S DEPT OF ED/GSL/ATL",
+            "type": "installment",
+            "status": "Closed - Collection/Assigned to government",
+            "balance": 19820,
+            "limit": null,
+            "opened": "2012-08-30",
+            "closed": "2018-02",
+            "is_au": false
+          },
+          {
+            "creditor": "U S DEPT OF ED/GSL/ATL",
+            "type": "installment",
+            "status": "Closed - Collection/Assigned to government",
+            "balance": 4302,
+            "limit": null,
+            "opened": "2010-08-26",
+            "closed": "2018-02",
+            "is_au": false
+          },
+          {
+            "creditor": "U S DEPT OF ED/GSL/ATL",
+            "type": "installment",
+            "status": "Closed - Collection/Assigned to government",
+            "balance": 1534,
+            "limit": null,
+            "opened": "2013-09-09",
+            "closed": "2018-02",
+            "is_au": false
+          }
+        ]
+      },
+      "equifax": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "transunion": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "Shawna Titchener Transunion.pdf",
+    "ok": true,
+    "elapsed": "40.55s",
+    "bureaus": {
+      "experian": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "equifax": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "transunion": {
+        "score": 656,
+        "utilization_pct": 53,
+        "inquiries": 11,
+        "negatives": 0,
+        "late_payment_events": 0,
+        "names": ["SHAWNA L TITCHENER"],
+        "addresses": [
+          "PO BOX 65092, SALT LAKE CITY UT 84165",
+          "PO BOX 65082, SALT LAKE CITY UT 84165"
+        ],
+        "employers": ["FAMOUS DAVES BBQ"],
+        "tradelines": [
+          {
+            "creditor": "CAP1/WMT",
+            "type": "revolving",
+            "status": "open",
+            "balance": 128,
+            "limit": 220,
+            "opened": "2019-04-09",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "open",
+            "balance": 790,
+            "limit": 900,
+            "opened": "2017-05-12",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CB/NMNB/KS",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 300,
+            "opened": "2019-09-15",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CB/VS/COH",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 300,
+            "opened": "2019-04-09",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CREDITONEBK",
+            "type": "revolving",
+            "status": "open",
+            "balance": 844,
+            "limit": 850,
+            "opened": "2017-05-12",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CREDITONEBK",
+            "type": "revolving",
+            "status": "open",
+            "balance": 494,
+            "limit": 500,
+            "opened": "2017-07-10",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "HARLEY DAVID",
+            "type": "installment",
+            "status": "open",
+            "balance": 10594,
+            "limit": null,
+            "opened": "2019-05-24",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SYNCB/CARECR",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 200,
+            "opened": "2017-06-12",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SYNCB/PPC",
+            "type": "revolving",
+            "status": "open",
+            "balance": 70,
+            "limit": 200,
+            "opened": "2019-12-05",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "USAA FSB BK",
+            "type": "revolving",
+            "status": "open",
+            "balance": 201,
+            "limit": 300,
+            "opened": "2015-07-01",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "UWM",
+            "type": "real estate",
+            "status": "open",
+            "balance": 153000,
+            "limit": null,
+            "opened": "2019-11-27",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SYNCB/WALMAR",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 0,
+            "limit": 200,
+            "opened": "2018-10-16",
+            "closed": "2019-10-16",
+            "is_au": false
+          },
+          {
+            "creditor": "VERIZON",
+            "type": "other",
+            "status": "closed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2014-09-04",
+            "closed": "2018-03-31",
+            "is_au": false
+          }
+        ]
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "RashawnTransunion.pdf",
+    "ok": true,
+    "elapsed": "29.83s",
+    "bureaus": {
+      "experian": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "equifax": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "transunion": {
+        "score": 659,
+        "utilization_pct": 30,
+        "inquiries": 18,
+        "negatives": 1,
+        "late_payment_events": 1,
+        "names": ["RASHAWN D COLLIER"],
+        "addresses": [
+          "1603 UNION BV, BAY SHORE, NY 11706",
+          "517 TAYLOR AV, EAST PATCHOGUE, NY 11772",
+          "1007 CARLLS STRAIGHT PA, DIX HILLS, NY 11746"
+        ],
+        "employers": ["AEROTEK", "BEECHWOOD HOMES"],
+        "tradelines": [
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 174,
+            "limit": 500,
+            "opened": "2016-08",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 1502,
+            "limit": 5000,
+            "opened": "2019-10",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CCB/CHLDPLCE",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 166,
+            "limit": 850,
+            "opened": "2019-03",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CITI",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 27,
+            "limit": 200,
+            "opened": "2016-07",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CREDITONEBNK",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 527,
+            "limit": 1000,
+            "opened": "2017-09",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CREDITONEBNK",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 1022,
+            "limit": 1500,
+            "opened": "2019-05",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "KIA MTR FIN",
+            "type": "installment",
+            "status": "Open",
+            "balance": 16350,
+            "limit": null,
+            "opened": "2019-04",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "TEACHERS FCU",
+            "type": "installment",
+            "status": "Open",
+            "balance": 36551,
+            "limit": null,
+            "opened": "2019-04",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "TEACHERS FCU",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 0,
+            "limit": 2500,
+            "opened": "2019-10",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "EXETER FIN",
+            "type": "installment",
+            "status": "Closed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2018-12",
+            "closed": "2019-04",
+            "is_au": false
+          }
+        ]
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "transunion cr.pdf",
+    "ok": true,
+    "elapsed": "27.89s",
+    "bureaus": {
+      "experian": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "equifax": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "transunion": {
+        "score": 602,
+        "utilization_pct": 0,
+        "inquiries": 0,
+        "negatives": 2,
+        "late_payment_events": 2,
+        "names": ["MARTIN R JAUREGUI"],
+        "addresses": [
+          "21035 CANYON RIDGE DR, LAKE ELSINORE, CA 92532",
+          "7761 PORT ARTHUR DR, CORONA, CA 92880",
+          "26562 RHONE CT, MORENO VALLEY, CA 92555",
+          "NORCO,"
+        ],
+        "employers": ["U S D", "CORONA NORCO UNIFIED SCHOOL"],
+        "tradelines": [
+          {
+            "creditor": "DISCOVERBANK",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 15000,
+            "opened": "1989-10-16",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "PRIMELENDING",
+            "type": "mortgage",
+            "status": "open",
+            "balance": 357739,
+            "limit": null,
+            "opened": "2015-09-21",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "AM HONDA FIN",
+            "type": "installment",
+            "status": "closed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2009-03-21",
+            "closed": "2014-03-20",
+            "is_au": false
+          },
+          {
+            "creditor": "BK OF AMER",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 0,
+            "limit": 8000,
+            "opened": "2016-10-20",
+            "closed": "2020-03-19",
+            "is_au": false
+          },
+          {
+            "creditor": "PRIMELENDING",
+            "type": "mortgage",
+            "status": "closed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2015-09-21",
+            "closed": "2015-10-29",
+            "is_au": false
+          },
+          {
+            "creditor": "SEARS/CBNA",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 0,
+            "limit": 2001,
+            "opened": "2012-10-28",
+            "closed": "2018-03-09",
+            "is_au": false
+          },
+          {
+            "creditor": "SEARS/CBNA",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 0,
+            "limit": 6000,
+            "opened": "2011-12-19",
+            "closed": "2017-10-26",
+            "is_au": false
+          },
+          {
+            "creditor": "WFHM",
+            "type": "mortgage",
+            "status": "closed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2015-09-21",
+            "closed": "2019-08-15",
+            "is_au": false
+          }
+        ]
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "Shawna Titchener Equifax.pdf",
+    "ok": true,
+    "elapsed": "39.67s",
+    "bureaus": {
+      "experian": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "equifax": {
+        "score": null,
+        "utilization_pct": 53,
+        "inquiries": 7,
+        "negatives": 0,
+        "late_payment_events": 0,
+        "names": ["SHAWNA LOUISE TITCHENER"],
+        "addresses": [
+          "1525 E BROADWAY AVE, APT 104, BISMARCK ND 58501",
+          "1525 E BROADWAY AVE, BISMARCK ND 58501",
+          "PO BOX 182789, COLUMBUS OH 43218"
+        ],
+        "employers": ["FAMOUS DAVES BBQ"],
+        "tradelines": [
+          {
+            "creditor": "CAPITAL ONE BANK USA",
+            "type": "revolving",
+            "status": "open",
+            "balance": 2645,
+            "limit": 3000,
+            "opened": "2017-05-12",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE/WALMART",
+            "type": "revolving",
+            "status": "open",
+            "balance": 1162,
+            "limit": 2000,
+            "opened": "2019-02-05",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "COMENITYBANK/MAURICES",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 750,
+            "opened": "2019-09-13",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "COMENITYBANK/VICTORIA",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 500,
+            "opened": "2019-04-07",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CREDIT ONE BANK",
+            "type": "revolving",
+            "status": "open",
+            "balance": 1987,
+            "limit": 2000,
+            "opened": "2019-03-12",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CREDIT ONE BANK",
+            "type": "revolving",
+            "status": "open",
+            "balance": 1987,
+            "limit": 2000,
+            "opened": "2017-07-10",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "HARLEY DAVIDSON FINA",
+            "type": "installment",
+            "status": "open",
+            "balance": 9425,
+            "limit": null,
+            "opened": "2019-05-24",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "NATIONSTAR DBA MRCOOP",
+            "type": "mortgage",
+            "status": "open",
+            "balance": 131991,
+            "limit": null,
+            "opened": "2019-11-27",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SYNCB/CARE CREDIT",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 500,
+            "opened": "2017-06-12",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SYNCB/PCD",
+            "type": "revolving",
+            "status": "open",
+            "balance": 174,
+            "limit": 500,
+            "opened": "2019-12-05",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "USAA SAVINGS BANK",
+            "type": "revolving",
+            "status": "open",
+            "balance": 201,
+            "limit": 300,
+            "opened": "2015-07-01",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SYNCB/WALMART",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 0,
+            "limit": 500,
+            "opened": "2018-10-19",
+            "closed": "2019-10-16",
+            "is_au": false
+          },
+          {
+            "creditor": "VERIZON WIRELESS",
+            "type": "other",
+            "status": "closed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2014-09-04",
+            "closed": "2018-03-17",
+            "is_au": false
+          }
+        ]
+      },
+      "transunion": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "Evelyn Gonzales Equifax.pdf",
+    "ok": true,
+    "elapsed": "50.65s",
+    "bureaus": {
+      "experian": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "equifax": {
+        "score": 594,
+        "utilization_pct": 1,
+        "inquiries": 1,
+        "negatives": 3,
+        "late_payment_events": 3,
+        "names": [
+          "EVELYN GONZALEZ-ALVAREZ",
+          "EVELYN GONZALEZ ALVEREZ",
+          "EVELYN GONZALEZ ALVAREZ",
+          "EVELYN GONZALEZ ALVAREZ"
+        ],
+        "addresses": [
+          "172 JEFFERSON ST APT 1R, BROOKLYN, NY 11206",
+          "1579 STERLING PL APT LB1, BROOKLYN, NY 11213",
+          "72 JEFFERSON ST, BROOKLYN, NY 11206"
+        ],
+        "employers": [],
+        "tradelines": [
+          {
+            "creditor": "ATLANTIC CAPITAL BAN",
+            "type": "installment",
+            "status": "open",
+            "balance": 832,
+            "limit": null,
+            "opened": "2019-10",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "AUSTIN CAPITAL BANK",
+            "type": "installment",
+            "status": "open",
+            "balance": 925,
+            "limit": null,
+            "opened": "2019-10",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE, N.A.",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 300,
+            "opened": "2015-05",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CARMEL FINANCIAL",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 5000,
+            "opened": "2018-07",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "MAJR FINANCIAL CORPO",
+            "type": "revolving",
+            "status": "open",
+            "balance": 0,
+            "limit": 5000,
+            "opened": "2017-12",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "NATIONWIDE ACCEPTANC",
+            "type": "revolving",
+            "status": "open",
+            "balance": 150,
+            "limit": 3000,
+            "opened": "2017-12",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "NAVY FEDERAL CU",
+            "type": "revolving",
+            "status": "open",
+            "balance": 9,
+            "limit": 500,
+            "opened": "2019-10",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "DISCOVER BANK",
+            "type": "revolving",
+            "status": "closed",
+            "balance": 1503,
+            "limit": 1100,
+            "opened": "2014-01",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "ONEMAIN FINANCIAL",
+            "type": "installment",
+            "status": "closed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2014-02",
+            "closed": "2014-11-30",
+            "is_au": false
+          },
+          {
+            "creditor": "ALLIED COLLECTION SE",
+            "type": "other",
+            "status": "closed",
+            "balance": 2047,
+            "limit": null,
+            "opened": "2019-06",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "MIDLAND FUNDING LLC",
+            "type": "other",
+            "status": "closed",
+            "balance": 1430,
+            "limit": null,
+            "opened": "2015-12",
+            "closed": null,
+            "is_au": false
+          }
+        ]
+      },
+      "transunion": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      }
+    },
+    "error": null
+  },
+  {
+    "filename": "EquifaxChrisHood.pdf",
+    "ok": true,
+    "elapsed": "42.21s",
+    "bureaus": {
+      "experian": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      },
+      "equifax": {
+        "score": 651,
+        "utilization_pct": 8,
+        "inquiries": 9,
+        "negatives": 1,
+        "late_payment_events": 2,
+        "names": ["CHRIS H HOOD"],
+        "addresses": [
+          "58 WAXWING LN, ALISO VIEJO, CA 92656",
+          "2775 MESA VERDE DR E APT J115, COSTA MESA, CA 92626",
+          "224 W MARQUITA APT 2, SAN CLEMENTE, CA 92672",
+          "145 W ESCALONES APT B, SAN CLEMENTE, CA 92672",
+          "2340 S OLA VISTA, SAN CLEMENTE, CA 92672",
+          "444 W CAROLINA AVE, SUMMERVILLE, SC 29483",
+          "2211 CHATELAIN WAY, MOUNT PLEASANT, SC 29464",
+          "1104 ASTOR DR, MOUNT PLEASANT, SC 29464",
+          "1141 WATERFRONT DR, MOUNT PLEASANT, SC 29464",
+          "997 JOHNNIE DODDS BLVD APT 224, MOUNT PLEASANT, SC 29464"
+        ],
+        "employers": ["SELFEMPLOYED1099 EMP"],
+        "tradelines": [
+          {
+            "creditor": "AMERICAN EXPRESS",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 3382,
+            "limit": null,
+            "opened": "2019-06",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE BANK USA",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 420,
+            "limit": 750,
+            "opened": "2019-02",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CAPITAL ONE BANK USA",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 13,
+            "limit": 501,
+            "opened": "2016-02",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CREDIT ONE BANK",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 12,
+            "limit": 1000,
+            "opened": "2018-01",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "CREDIT ONE BANK",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 6,
+            "limit": 1250,
+            "opened": "2017-01",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "DEPT OF ED/NELNET",
+            "type": "installment",
+            "status": "Open",
+            "balance": 1902,
+            "limit": null,
+            "opened": "2017-03",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "DEPT OF ED/NELNET",
+            "type": "installment",
+            "status": "Open",
+            "balance": 1690,
+            "limit": null,
+            "opened": "2017-03",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "EXETER FINANCE",
+            "type": "installment",
+            "status": "Open",
+            "balance": 12622,
+            "limit": null,
+            "opened": "2017-11",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "FORTIVA/TBOM",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 170,
+            "limit": 3000,
+            "opened": "2019-03",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SYNCB/CAR CARE MIDAS",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 0,
+            "limit": 400,
+            "opened": "2019-06",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "TD BANK USA/TARGET C",
+            "type": "revolving",
+            "status": "Open",
+            "balance": 0,
+            "limit": 600,
+            "opened": "2019-05",
+            "closed": null,
+            "is_au": false
+          },
+          {
+            "creditor": "SANTANDER CONSUMER U",
+            "type": "installment",
+            "status": "Closed",
+            "balance": 0,
+            "limit": null,
+            "opened": "2013-02",
+            "closed": "2016-03-31",
+            "is_au": false
+          },
+          {
+            "creditor": "NCB MANAGEMENT SERVI",
+            "type": "other",
+            "status": "Closed",
+            "balance": 8214,
+            "limit": null,
+            "opened": "2016-03",
+            "closed": null,
+            "is_au": false
+          }
+        ]
+      },
+      "transunion": {
+        "score": null,
+        "utilization_pct": null,
+        "inquiries": null,
+        "negatives": null,
+        "late_payment_events": null,
+        "names": [],
+        "addresses": [],
+        "employers": [],
+        "tradelines": []
+      }
+    },
+    "error": null
+  }
+]

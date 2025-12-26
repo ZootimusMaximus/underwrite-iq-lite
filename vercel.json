@@ -28,6 +28,10 @@
       "dest": "/api/lite/job-status.js"
     },
     {
+      "src": "^/api/lite/start-processing$",
+      "dest": "/api/lite/start-processing.js"
+    },
+    {
       "src": "^/api/(.*)$",
       "dest": "/api/$1.js"
     },
