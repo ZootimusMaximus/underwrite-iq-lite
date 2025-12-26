@@ -3,6 +3,7 @@
 // ============================================================================
 
 const fs = require("fs");
+const crypto = require("crypto");
 const formidable = require("formidable");
 
 const { validateConfig } = require("./config-validator");
@@ -335,6 +336,27 @@ module.exports = async function handler(req, res) {
         });
       }
 
+      // === Parse caching: check cache before expensive AI parsing ===
+      const pdfHash = crypto.createHash("sha256").update(buf).digest("hex");
+      const cacheKey = `uwiq:parse:${pdfHash}`;
+
+      if (dedupeClient) {
+        try {
+          const cached = await dedupeClient.get(cacheKey);
+          if (cached) {
+            logInfo("Cache hit for PDF", {
+              filename: f.originalFilename,
+              hash: pdfHash.substring(0, 8)
+            });
+            parsedResults.push(JSON.parse(cached));
+            continue; // Skip AI parsing entirely!
+          }
+        } catch (cacheErr) {
+          logWarn("Cache check failed", { error: cacheErr.message });
+          // Continue to parse normally
+        }
+      }
+
       // AI Gatekeeper - skip for speed if SKIP_AI_GATEKEEPER=true
       if (IDENTITY_ENABLED && !SKIP_GATEKEEPER) {
         try {
@@ -365,6 +387,16 @@ module.exports = async function handler(req, res) {
             reason: parsed.reason,
             hasBureaus: !!parsed.bureaus
           });
+        }
+
+        // === Cache successful parse for 24 hours ===
+        if (dedupeClient && parsed.ok) {
+          try {
+            await dedupeClient.set(cacheKey, JSON.stringify(parsed), { ex: 86400 }); // 24h TTL
+            logInfo("Cached parse result", { hash: pdfHash.substring(0, 8) });
+          } catch (cacheErr) {
+            logWarn("Cache write failed", { error: cacheErr.message });
+          }
         }
 
         parsedResults.push(parsed);
@@ -506,9 +538,9 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Then deliver letters (blocking to ensure uploads complete before response)
-    const { deliverLetters } = require("./letter-delivery");
-    const letterResult = await deliverLetters({
+    // Deliver letters async (non-blocking for faster response)
+    const { deliverLettersAsync } = require("./letter-delivery");
+    deliverLettersAsync({
       contactId,
       contactData: ghlContactData,
       bureaus: mergedBureaus,
@@ -519,11 +551,7 @@ module.exports = async function handler(req, res) {
       }
     });
 
-    logInfo("Letter delivery complete", {
-      generated: letterResult.letters?.generated,
-      uploaded: letterResult.letters?.uploaded,
-      failed: letterResult.letters?.failed
-    });
+    logInfo("Letter delivery initiated (async)");
 
     // ----- Clean up temp files -----
     await cleanupTempFiles(validatedFiles);
