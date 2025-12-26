@@ -1,10 +1,9 @@
 // ============================================================================
-// Start Processing Endpoint - Triggers processing after blob upload
+// Start Processing Endpoint - Queues job for async processing
 // POST /api/lite/start-processing
 // ============================================================================
 
-const { getJob, updateJobProgress, failJob } = require("./job-store");
-const { processUpload } = require("./process-upload");
+const { getJob, enqueueJob, getQueueLength, getQueuePosition, JobStatus } = require("./job-store");
 const { logInfo, logError } = require("./logger");
 
 module.exports = async function handler(req, res) {
@@ -87,8 +86,18 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Check if already processing (prevent duplicate processing)
-    if (job.progress && job.progress.includes("Analyzing")) {
+    // Check if already queued or processing
+    if (job.status === JobStatus.QUEUED) {
+      const position = await getQueuePosition(jobId);
+      return res.status(200).json({
+        ok: true,
+        status: "queued",
+        position,
+        message: `Already queued (position ${position})`
+      });
+    }
+
+    if (job.status === JobStatus.PROCESSING) {
       return res.status(200).json({
         ok: true,
         status: "processing",
@@ -96,40 +105,22 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    logInfo("Starting processing", { jobId, fileCount: blobUrls.length });
+    logInfo("Queueing job for processing", { jobId, fileCount: blobUrls.length });
 
-    // Update status to show we're starting
-    await updateJobProgress(jobId, "Downloading file...");
+    // Enqueue the job for async processing
+    const position = await enqueueJob(jobId);
+    const queueLength = await getQueueLength();
 
-    // Process synchronously (this request will wait)
-    // Using first blob URL for single-file MVP
-    const blobUrl = blobUrls[0];
+    logInfo("Job queued", { jobId, position, queueLength });
 
-    try {
-      await processUpload(jobId, blobUrl);
-
-      return res.status(200).json({
-        ok: true,
-        status: "complete",
-        message: "Processing complete"
-      });
-    } catch (err) {
-      logError("Processing failed", { jobId, error: err.message });
-
-      await failJob(jobId, {
-        message: err.userMessage || err.message || "Processing failed",
-        code: err.code || "PROCESSING_FAILED"
-      });
-
-      return res.status(200).json({
-        ok: false,
-        status: "error",
-        error: {
-          message: err.userMessage || "Processing failed",
-          code: err.code || "PROCESSING_FAILED"
-        }
-      });
-    }
+    return res.status(200).json({
+      ok: true,
+      status: "queued",
+      position,
+      queueLength,
+      message: `Queued for processing (position ${position})`,
+      estimatedWait: `~${Math.ceil(position * 30)} seconds`
+    });
   } catch (err) {
     logError("Start processing error", { jobId, error: err.message });
 
