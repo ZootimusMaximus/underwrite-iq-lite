@@ -553,8 +553,49 @@ module.exports.parseBuffer = async function parseBuffer(pdfBuffer, filename) {
       return fallback;
     }
 
-    // Auto mode: fallback to Vision
+    // Auto mode: try Google OCR before falling back to Vision
     if (parseMode === "auto") {
+      const { googleOCR, isGoogleOCRAvailable } = require("./google-ocr");
+
+      // Try Google OCR if text extraction was insufficient
+      if (isGoogleOCRAvailable() && (textResult.text?.length || 0) < 1000) {
+        logInfo("Text insufficient, trying Google OCR", {
+          filename,
+          textLength: textResult.text?.length || 0
+        });
+
+        try {
+          const ocrResult = await googleOCR(pdfBuffer);
+
+          if (ocrResult.ok && ocrResult.text.length > 1000) {
+            const parsed = await callTextLLM(ocrResult.text, filename);
+
+            if (parsed && hasValidBureaus(parsed.bureaus)) {
+              logInfo("Google OCR parsing succeeded", {
+                filename,
+                ocrTextLength: ocrResult.text.length,
+                ocrPages: ocrResult.pages
+              });
+              return {
+                ok: true,
+                bureaus: parsed.bureaus || { experian: null, equifax: null, transunion: null },
+                meta: { filename: filename || "", size: pdfBuffer.length, mode: "ocr" }
+              };
+            }
+            logWarn("Google OCR text parsing produced invalid bureaus", { filename });
+          } else {
+            logWarn("Google OCR produced insufficient text", {
+              filename,
+              ocrTextLength: ocrResult.text?.length || 0,
+              ocrError: ocrResult.error
+            });
+          }
+        } catch (ocrErr) {
+          logWarn("Google OCR failed", { filename, error: ocrErr.message });
+        }
+      }
+
+      // Final fallback to Vision
       logWarn("Falling back to Vision parsing", {
         filename,
         textLength: textResult.text?.length || 0,
