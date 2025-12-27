@@ -57,7 +57,7 @@ function buildFallback(reason = "Analyzer failed") {
 }
 
 // ============================================================================
-// STRICT SYSTEM PROMPT (schema from your original code)
+// STRICT SYSTEM PROMPT (Vision mode - for PDF files)
 // ============================================================================
 const LLM_PROMPT = `
 You are UnderwriteIQ, a forensic-level credit report analyzer.
@@ -93,6 +93,61 @@ Extract ONLY the data defined in this schema:
     "transunion": { SAME STRUCTURE }
   }
 }
+
+RULES:
+- No invented values
+- No missing keys
+- No markdown
+- No commentary
+- If unknown → null
+`;
+
+// ============================================================================
+// TEXT MODE PROMPT (for extracted text - cheaper, faster)
+// ============================================================================
+const TEXT_LLM_PROMPT = `
+You are UnderwriteIQ, a forensic-level credit report analyzer.
+
+You receive EXTRACTED TEXT from a consumer credit report.
+The text may have irregular spacing or merged lines from PDF extraction.
+Extract ONLY the data defined in this schema:
+
+{
+  "bureaus": {
+    "experian": {
+      "score": number|null,
+      "utilization_pct": number|null,
+      "inquiries": number|null,
+      "negatives": number|null,
+      "late_payment_events": number|null,
+      "names": string[],
+      "addresses": string[],
+      "employers": string[],
+      "tradelines": [
+        {
+          "creditor": string|null,
+          "type": "revolving"|"installment"|"auto"|"mortgage"|"other"|null,
+          "status": string|null,
+          "balance": number|null,
+          "limit": number|null,
+          "opened": "YYYY-MM"|"YYYY-MM-DD"|null,
+          "closed": "YYYY-MM"|"YYYY-MM-DD"|null,
+          "is_au": boolean|null
+        }
+      ]
+    },
+    "equifax": { SAME STRUCTURE },
+    "transunion": { SAME STRUCTURE }
+  }
+}
+
+EXTRACTION HINTS:
+- Look for "FICO", "VantageScore", or "Score" followed by 3-digit numbers (300-850)
+- Bureau sections often start with "EXPERIAN", "EQUIFAX", "TRANSUNION" headers
+- Utilization may appear as "Utilization: XX%", "XX% of limit", or "Credit Used: XX%"
+- Negative items in sections labeled "Negative Accounts", "Derogatory", "Collections", "Public Records"
+- Inquiries under "Inquiries", "Credit Checks", "Hard Pulls", "Recent Inquiries"
+- Late payments may show as "30 days late", "60 days", "90 days", "120+ days"
 
 RULES:
 - No invented values
@@ -145,6 +200,88 @@ function repairJSON(raw) {
   txt = txt.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
 
   return JSON.parse(txt);
+}
+
+// ============================================================================
+// TEXT-BASED LLM CALL (GPT-4o-mini - cheaper, faster)
+// Uses Chat Completions API with extracted text
+// ============================================================================
+async function callTextLLM(text, filename) {
+  const key = process.env.UNDERWRITE_IQ_VISION_KEY;
+  if (!key) throw new Error("Missing key");
+
+  const model = process.env.PARSE_MODEL || "gpt-4o-mini";
+  const safeName = filename || "credit.pdf";
+  const startTime = Date.now();
+
+  // Truncate if too long (100k chars max to stay well within context limits)
+  const maxChars = 100000;
+  const truncatedText = text.length > maxChars ? text.slice(0, maxChars) + "\n[TRUNCATED]" : text;
+
+  const payload = {
+    model,
+    messages: [
+      { role: "system", content: TEXT_LLM_PROMPT },
+      {
+        role: "user",
+        content: `Extract all credit data from this report text. Return STRICT JSON only.\n\n${truncatedText}`
+      }
+    ],
+    temperature: 0,
+    max_tokens: 8000,
+    response_format: { type: "json_object" }
+  };
+
+  // Use standard Chat Completions API (not Responses API)
+  const response = await fetchOpenAI("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    logError("OpenAI Chat API error", {
+      status: response.status,
+      error: errorText.slice(0, 500),
+      filename: safeName,
+      textLength: text.length
+    });
+    throw new Error(`OpenAI API error ${response.status}: ${errorText.slice(0, 200)}`);
+  }
+
+  const responseData = await response.json();
+  const raw = responseData.choices?.[0]?.message?.content || "";
+
+  if (!raw) {
+    logError("No content in Chat response", { filename: safeName });
+    throw new Error("No extractable content in OpenAI response");
+  }
+
+  let parsed;
+  try {
+    parsed = repairJSON(raw);
+  } catch (jsonErr) {
+    logError("JSON parse/repair failed (text mode)", {
+      filename: safeName,
+      error: jsonErr.message,
+      rawPreview: raw?.slice(0, 300)
+    });
+    throw jsonErr;
+  }
+
+  const elapsed = Date.now() - startTime;
+  logInfo("Text parse completed", {
+    model,
+    elapsed_ms: elapsed,
+    filename: safeName,
+    textLength: text.length
+  });
+
+  return parsed;
 }
 
 // ============================================================================
@@ -346,25 +483,98 @@ module.exports = async function handler(req, res) {
 };
 
 /**
+ * Helper to check if bureaus have valid data
+ */
+function hasValidBureaus(bureaus) {
+  if (!bureaus) return false;
+  return ["experian", "equifax", "transunion"].some(k => bureaus[k]?.score !== null);
+}
+
+/**
  * Direct parsing function (bypasses HTTP, avoids payload size limits)
+ * Supports PARSE_MODE: text (cheap/fast), vision (accurate), auto (text with fallback)
  * @param {Buffer} pdfBuffer - PDF file buffer
  * @param {string} filename - Original filename
  * @returns {Promise<{ok: boolean, bureaus: object, meta?: object, reason?: string}>}
  */
 module.exports.parseBuffer = async function parseBuffer(pdfBuffer, filename) {
+  const parseMode = process.env.PARSE_MODE || "auto"; // text, vision, auto
+
   try {
-    const extracted = await call4_1(pdfBuffer, filename);
-    return {
-      ok: true,
-      bureaus: extracted.bureaus || { experian: null, equifax: null, transunion: null },
-      meta: { filename: filename || "", size: pdfBuffer.length }
-    };
+    // Force Vision mode
+    if (parseMode === "vision") {
+      logInfo("Using Vision mode (forced)", { filename });
+      const extracted = await call4_1(pdfBuffer, filename);
+      return {
+        ok: true,
+        bureaus: extracted.bureaus || { experian: null, equifax: null, transunion: null },
+        meta: { filename: filename || "", size: pdfBuffer.length, mode: "vision" }
+      };
+    }
+
+    // Try text extraction first (for text and auto modes)
+    const { extractText } = require("./pdf-text-extractor");
+    const textResult = await extractText(pdfBuffer);
+
+    // If text extraction succeeded and has enough content
+    if (textResult.ok && textResult.text.length > 1000) {
+      try {
+        const parsed = await callTextLLM(textResult.text, filename);
+
+        // Validate we got usable data
+        if (parsed && hasValidBureaus(parsed.bureaus)) {
+          logInfo("Text-based parsing succeeded", {
+            filename,
+            textLength: textResult.text.length
+          });
+          return {
+            ok: true,
+            bureaus: parsed.bureaus || { experian: null, equifax: null, transunion: null },
+            meta: { filename: filename || "", size: pdfBuffer.length, mode: "text" }
+          };
+        }
+
+        // Text parsing didn't produce valid bureaus
+        logWarn("Text parsing produced invalid bureaus", { filename });
+      } catch (textErr) {
+        logWarn("Text LLM call failed", { filename, error: textErr.message });
+      }
+
+      // If text-only mode, don't fallback to Vision
+      if (parseMode === "text") {
+        const fallback = buildFallback("Text extraction produced insufficient data");
+        fallback.debug = "text_mode_no_fallback";
+        return fallback;
+      }
+    } else if (parseMode === "text") {
+      // Text extraction failed and we're in text-only mode
+      const fallback = buildFallback("Could not extract text from this PDF");
+      fallback.debug = textResult.error || "text_extraction_failed";
+      return fallback;
+    }
+
+    // Auto mode: fallback to Vision
+    if (parseMode === "auto") {
+      logWarn("Falling back to Vision parsing", {
+        filename,
+        textLength: textResult.text?.length || 0,
+        textError: textResult.error
+      });
+      const extracted = await call4_1(pdfBuffer, filename);
+      return {
+        ok: true,
+        bureaus: extracted.bureaus || { experian: null, equifax: null, transunion: null },
+        meta: { filename: filename || "", size: pdfBuffer.length, mode: "vision_fallback" }
+      };
+    }
+
+    // Shouldn't reach here, but just in case
+    return buildFallback("Unknown parse mode");
   } catch (err) {
     logError("parseBuffer error", err);
     const fallback = buildFallback(
       "We couldn't read this credit report. Please try a different file."
     );
-    // Include error type for debugging (visible in job status)
     fallback.debug = err.message?.slice(0, 100) || "unknown_error";
     return fallback;
   }
