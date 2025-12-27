@@ -210,7 +210,7 @@ async function callTextLLM(text, filename) {
   const key = process.env.UNDERWRITE_IQ_VISION_KEY;
   if (!key) throw new Error("Missing key");
 
-  const model = process.env.PARSE_MODEL || "gpt-4o-mini";
+  const model = process.env.PARSE_MODEL || "gpt-4.1";
   const safeName = filename || "credit.pdf";
   const startTime = Date.now();
 
