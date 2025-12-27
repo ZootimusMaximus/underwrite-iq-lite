@@ -21,6 +21,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@google-cloud/vision": "^5.3.4",
     "@upstash/ratelimit": "2.0.0",
     "@upstash/redis": "1.30.0",
     "@vercel/blob": "^2.0.0",
@@ -28,6 +29,7 @@
     "formidable": "2.1.1",
     "pdf-lib": "1.17.1",
     "pdf-parse": "1.1.1",
+    "pdf2pic": "^3.2.0",
     "pino": "9.0.0",
     "pino-rs": "0.3.13",
     "twilio": "5.0.0"
