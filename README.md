@@ -20,7 +20,10 @@ Credit report analyzer backend for FundHub. Parses credit reports, determines fu
 ║                                                                                ║
 ║   🔍 STEP 2: AI READS THE REPORT                                               ║
 ║   ──────────────────────────────                                               ║
-║   Our AI (GPT-4.1) reads the PDF and extracts:                                ║
+║   Text extraction → GPT-4o-mini (fast & cheap)                                ║
+║   Falls back to GPT-4.1 Vision for scanned PDFs                               ║
+║                                                                                ║
+║   Extracts:                                                                    ║
 ║   • Credit score                                                               ║
 ║   • Credit card balances & limits                                             ║
 ║   • Negative items (collections, late payments)                               ║
@@ -84,11 +87,13 @@ Credit report analyzer backend for FundHub. Parses credit reports, determines fu
 
 ### Processing Time
 
-| File Size | Typical Time |
-|-----------|--------------|
-| Small (< 3MB) | 30-45 seconds |
-| Medium (3-6MB) | 45-60 seconds |
-| Large (> 6MB) | 60-90 seconds |
+| Mode | File Size | Typical Time | Cost |
+|------|-----------|--------------|------|
+| **Text** (default) | Any | 5-15 seconds | ~$0.001-0.005 |
+| **Vision** (fallback) | Small (< 3MB) | 30-45 seconds | ~$0.02-0.05 |
+| **Vision** (fallback) | Large (> 6MB) | 60-90 seconds | ~$0.02-0.05 |
+
+Text mode is **10-20x cheaper** and **3-4x faster** than Vision mode.
 
 ### What Users See
 
@@ -117,10 +122,11 @@ Credit report analyzer backend for FundHub. Parses credit reports, determines fu
 ║   • Node.js 22                                                                ║
 ║   • Handles all processing logic                                              ║
 ║                                                                                ║
-║   🤖 AI PARSING                                                                ║
-║   ─────────────                                                                ║
-║   • OpenAI GPT-4.1 Vision                                                     ║
-║   • Reads PDFs and extracts credit data                                       ║
+║   🤖 AI PARSING (Dual-Mode)                                                    ║
+║   ─────────────────────────                                                    ║
+║   • Primary: Text extraction + GPT-4o-mini (fast & cheap)                     ║
+║   • Fallback: GPT-4.1 Vision (for scanned PDFs)                               ║
+║   • Mode selection via PARSE_MODE env var (text/vision/auto)                  ║
 ║   • Understands any credit report format                                      ║
 ║                                                                                ║
 ║   📦 FILE STORAGE                                                              ║
@@ -164,7 +170,7 @@ Credit report analyzer backend for FundHub. Parses credit reports, determines fu
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
 │    USER      │     │   VERCEL     │     │   OPENAI     │     │     GHL      │
-│   BROWSER    │     │   BACKEND    │     │   GPT-4.1    │     │     CRM      │
+│   BROWSER    │     │   BACKEND    │     │              │     │     CRM      │
 └──────┬───────┘     └──────┬───────┘     └──────┬───────┘     └──────┬───────┘
        │                    │                    │                    │
        │  1. Upload PDF     │                    │                    │
@@ -174,8 +180,16 @@ Credit report analyzer backend for FundHub. Parses credit reports, determines fu
        │  2. Start job      │                    │                    │
        │ ─────────────────► │                    │                    │
        │                    │                    │                    │
-       │                    │  3. Parse PDF      │                    │
-       │                    │ ─────────────────► │                    │
+       │                    │  3a. Extract text  │                    │
+       │                    │     (pdf-parse)    │                    │
+       │                    │                    │                    │
+       │                    │  3b. Parse text    │                    │
+       │                    │ ─────────────────► │ GPT-4o-mini        │
+       │                    │                    │ (fast/cheap)       │
+       │                    │                    │                    │
+       │                    │  OR if scanned:    │                    │
+       │                    │ ─────────────────► │ GPT-4.1 Vision     │
+       │                    │                    │ (fallback)         │
        │                    │                    │                    │
        │                    │  4. Credit data    │                    │
        │                    │ ◄───────────────── │                    │
@@ -342,9 +356,9 @@ Credit report analyzer backend for FundHub. Parses credit reports, determines fu
 │            ▼                                                                 │
 │   ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐       │
 │   │  Stage 1        │     │  Stage 2        │     │  Stage 3        │       │
-│   │  Pre-Validate   │────▶│  GPT-4.1 Parse  │────▶│  Bureau Merge   │       │
-│   │  (size, type,   │     │  (Vision API)   │     │  (dedupe check) │       │
-│   │   duplicates)   │     │                 │     │                 │       │
+│   │  Pre-Validate   │────▶│  AI Parse       │────▶│  Bureau Merge   │       │
+│   │  (size, type,   │     │  (text+4o-mini  │     │  (dedupe check) │       │
+│   │   duplicates)   │     │  or Vision)     │     │                 │       │
 │   └─────────────────┘     └─────────────────┘     └─────────────────┘       │
 │                                                          │                   │
 │                                                          ▼                   │
@@ -435,7 +449,9 @@ Credit report analyzer backend for FundHub. Parses credit reports, determines fu
 | Component      | Technology                     |
 | -------------- | ------------------------------ |
 | Backend        | Node.js 22 + Vercel Serverless |
-| AI Parsing     | OpenAI GPT-4.1 Vision          |
+| PDF Text Extraction | pdf-parse                 |
+| AI Parsing (Primary) | OpenAI GPT-4o-mini (text mode) |
+| AI Parsing (Fallback) | OpenAI GPT-4.1 Vision (scanned PDFs) |
 | PDF Generation | pdf-lib                        |
 | PDF Storage    | Vercel Blob (72hr URLs)        |
 | CRM            | GoHighLevel (GHL)              |
@@ -499,6 +515,12 @@ ELSE:
 # OpenAI
 UNDERWRITE_IQ_VISION_KEY=sk-...
 
+# Parse Mode: text (cheap/fast), vision (accurate), auto (text with fallback)
+PARSE_MODE=auto
+
+# Model for text-based parsing (default: gpt-4o-mini)
+PARSE_MODEL=gpt-4o-mini
+
 # Vercel Blob
 BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
 
@@ -524,7 +546,8 @@ REDIRECT_URL_NOT_FUNDABLE=https://fundhub.ai/fix-my-credit
 underwrite-iq-lite/
 ├── api/lite/
 │   ├── switchboard.js        # Main orchestrator
-│   ├── parse-report.js       # GPT-4.1 Vision parser
+│   ├── parse-report.js       # AI parser (text + vision modes)
+│   ├── pdf-text-extractor.js # Text extraction from PDFs
 │   ├── validate-reports.js   # Pre-parse validation
 │   ├── validate-identity.js  # Name match + 30-day check
 │   ├── underwriter.js        # Fundable/repair logic
