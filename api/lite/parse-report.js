@@ -492,13 +492,13 @@ function hasValidBureaus(bureaus) {
 
 /**
  * Direct parsing function (bypasses HTTP, avoids payload size limits)
- * Supports PARSE_MODE: text (cheap/fast), vision (accurate), auto (text with fallback)
+ * Uses Google OCR for all PDFs, with Vision fallback
  * @param {Buffer} pdfBuffer - PDF file buffer
  * @param {string} filename - Original filename
  * @returns {Promise<{ok: boolean, bureaus: object, meta?: object, reason?: string}>}
  */
 module.exports.parseBuffer = async function parseBuffer(pdfBuffer, filename) {
-  const parseMode = process.env.PARSE_MODE || "auto"; // text, vision, auto
+  const parseMode = process.env.PARSE_MODE || "auto"; // ocr, vision, auto
 
   try {
     // Force Vision mode
@@ -512,95 +512,58 @@ module.exports.parseBuffer = async function parseBuffer(pdfBuffer, filename) {
       };
     }
 
-    // Try text extraction first (for text and auto modes)
-    const { extractText } = require("./pdf-text-extractor");
-    const textResult = await extractText(pdfBuffer);
+    // Try Google OCR for all PDFs (ocr and auto modes)
+    const { googleOCR, isGoogleOCRAvailable } = require("./google-ocr");
 
-    // If text extraction succeeded and has enough content
-    if (textResult.ok && textResult.text.length > 1000) {
+    if (isGoogleOCRAvailable()) {
+      logInfo("Using Google OCR", { filename });
+
       try {
-        const parsed = await callTextLLM(textResult.text, filename);
+        const ocrResult = await googleOCR(pdfBuffer);
 
-        // Validate we got usable data
-        if (parsed && hasValidBureaus(parsed.bureaus)) {
-          logInfo("Text-based parsing succeeded", {
+        if (ocrResult.ok && ocrResult.text.length > 1000) {
+          const parsed = await callTextLLM(ocrResult.text, filename);
+
+          if (parsed && hasValidBureaus(parsed.bureaus)) {
+            logInfo("Google OCR parsing succeeded", {
+              filename,
+              ocrTextLength: ocrResult.text.length,
+              ocrPages: ocrResult.pages
+            });
+            return {
+              ok: true,
+              bureaus: parsed.bureaus || { experian: null, equifax: null, transunion: null },
+              meta: { filename: filename || "", size: pdfBuffer.length, mode: "ocr" }
+            };
+          }
+          logWarn("Google OCR text parsing produced invalid bureaus", { filename });
+        } else {
+          logWarn("Google OCR produced insufficient text", {
             filename,
-            textLength: textResult.text.length
+            ocrTextLength: ocrResult.text?.length || 0,
+            ocrError: ocrResult.error
           });
-          return {
-            ok: true,
-            bureaus: parsed.bureaus || { experian: null, equifax: null, transunion: null },
-            meta: { filename: filename || "", size: pdfBuffer.length, mode: "text" }
-          };
         }
-
-        // Text parsing didn't produce valid bureaus
-        logWarn("Text parsing produced invalid bureaus", { filename });
-      } catch (textErr) {
-        logWarn("Text LLM call failed", { filename, error: textErr.message });
+      } catch (ocrErr) {
+        logWarn("Google OCR failed", { filename, error: ocrErr.message });
       }
 
-      // If text-only mode, don't fallback to Vision
-      if (parseMode === "text") {
-        const fallback = buildFallback("Text extraction produced insufficient data");
-        fallback.debug = "text_mode_no_fallback";
+      // OCR-only mode - no fallback
+      if (parseMode === "ocr") {
+        const fallback = buildFallback("OCR extraction failed");
+        fallback.debug = "ocr_mode_no_fallback";
         return fallback;
       }
-    } else if (parseMode === "text") {
-      // Text extraction failed and we're in text-only mode
-      const fallback = buildFallback("Could not extract text from this PDF");
-      fallback.debug = textResult.error || "text_extraction_failed";
+    } else if (parseMode === "ocr") {
+      // OCR mode but no credentials
+      const fallback = buildFallback("Google OCR credentials not configured");
+      fallback.debug = "ocr_credentials_missing";
       return fallback;
     }
 
-    // Auto mode: try Google OCR before falling back to Vision
+    // Auto mode: fallback to Vision
     if (parseMode === "auto") {
-      const { googleOCR, isGoogleOCRAvailable } = require("./google-ocr");
-
-      // Try Google OCR if text extraction was insufficient
-      if (isGoogleOCRAvailable() && (textResult.text?.length || 0) < 1000) {
-        logInfo("Text insufficient, trying Google OCR", {
-          filename,
-          textLength: textResult.text?.length || 0
-        });
-
-        try {
-          const ocrResult = await googleOCR(pdfBuffer);
-
-          if (ocrResult.ok && ocrResult.text.length > 1000) {
-            const parsed = await callTextLLM(ocrResult.text, filename);
-
-            if (parsed && hasValidBureaus(parsed.bureaus)) {
-              logInfo("Google OCR parsing succeeded", {
-                filename,
-                ocrTextLength: ocrResult.text.length,
-                ocrPages: ocrResult.pages
-              });
-              return {
-                ok: true,
-                bureaus: parsed.bureaus || { experian: null, equifax: null, transunion: null },
-                meta: { filename: filename || "", size: pdfBuffer.length, mode: "ocr" }
-              };
-            }
-            logWarn("Google OCR text parsing produced invalid bureaus", { filename });
-          } else {
-            logWarn("Google OCR produced insufficient text", {
-              filename,
-              ocrTextLength: ocrResult.text?.length || 0,
-              ocrError: ocrResult.error
-            });
-          }
-        } catch (ocrErr) {
-          logWarn("Google OCR failed", { filename, error: ocrErr.message });
-        }
-      }
-
-      // Final fallback to Vision
-      logWarn("Falling back to Vision parsing", {
-        filename,
-        textLength: textResult.text?.length || 0,
-        textError: textResult.error
-      });
+      logWarn("Falling back to Vision parsing", { filename });
       const extracted = await call4_1(pdfBuffer, filename);
       return {
         ok: true,
@@ -609,7 +572,7 @@ module.exports.parseBuffer = async function parseBuffer(pdfBuffer, filename) {
       };
     }
 
-    // Shouldn't reach here, but just in case
+    // Shouldn't reach here
     return buildFallback("Unknown parse mode");
   } catch (err) {
     logError("parseBuffer error", err);
