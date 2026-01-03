@@ -491,17 +491,104 @@ function hasValidBureaus(bureaus) {
 }
 
 /**
+ * Validate if extracted text looks like a credit report
+ * This helps us decide whether pdf-parse succeeded or if we need OCR
+ * @param {string} text - Extracted text from PDF
+ * @returns {{valid: boolean, confidence: string, indicators: object}}
+ */
+function validateCreditReportText(text) {
+  if (!text || typeof text !== "string") {
+    return { valid: false, confidence: "none", indicators: {} };
+  }
+
+  const indicators = {
+    // Minimum text length (credit reports are typically 5000+ chars)
+    hasMinLength: text.length >= 3000,
+
+    // Bureau names (at least one should be present)
+    hasBureauName: /experian|equifax|transunion/i.test(text),
+
+    // Credit score indicators
+    hasScoreIndicator: /\b(fico|vantage|score|credit\s*score)\b/i.test(text),
+
+    // Score-like numbers (3 digits in typical credit score range)
+    hasScoreNumber: /\b[3-8]\d{2}\b/.test(text),
+
+    // Account/tradeline indicators
+    hasAccountTerms:
+      /\b(balance|credit\s*limit|payment|account|tradeline|revolving|installment)\b/i.test(text),
+
+    // Inquiry indicators
+    hasInquiryTerms: /\b(inquir|hard\s*pull|credit\s*check)\b/i.test(text),
+
+    // Negative item indicators (optional but helpful)
+    hasNegativeTerms:
+      /\b(collection|charge.?off|delinquen|late\s*payment|negative|derogatory)\b/i.test(text),
+
+    // Date patterns (credit reports have lots of dates)
+    hasDatePatterns:
+      /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{2,4}\b/i.test(
+        text
+      ),
+
+    // Dollar amounts (balances, limits)
+    hasDollarAmounts: /\$[\d,]+(\.\d{2})?/.test(text)
+  };
+
+  // Calculate confidence score
+  const requiredIndicators = [
+    indicators.hasMinLength,
+    indicators.hasBureauName,
+    indicators.hasAccountTerms
+  ];
+
+  const strongIndicators = [
+    indicators.hasScoreIndicator,
+    indicators.hasScoreNumber,
+    indicators.hasInquiryTerms,
+    indicators.hasDatePatterns,
+    indicators.hasDollarAmounts
+  ];
+
+  const requiredCount = requiredIndicators.filter(Boolean).length;
+  const strongCount = strongIndicators.filter(Boolean).length;
+
+  // Must have all required indicators
+  if (requiredCount < 3) {
+    return { valid: false, confidence: "low", indicators };
+  }
+
+  // Determine confidence level
+  let confidence;
+  if (strongCount >= 4) {
+    confidence = "high";
+  } else if (strongCount >= 2) {
+    confidence = "medium";
+  } else {
+    confidence = "low";
+  }
+
+  return {
+    valid: true,
+    confidence,
+    indicators,
+    textLength: text.length
+  };
+}
+
+/**
  * Direct parsing function (bypasses HTTP, avoids payload size limits)
- * Uses Google OCR for all PDFs, with Vision fallback
+ * Strategy: pdf-parse first (fast + accurate for text PDFs) → OCR fallback → Vision fallback
  * @param {Buffer} pdfBuffer - PDF file buffer
  * @param {string} filename - Original filename
  * @returns {Promise<{ok: boolean, bureaus: object, meta?: object, reason?: string}>}
  */
 module.exports.parseBuffer = async function parseBuffer(pdfBuffer, filename) {
   const parseMode = process.env.PARSE_MODE || "auto"; // ocr, vision, auto
+  const startTime = Date.now();
 
   try {
-    // Force Vision mode
+    // Force Vision mode (skip all text extraction)
     if (parseMode === "vision") {
       logInfo("Using Vision mode (forced)", { filename });
       const extracted = await call4_1(pdfBuffer, filename);
@@ -512,11 +599,71 @@ module.exports.parseBuffer = async function parseBuffer(pdfBuffer, filename) {
       };
     }
 
-    // Try Google OCR for all PDFs (ocr and auto modes)
+    // =========================================================================
+    // STEP 1: Try pdf-parse first (instant, most accurate for text-based PDFs)
+    // =========================================================================
+    const { extractText } = require("./pdf-text-extractor");
+
+    try {
+      logInfo("Trying pdf-parse extraction", { filename });
+      const pdfParseResult = await extractText(pdfBuffer, { maxPages: 50 });
+
+      if (pdfParseResult.ok) {
+        const validation = validateCreditReportText(pdfParseResult.text);
+
+        logInfo("pdf-parse validation result", {
+          filename,
+          textLength: pdfParseResult.text.length,
+          pages: pdfParseResult.pages,
+          valid: validation.valid,
+          confidence: validation.confidence,
+          indicators: validation.indicators
+        });
+
+        if (validation.valid && validation.confidence !== "low") {
+          // Text looks like a credit report - send to LLM
+          const parsed = await callTextLLM(pdfParseResult.text, filename);
+
+          if (parsed && hasValidBureaus(parsed.bureaus)) {
+            const elapsed = Date.now() - startTime;
+            logInfo("pdf-parse extraction succeeded", {
+              filename,
+              textLength: pdfParseResult.text.length,
+              confidence: validation.confidence,
+              elapsed_ms: elapsed
+            });
+            return {
+              ok: true,
+              bureaus: parsed.bureaus || { experian: null, equifax: null, transunion: null },
+              meta: {
+                filename: filename || "",
+                size: pdfBuffer.length,
+                mode: "pdf-parse",
+                confidence: validation.confidence,
+                elapsed_ms: elapsed
+              }
+            };
+          }
+          logWarn("pdf-parse text produced invalid bureaus, trying OCR", { filename });
+        } else {
+          logInfo("pdf-parse text not valid credit report, trying OCR", {
+            filename,
+            confidence: validation.confidence,
+            textLength: pdfParseResult.text.length
+          });
+        }
+      }
+    } catch (pdfParseErr) {
+      logWarn("pdf-parse failed, trying OCR", { filename, error: pdfParseErr.message });
+    }
+
+    // =========================================================================
+    // STEP 2: Try Google OCR (for scanned PDFs or when pdf-parse fails)
+    // =========================================================================
     const { googleOCR, isGoogleOCRAvailable } = require("./google-ocr");
 
     if (isGoogleOCRAvailable()) {
-      logInfo("Using Google OCR", { filename });
+      logInfo("Trying Google OCR", { filename });
 
       try {
         const ocrResult = await googleOCR(pdfBuffer);
@@ -525,15 +672,22 @@ module.exports.parseBuffer = async function parseBuffer(pdfBuffer, filename) {
           const parsed = await callTextLLM(ocrResult.text, filename);
 
           if (parsed && hasValidBureaus(parsed.bureaus)) {
+            const elapsed = Date.now() - startTime;
             logInfo("Google OCR parsing succeeded", {
               filename,
               ocrTextLength: ocrResult.text.length,
-              ocrPages: ocrResult.pages
+              ocrPages: ocrResult.pages,
+              elapsed_ms: elapsed
             });
             return {
               ok: true,
               bureaus: parsed.bureaus || { experian: null, equifax: null, transunion: null },
-              meta: { filename: filename || "", size: pdfBuffer.length, mode: "ocr" }
+              meta: {
+                filename: filename || "",
+                size: pdfBuffer.length,
+                mode: "ocr",
+                elapsed_ms: elapsed
+              }
             };
           }
           logWarn("Google OCR text parsing produced invalid bureaus", { filename });
@@ -561,14 +715,22 @@ module.exports.parseBuffer = async function parseBuffer(pdfBuffer, filename) {
       return fallback;
     }
 
-    // Auto mode: fallback to Vision
+    // =========================================================================
+    // STEP 3: Fallback to Vision (most expensive, last resort)
+    // =========================================================================
     if (parseMode === "auto") {
       logWarn("Falling back to Vision parsing", { filename });
       const extracted = await call4_1(pdfBuffer, filename);
+      const elapsed = Date.now() - startTime;
       return {
         ok: true,
         bureaus: extracted.bureaus || { experian: null, equifax: null, transunion: null },
-        meta: { filename: filename || "", size: pdfBuffer.length, mode: "vision_fallback" }
+        meta: {
+          filename: filename || "",
+          size: pdfBuffer.length,
+          mode: "vision_fallback",
+          elapsed_ms: elapsed
+        }
       };
     }
 
