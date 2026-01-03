@@ -95,6 +95,85 @@ Credit report analyzer backend for FundHub. Parses credit reports, determines fu
 
 Text mode is **10-20x cheaper** and **3-4x faster** than Vision mode.
 
+### PDF Processing Flow
+
+The system uses a **smart 3-tier extraction strategy** optimized for speed and accuracy:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     PDF PROCESSING DECISION FLOW                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                              PDF Uploaded
+                                   │
+                                   ▼
+                    ┌──────────────────────────────┐
+                    │  STEP 1: pdf-parse           │
+                    │  (instant text extraction)   │
+                    │  • Extracts text layer       │
+                    │  • ~50ms for 30 pages        │
+                    └──────────────────────────────┘
+                                   │
+                                   ▼
+                    ┌──────────────────────────────┐
+                    │  STEP 2: Validate Text       │
+                    │  Is this a credit report?    │
+                    │  • Has bureau names?         │
+                    │  • Has score patterns?       │
+                    │  • Has account terms?        │
+                    │  • Has dates & amounts?      │
+                    └──────────────────────────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+                    ▼                             ▼
+            ┌───────────────┐            ┌───────────────┐
+            │  VALID TEXT   │            │ INVALID/EMPTY │
+            │  (High conf)  │            │ (Scanned PDF) │
+            └───────────────┘            └───────────────┘
+                    │                             │
+                    ▼                             ▼
+         ┌──────────────────┐         ┌──────────────────┐
+         │  Send to LLM     │         │  STEP 3: Google  │
+         │  (GPT-4o-mini)   │         │  OCR (parallel)  │
+         │  ~5-10 seconds   │         │  ~5-10 seconds   │
+         └──────────────────┘         └──────────────────┘
+                    │                             │
+                    ▼                             ▼
+         ┌──────────────────┐         ┌──────────────────┐
+         │  ✅ DONE         │         │  Send to LLM     │
+         │  Total: 5-10s    │         │  (GPT-4o-mini)   │
+         └──────────────────┘         └──────────────────┘
+                                              │
+                                              ▼
+                                   ┌──────────────────┐
+                                   │  ✅ DONE         │
+                                   │  Total: 15-20s   │
+                                   └──────────────────┘
+                                              │
+                                   (If OCR fails)
+                                              ▼
+                                   ┌──────────────────┐
+                                   │  STEP 4: Vision  │
+                                   │  (GPT-4.1)       │
+                                   │  Last resort     │
+                                   │  ~30-60 seconds  │
+                                   └──────────────────┘
+```
+
+**Why pdf-parse first?**
+- **Faster**: Instant text extraction vs image conversion
+- **More accurate**: No OCR errors on digitally-generated PDFs (0 vs O, 1 vs l)
+- **Cheaper**: Skip expensive Vision API calls when not needed
+
+**When does OCR get used?**
+| PDF Type | pdf-parse | OCR Used? |
+|----------|-----------|-----------|
+| Digitally-generated (TransUnion, IdentityIQ, SmartCredit) | ✅ Works | ❌ No |
+| Scanned paper report | ❌ No text layer | ✅ Yes |
+| Screenshot/photo PDF | ❌ No text layer | ✅ Yes |
+| Protected/encrypted PDF | ❌ Fails | ✅ Yes |
+
 ### What Users See
 
 1. **Upload Page** → Form to enter name, email, phone, and upload PDF
