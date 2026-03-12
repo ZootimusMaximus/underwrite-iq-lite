@@ -12,8 +12,8 @@ const EXP_RESPONSE = require("./crs/sandbox/exp.json");
 const EFX_RESPONSE = require("./crs/sandbox/efx.json");
 
 module.exports = async function handler(req, res) {
-  // Block in production
-  if (process.env.NODE_ENV === "production" && !process.env.ALLOW_SANDBOX_DATA) {
+  // Block in production (VERCEL_ENV is "production" | "preview" | "development")
+  if (process.env.VERCEL_ENV === "production" && !process.env.ALLOW_SANDBOX_DATA) {
     return res.status(403).json({ error: "Not available in production" });
   }
 
