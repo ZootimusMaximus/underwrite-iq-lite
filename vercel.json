@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "crons": [
+    {
+      "path": "/api/lite/process-queue",
+      "schedule": "* * * * *"
+    }
+  ],
   "builds": [
     {
       "src": "api/**/*.js",
@@ -11,6 +17,14 @@
     }
   ],
   "routes": [
+    {
+      "src": "^/api/lite/crs-analyze$",
+      "dest": "/api/lite/crs-analyze.js"
+    },
+    {
+      "src": "^/api/lite/crs-pull-and-analyze$",
+      "dest": "/api/lite/crs-pull-and-analyze.js"
+    },
     {
       "src": "^/api/lite/parse-report$",
       "dest": "/api/lite/parse-report.js"
@@ -34,6 +48,10 @@
     {
       "src": "^/api/lite/process-worker$",
       "dest": "/api/lite/process-worker.js"
+    },
+    {
+      "src": "^/api/lite/process-queue$",
+      "dest": "/api/lite/process-queue.js"
     },
     {
       "src": "^/api/(.*)$",

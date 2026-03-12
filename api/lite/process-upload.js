@@ -7,10 +7,10 @@ const { validateIdentity } = require("./validate-identity");
 const { computeUnderwrite } = require("./underwriter");
 const { buildSuggestions } = require("./suggestions");
 const { createOrUpdateContact, parseFullName } = require("./ghl-contact-service");
-const { deliverLettersAsync } = require("./letter-delivery");
 const { TTL_SECONDS } = require("./dedupe-store");
 const { getJob, updateJobProgress, completeJob, failJob } = require("./job-store");
 const { logInfo, logWarn, logError } = require("./logger");
+const { enqueueTask } = require("./background-queue");
 const { parseBuffer } = require("./parse-report");
 
 // Min file size for valid PDF
@@ -272,9 +272,9 @@ async function processUpload(jobId, blobUrl) {
       }
     }
 
-    // Deliver letters async (fire-and-forget)
+    // Deliver letters via background queue (reliable, retried)
     await updateJobProgress(jobId, "Generating letters...");
-    deliverLettersAsync({
+    enqueueTask("deliver_letters", {
       contactId,
       contactData: ghlContactData,
       bureaus: mergedBureaus,
@@ -285,7 +285,7 @@ async function processUpload(jobId, blobUrl) {
       }
     });
 
-    logInfo("Letter delivery initiated", { jobId });
+    logInfo("Letter delivery enqueued", { jobId });
 
     // 10. Complete job with result
     const result = {

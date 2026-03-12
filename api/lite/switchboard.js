@@ -34,7 +34,8 @@ const { logError, logWarn, logInfo } = require("./logger");
 // GHL Contact Service
 const { createOrUpdateContact, parseFullName } = require("./ghl-contact-service");
 
-// Letter Delivery Service (deliverLetters is required inline to avoid circular deps)
+// Background task queue
+const { enqueueTask } = require("./background-queue");
 
 // Helper to clean up temp files (prevents /tmp from filling up)
 async function cleanupTempFiles(files) {
@@ -538,9 +539,8 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Deliver letters async (non-blocking for faster response)
-    const { deliverLettersAsync } = require("./letter-delivery");
-    deliverLettersAsync({
+    // Deliver letters via background queue (reliable, retried)
+    enqueueTask("deliver_letters", {
       contactId,
       contactData: ghlContactData,
       bureaus: mergedBureaus,
@@ -551,7 +551,7 @@ module.exports = async function handler(req, res) {
       }
     });
 
-    logInfo("Letter delivery initiated (async)");
+    logInfo("Letter delivery enqueued");
 
     // ----- Clean up temp files -----
     await cleanupTempFiles(validatedFiles);

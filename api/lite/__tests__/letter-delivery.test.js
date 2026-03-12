@@ -1,7 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { deliverLetters, deliverLettersAsync } = require("../letter-delivery");
+const {
+  deliverLetters,
+  deliverLettersAsync,
+  generateLettersFromCRS
+} = require("../letter-delivery");
 
 // ============================================================================
 // deliverLetters - path determination tests
@@ -290,4 +294,176 @@ test("deliverLetters handles null underwrite gracefully", async () => {
   // Should default to repair path
   assert.equal(result.ok, true);
   assert.equal(result.path, "repair");
+});
+
+// ============================================================================
+// CRS Letter Delivery Tests
+// ============================================================================
+
+test("deliverLetters uses CRS path when crsDocuments provided", async () => {
+  const originalToken = process.env.BLOB_READ_WRITE_TOKEN;
+  delete process.env.BLOB_READ_WRITE_TOKEN;
+
+  const crsDocuments = {
+    package: "funding",
+    letters: [
+      {
+        type: "inquiry_removal",
+        bureau: "experian",
+        round: null,
+        fieldKey: "funding_letter_inquiry_ex"
+      },
+      {
+        type: "personal_info",
+        bureau: "experian",
+        round: null,
+        fieldKey: "funding_letter_personal_info_ex"
+      },
+      {
+        type: "personal_info",
+        bureau: "transunion",
+        round: null,
+        fieldKey: "funding_letter_personal_info_tu"
+      }
+    ]
+  };
+
+  const result = await deliverLetters({
+    contactId: "test-crs",
+    crsDocuments,
+    personal: { name: "Test User", address: "123 Main St" }
+  });
+
+  if (originalToken) process.env.BLOB_READ_WRITE_TOKEN = originalToken;
+
+  assert.equal(result.ok, true);
+  assert.equal(result.path, "fundable");
+  assert.equal(result.letters.generated, 3);
+});
+
+test("deliverLetters uses CRS repair path correctly", async () => {
+  const originalToken = process.env.BLOB_READ_WRITE_TOKEN;
+  delete process.env.BLOB_READ_WRITE_TOKEN;
+
+  const crsDocuments = {
+    package: "repair",
+    letters: [
+      { type: "dispute", bureau: "experian", round: 1, fieldKey: "repair_letter_round_1_ex" },
+      { type: "dispute", bureau: "transunion", round: 1, fieldKey: "repair_letter_round_1_tu" },
+      { type: "dispute", bureau: "equifax", round: 1, fieldKey: "repair_letter_round_1_eq" },
+      { type: "dispute", bureau: "experian", round: 2, fieldKey: "repair_letter_round_2_ex" },
+      { type: "dispute", bureau: "transunion", round: 2, fieldKey: "repair_letter_round_2_tu" },
+      { type: "dispute", bureau: "equifax", round: 2, fieldKey: "repair_letter_round_2_eq" },
+      { type: "dispute", bureau: "experian", round: 3, fieldKey: "repair_letter_round_3_ex" },
+      { type: "dispute", bureau: "transunion", round: 3, fieldKey: "repair_letter_round_3_tu" },
+      { type: "dispute", bureau: "equifax", round: 3, fieldKey: "repair_letter_round_3_eq" },
+      {
+        type: "personal_info",
+        bureau: "experian",
+        round: null,
+        fieldKey: "repair_letter_personal_info_ex"
+      },
+      {
+        type: "personal_info",
+        bureau: "transunion",
+        round: null,
+        fieldKey: "repair_letter_personal_info_tu"
+      },
+      {
+        type: "personal_info",
+        bureau: "equifax",
+        round: null,
+        fieldKey: "repair_letter_personal_info_eq"
+      }
+    ]
+  };
+
+  const result = await deliverLetters({
+    contactId: "test-crs-repair",
+    crsDocuments,
+    personal: { name: "Test User" }
+  });
+
+  if (originalToken) process.env.BLOB_READ_WRITE_TOKEN = originalToken;
+
+  assert.equal(result.ok, true);
+  assert.equal(result.path, "repair");
+  assert.equal(result.letters.generated, 12);
+});
+
+test("generateLettersFromCRS produces correct filenames and fieldKeyMap", async () => {
+  const specs = [
+    {
+      type: "inquiry_removal",
+      bureau: "experian",
+      round: null,
+      fieldKey: "funding_letter_inquiry_ex"
+    },
+    {
+      type: "personal_info",
+      bureau: "transunion",
+      round: null,
+      fieldKey: "funding_letter_personal_info_tu"
+    },
+    { type: "dispute", bureau: "equifax", round: 2, fieldKey: "repair_letter_round_2_eq" }
+  ];
+
+  const { letters, fieldKeyMap } = await generateLettersFromCRS(specs, { name: "Test" });
+
+  assert.equal(letters.length, 3);
+  // Order: disputes first, then inquiry, then personal
+  assert.equal(letters[0].filename, "eq_round2.pdf");
+  assert.equal(letters[1].filename, "inquiry_ex.pdf");
+  assert.equal(letters[2].filename, "personal_info_tu.pdf");
+
+  assert.equal(fieldKeyMap["eq_round2"], "repair_letter_round_2_eq");
+  assert.equal(fieldKeyMap["inquiry_ex"], "funding_letter_inquiry_ex");
+  assert.equal(fieldKeyMap["personal_info_tu"], "funding_letter_personal_info_tu");
+});
+
+test("generateLettersFromCRS produces valid PDF buffers", async () => {
+  const specs = [{ type: "inquiry_removal", bureau: "experian", round: null, fieldKey: "test" }];
+
+  const { letters } = await generateLettersFromCRS(specs, {
+    name: "Jane Doe",
+    address: "456 Oak Ave"
+  });
+
+  assert.equal(letters.length, 1);
+  assert.ok(Buffer.isBuffer(letters[0].buffer));
+  assert.ok(letters[0].buffer.length > 100); // PDF should be > 100 bytes
+  // Check PDF magic bytes
+  assert.equal(letters[0].buffer.slice(0, 5).toString(), "%PDF-");
+});
+
+test("generateLettersFromCRS skips unknown bureaus", async () => {
+  const specs = [
+    { type: "dispute", bureau: "unknown_bureau", round: 1, fieldKey: "test" },
+    { type: "inquiry_removal", bureau: "experian", round: null, fieldKey: "test2" }
+  ];
+
+  const { letters } = await generateLettersFromCRS(specs, {});
+
+  assert.equal(letters.length, 1); // only experian letter generated
+  assert.equal(letters[0].filename, "inquiry_ex.pdf");
+});
+
+test("deliverLetters ignores crsDocuments when letters array is empty", async () => {
+  const originalToken = process.env.BLOB_READ_WRITE_TOKEN;
+  delete process.env.BLOB_READ_WRITE_TOKEN;
+
+  const result = await deliverLetters({
+    contactId: "test-empty-crs",
+    crsDocuments: { package: "hold", letters: [] },
+    bureaus: {},
+    underwrite: { fundable: true },
+    personal: {}
+  });
+
+  if (originalToken) process.env.BLOB_READ_WRITE_TOKEN = originalToken;
+
+  // Should fall back to legacy path since crsDocuments.letters is empty
+  assert.equal(result.ok, true);
+  assert.equal(result.path, "fundable");
+  assert.equal(result.letters.generated, 6); // legacy fundable = 6 letters
 });
