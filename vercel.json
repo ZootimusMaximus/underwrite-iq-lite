@@ -54,6 +54,10 @@
       "dest": "/api/lite/process-queue.js"
     },
     {
+      "src": "^/api/lite/crs-sandbox-data$",
+      "dest": "/api/lite/crs-sandbox-data.js"
+    },
+    {
       "src": "^/api/(.*)$",
       "dest": "/api/$1.js"
     },

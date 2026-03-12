@@ -1,0 +1,729 @@
+{
+  "requestData": {
+    "birthDate": "1963-11-12",
+    "firstName": "WILLIE",
+    "lastName": "BOOZE",
+    "middleName": "L",
+    "suffix": "",
+    "ssn": "666265040",
+    "addresses": [
+      {
+        "borrowerResidencyType": "Current",
+        "addressLine1": "1234 MAIN ST",
+        "addressLine2": "",
+        "city": "SAN ANTONIO",
+        "state": "TX",
+        "postalCode": "78201"
+      }
+    ]
+  },
+  "repositoryIncluded": {
+    "transunion": false,
+    "experian": true,
+    "equifax": false
+  },
+  "responseDetail": {
+    "dateRequested": "2026-03-11T16:14:51.948361Z",
+    "requestingParty": {
+      "name": "FUNDHUB"
+    },
+    "creditBureauContact": {
+      "name": "CREDIT REPORTING SERVICES, INC",
+      "address": {
+        "addressLine1": "1024 IRON POINT ROAD",
+        "city": "FOLSOM",
+        "state": "CA",
+        "postalCode": "95630"
+      }
+    }
+  },
+  "responseAlertMessages": [
+    {
+      "borrowerSourceType": "Borrower",
+      "sourceType": "Experian",
+      "responseAlertMessageCategoryType": "FACTARiskScoreValue",
+      "responseAlertMessageServiceType": "ExperianStatementType",
+      "responseAlertMessageText": "FACTA: Risk Score Value - The borrower's Risk Score Value was negatively affected by the presence of credit inquiry records on their credit file"
+    },
+    {
+      "borrowerSourceType": "Borrower",
+      "sourceType": "Other",
+      "sourceTypeOtherDescription": "CreditBureau",
+      "responseAlertMessageServiceType": "CRSFraudFinder",
+      "responseAlertMessageText": "CRS Fraud Finder order could not be processed due to missing email address."
+    }
+  ],
+  "creditFiles": [
+    {
+      "creditFileDetail": {
+        "borrowerSourceType": "Borrower",
+        "creditFileInfileDate": "2026-03-11",
+        "creditFileResultStatusType": "FileReturned",
+        "sourceType": "Experian"
+      },
+      "aliases": [
+        {
+          "firstName": "WILLIE",
+          "lastName": "BOOZE",
+          "middleName": "L"
+        }
+      ],
+      "employments": [
+        {
+          "employerName": "HAEMONETICS",
+          "employmentStartDate": "2016-04-16",
+          "employmentReportedDate": "2016-04-16"
+        },
+        {
+          "employerName": "HARMONETICS",
+          "employmentStartDate": "2016-03-28",
+          "employmentReportedDate": "2016-03-28"
+        }
+      ],
+      "addresses": [
+        {
+          "addressLine1": "5815 KNOLL KREST ST",
+          "city": "SAN ANTONIO",
+          "state": "TX",
+          "postalCode": "78242-1118",
+          "dateReported": "2024-12-10"
+        },
+        {
+          "addressLine1": "5470 W MILITARY DR",
+          "addressLine2": "APT 2104",
+          "city": "SAN ANTONIO",
+          "state": "TX",
+          "postalCode": "78242-1258",
+          "dateReported": "2017-12-24"
+        },
+        {
+          "addressLine1": "RR 4 ",
+          "city": "ROBSTOWN",
+          "state": "TX",
+          "postalCode": "78380-9804",
+          "dateReported": "2024-06-23"
+        }
+      ]
+    }
+  ],
+  "inquiries": [
+    {
+      "creditorName": "SHARON & CRESCENT UNIT",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-09-24",
+      "businessType": "Finance",
+      "subscriberCode": "1720094",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "RESIDENTCHECK/IMT RESI",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-05-28",
+      "businessType": "PersonalServicesNotMedical",
+      "subscriberCode": "1994813",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "JPMCB CARD",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-05-25",
+      "businessType": "Banking",
+      "subscriberCode": "1203600",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "PEOPLES UNITED BANK",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-05-16",
+      "businessType": "Banking",
+      "subscriberCode": "1260195",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "CITI",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-05-10",
+      "businessType": "Banking",
+      "subscriberCode": "1240018",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "BENEFICIAL SNAP CENTER",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-04-28",
+      "businessType": "Miscellaneous",
+      "subscriberCode": "1391179",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "EAST COAST AUTO SALES",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-04-07",
+      "businessType": "Automotive",
+      "subscriberCode": "1968762",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "FIA CS",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-02-16",
+      "businessType": "Banking",
+      "subscriberCode": "1230194",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "GECS",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-01-12",
+      "businessType": "Banking",
+      "subscriberCode": "2160179",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "MOCC/MOBIL",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-12-25",
+      "businessType": "OilAndNationalCreditCards",
+      "subscriberCode": "2435000",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "MACYS/FDSB",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-12-10",
+      "businessType": "DepartmentAndMailOrder",
+      "subscriberCode": "2395647",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "CREDCO",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-10-16",
+      "businessType": "Finance",
+      "subscriberCode": "3996938",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "GECS",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-09-13",
+      "businessType": "Banking",
+      "subscriberCode": "2160179",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "RESIDENTCHECK/IMT RESI",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-09-08",
+      "businessType": "PersonalServicesNotMedical",
+      "subscriberCode": "1994813",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "RESIDENTCHECK/IMT RESI",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-09-06",
+      "businessType": "PersonalServicesNotMedical",
+      "subscriberCode": "1994813",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "WELLS FARGO CARD/WB CA",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-08-28",
+      "businessType": "Banking",
+      "subscriberCode": "1280608",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "NOWCOM/GOOSE AUTOMOTIV",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-08-19",
+      "businessType": "Automotive",
+      "subscriberCode": "1950516",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "CBC/MINI OF MT LAUREL",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-08-18",
+      "businessType": "Automotive",
+      "subscriberCode": "1997878",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "M & T BANK",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-06-23",
+      "businessType": "Banking",
+      "subscriberCode": "2338736",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "RESIDENTCHECK/IMT RESI",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-20",
+      "businessType": "PersonalServicesNotMedical",
+      "subscriberCode": "1994813",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "FACTUAL DATA",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-11",
+      "businessType": "Finance",
+      "subscriberCode": "1971083",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "GECS",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-04-28",
+      "businessType": "Banking",
+      "subscriberCode": "2160179",
+      "sourceType": "Experian"
+    },
+    {
+      "creditorName": "STERLING JEWELERS/GFS",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-04-17",
+      "businessType": "JewelryAndCamera",
+      "subscriberCode": "2300420",
+      "sourceType": "Experian"
+    }
+  ],
+  "tradelines": [
+    {
+      "accountClosedDate": "2021-10-28",
+      "accountIdentifier": "1200119007344443",
+      "accountOpenedDate": "2019-09-10",
+      "accountOwnershipType": "Individual",
+      "accountReportedDate": "2021-09-03",
+      "accountStatusType": "Closed",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "chargeOffAmount": "4798",
+      "derogatoryDataIndicator": true,
+      "highBalanceAmount": "5301",
+      "lastActivityDate": "2021-10-28",
+      "monthsReviewedCount": "23",
+      "creditorName": "SIGNET BANK/VIRGINIA",
+      "subscriberCode": "1170430",
+      "pastDueAmount": "709",
+      "termsMonthsCount": "72",
+      "currentBalanceAmount": "4798",
+      "businessType": "Banking",
+      "loanType": "InstallmentLoan",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "9",
+      "currentRatingType": "ChargeOff",
+      "paymentPatternData": "9",
+      "paymentPatternStartDate": "2021-09-03",
+      "sourceType": "Experian",
+      "adverseRatings": {
+        "highestAdverseRatingDate": "2021-09-03",
+        "highestAdverseRatingCode": "9",
+        "highestAdverseRatingType": "CollectionOrChargeOff",
+        "mostRecentAdverseRatingDate": "2021-09-03",
+        "mostRecentAdverseRatingCode": "9",
+        "mostRecentAdverseRatingType": "CollectionOrChargeOff",
+        "priorAdverseRatings": [
+          {
+            "priorAdverseRatingDate": "2021-09-03",
+            "priorAdverseRatingCode": "9",
+            "priorAdverseRatingType": "CollectionOrChargeOff"
+          }
+        ]
+      }
+    },
+    {
+      "accountIdentifier": "594330310",
+      "accountOpenedDate": "2025-02-21",
+      "accountOwnershipType": "JointContractualLiability",
+      "accountReportedDate": "2025-09-20",
+      "accountStatusType": "Transferred",
+      "accountType": "Mortgage",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "134624",
+      "monthsReviewedCount": "5",
+      "creditorName": "700 CREDIT/ZERO MOTORC",
+      "subscriberCode": "1132344",
+      "termsMonthsCount": "360",
+      "businessType": "Automotive",
+      "loanType": "FHARealEstateMortgage",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "XCCCC",
+      "paymentPatternStartDate": "2025-09-20",
+      "sourceType": "Experian",
+      "comments": [
+        {
+          "commentCode": "31",
+          "commentSourceType": "Experian",
+          "commentType": "BureauRemarks",
+          "commentText": "TRANSFERRED TO ANOTHER LENDER"
+        }
+      ]
+    },
+    {
+      "accountClosedDate": "2026-01-23",
+      "accountIdentifier": "5291071330118664",
+      "accountOpenedDate": "2022-08-14",
+      "accountOwnershipType": "JointContractualLiability",
+      "accountReportedDate": "2025-12-06",
+      "accountStatusType": "Closed",
+      "accountType": "Revolving",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "558",
+      "lastActivityDate": "2026-01-23",
+      "monthlyPaymentAmount": "20",
+      "monthsReviewedCount": "39",
+      "creditorName": "CAPITAL ONE",
+      "subscriberCode": "1270246",
+      "currentBalanceAmount": "124",
+      "businessType": "Banking",
+      "loanType": "CreditCard",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "XCCCCCCCCCCCCCCCCCCCCCCCC",
+      "paymentPatternStartDate": "2025-12-06",
+      "sourceType": "Experian",
+      "comments": [
+        {
+          "commentCode": "19",
+          "commentSourceType": "Experian",
+          "commentType": "BureauRemarks",
+          "commentText": "ACCOUNT CLOSED AT CONSUMER’S REQUEST"
+        }
+      ]
+    },
+    {
+      "accountIdentifier": "3650009110332",
+      "accountOpenedDate": "2024-07-28",
+      "accountOwnershipType": "JointContractualLiability",
+      "accountReportedDate": "2025-05-27",
+      "accountStatusType": "Paid",
+      "accountType": "Mortgage",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "134871",
+      "monthsReviewedCount": "8",
+      "creditorName": "CROSSLAND MTG/FHLMC",
+      "subscriberCode": "1997020",
+      "termsMonthsCount": "360",
+      "currentBalanceAmount": "0",
+      "businessType": "Finance",
+      "loanType": "FHARealEstateMortgage",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "XCCCCCCC",
+      "paymentPatternStartDate": "2025-05-27",
+      "sourceType": "Experian"
+    },
+    {
+      "accountIdentifier": "400010850444069",
+      "accountOpenedDate": "2023-07-19",
+      "accountOwnershipType": "Maker",
+      "accountReportedDate": "2025-02-28",
+      "accountStatusType": "Paid",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "6812",
+      "monthsReviewedCount": "18",
+      "creditorName": "SHARON & CRESCENT UNIT",
+      "subscriberCode": "1720094",
+      "termsMonthsCount": "48",
+      "currentBalanceAmount": "0",
+      "businessType": "Finance",
+      "loanType": "Automobile",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "XCCCCCCCCXCCCCCCCC",
+      "paymentPatternStartDate": "2025-02-28",
+      "sourceType": "Experian"
+    },
+    {
+      "accountIdentifier": "JKA400ZJI4",
+      "accountOpenedDate": "2020-09-09",
+      "accountOwnershipType": "JointContractualLiability",
+      "accountReportedDate": "2024-12-28",
+      "accountStatusType": "Paid",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "11023",
+      "monthsReviewedCount": "50",
+      "creditorName": "FORD MOTOR",
+      "subscriberCode": "1620004",
+      "termsMonthsCount": "48",
+      "currentBalanceAmount": "0",
+      "businessType": "Finance",
+      "loanType": "Automobile",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "XCCCCCCCCCCCCXCCCCCCCCCCC",
+      "paymentPatternStartDate": "2024-12-28",
+      "sourceType": "Experian"
+    },
+    {
+      "accountIdentifier": "400010250444013",
+      "accountOpenedDate": "2023-04-27",
+      "accountOwnershipType": "Maker",
+      "accountReportedDate": "2024-03-28",
+      "accountStatusType": "Paid",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "1500",
+      "monthsReviewedCount": "10",
+      "creditorName": "SHARON & CRESCENT UNIT",
+      "subscriberCode": "1720094",
+      "termsMonthsCount": "12",
+      "currentBalanceAmount": "0",
+      "businessType": "Finance",
+      "loanType": "Unsecured",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "XCCCCCCCCC",
+      "paymentPatternStartDate": "2024-03-28",
+      "sourceType": "Experian"
+    },
+    {
+      "accountIdentifier": "400010650444193",
+      "accountOpenedDate": "2022-11-23",
+      "accountOwnershipType": "Comaker",
+      "accountReportedDate": "2023-05-28",
+      "accountStatusType": "Paid",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "500",
+      "monthsReviewedCount": "5",
+      "creditorName": "SHARON & CRESCENT UNIT",
+      "subscriberCode": "1720094",
+      "termsMonthsCount": "12",
+      "currentBalanceAmount": "0",
+      "businessType": "Finance",
+      "loanType": "Secured",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "XCCCC",
+      "paymentPatternStartDate": "2023-05-28",
+      "sourceType": "Experian"
+    },
+    {
+      "accountIdentifier": "CC7140561062666",
+      "accountOpenedDate": "2017-11-01",
+      "accountOwnershipType": "JointParticipating",
+      "accountReportedDate": "2023-01-03",
+      "accountStatusType": "Paid",
+      "accountType": "Revolving",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "1230",
+      "monthsReviewedCount": "61",
+      "creditorName": "SYNCB/LEVITZ",
+      "subscriberCode": "1600061",
+      "currentBalanceAmount": "0",
+      "businessType": "HomeFurnishing",
+      "loanType": "ChargeAccount",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "XCCCCCCCCCCCC",
+      "paymentPatternStartDate": "2023-01-03",
+      "sourceType": "Experian"
+    },
+    {
+      "accountIdentifier": "19857206444444",
+      "accountOpenedDate": "2025-04-01",
+      "accountOwnershipType": "JointParticipating",
+      "accountReportedDate": "2025-12-06",
+      "accountStatusType": "Open",
+      "accountType": "Mortgage",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "134624",
+      "lastActivityDate": "2026-01-01",
+      "monthlyPaymentAmount": "1254",
+      "monthsReviewedCount": "1",
+      "creditorName": "SERVICE & PROF",
+      "subscriberCode": "3996098",
+      "termsDescription": "360 months at $1254 per month",
+      "termsMonthsCount": "360",
+      "currentBalanceAmount": "134072",
+      "loanType": "FHARealEstateMortgage",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "C",
+      "paymentPatternStartDate": "2025-12-06",
+      "sourceType": "Experian"
+    },
+    {
+      "accountIdentifier": "7962812",
+      "accountOpenedDate": "2024-12-09",
+      "accountOwnershipType": "Individual",
+      "accountReportedDate": "2025-11-28",
+      "accountStatusType": "Open",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "21138",
+      "lastActivityDate": "2026-01-13",
+      "monthlyPaymentAmount": "352",
+      "monthsReviewedCount": "10",
+      "creditorName": "ROCKLAND TRUST COMPANY",
+      "subscriberCode": "1180080",
+      "termsDescription": "60 months at $352 per month",
+      "termsMonthsCount": "60",
+      "currentBalanceAmount": "17967",
+      "businessType": "Banking",
+      "loanType": "Automobile",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "CCCCCCCCCC",
+      "paymentPatternStartDate": "2025-11-28",
+      "sourceType": "Experian"
+    },
+    {
+      "accountIdentifier": "CC7140562363348",
+      "accountOpenedDate": "2024-11-01",
+      "accountOwnershipType": "JointContractualLiability",
+      "accountReportedDate": "2025-11-25",
+      "accountStatusType": "Open",
+      "accountType": "Revolving",
+      "borrowerSourceType": "Borrower",
+      "creditLimitAmount": "1894",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "1982",
+      "lastActivityDate": "2026-01-20",
+      "monthlyPaymentAmount": "65",
+      "monthsReviewedCount": "12",
+      "creditorName": "SYNCB/LEVITZ",
+      "subscriberCode": "1600061",
+      "currentBalanceAmount": "1762",
+      "businessType": "HomeFurnishing",
+      "loanType": "ChargeAccount",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "CCCCCCCCCCCC",
+      "paymentPatternStartDate": "2025-11-25",
+      "sourceType": "Experian"
+    },
+    {
+      "accountIdentifier": "69752990283",
+      "accountOpenedDate": "2024-12-28",
+      "accountOwnershipType": "Individual",
+      "accountReportedDate": "2025-11-23",
+      "accountStatusType": "Open",
+      "accountType": "Revolving",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "",
+      "monthsReviewedCount": "9",
+      "creditorName": "BENEFICIAL",
+      "subscriberCode": "1500099",
+      "currentBalanceAmount": "239",
+      "businessType": "Finance",
+      "loanType": "ChargeAccount",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "CCCCCXCCC",
+      "paymentPatternStartDate": "2025-11-23",
+      "sourceType": "Experian"
+    }
+  ],
+  "publicRecords": [
+    {
+      "borrowerSourceType": "Borrower",
+      "subscriberCode": "1006000",
+      "courtName": "US BKPT CT MA BOSTON",
+      "dispositionDate": "2022-02-11",
+      "dispositionType": "Discharged",
+      "docketIdentifier": "BK9321294",
+      "filedDate": "2021-10-28",
+      "legalObligationAmount": "UNKNOWN",
+      "sourceType": "Experian",
+      "publicRecordType": "BankruptcyChapter7"
+    }
+  ],
+  "scores": [
+    {
+      "borrowerSourceType": "Borrower",
+      "modelName": "Experian/Fair Isaac Risk Model V9",
+      "modelNameType": "F9",
+      "sourceType": "Experian",
+      "factaInquiriesIndicator": true,
+      "scoreValue": "630",
+      "scoreRankPercentileValue": "19",
+      "scoreMaximumValue": "843",
+      "scoreMinimumValue": "336",
+      "scoreFactors": [
+        {
+          "scoreFactorCode": "38",
+          "scoreFactorText": "SERIOUS DELINQUENCY, PUBLIC RECORD, OR COLLECTION FILED"
+        },
+        {
+          "scoreFactorCode": "5",
+          "scoreFactorText": "TOO MANY ACCOUNTS WITH BALANCES"
+        },
+        {
+          "scoreFactorCode": "10",
+          "scoreFactorText": "PROPORTION OF BALANCE TO LIMITS ON BANK/NATIONAL REVOLVING OR\r\nOTHER REVOLVING ACCOUNTS IS TOO HIGH"
+        },
+        {
+          "scoreFactorCode": "8",
+          "scoreFactorText": "TOO MANY INQUIRIES LAST 12 MONTHS"
+        }
+      ]
+    },
+    {
+      "borrowerSourceType": "Borrower",
+      "modelName": "Income Insight",
+      "modelNameType": "II",
+      "sourceType": "Experian",
+      "factaInquiriesIndicator": false,
+      "scoreValue": "37"
+    }
+  ]
+}

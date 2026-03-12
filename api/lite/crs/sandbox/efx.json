@@ -1,0 +1,1120 @@
+{
+  "requestData": {
+    "birthDate": "1958-12-04",
+    "firstName": "JOHN",
+    "lastName": "BIALOGLOW",
+    "middleName": "V",
+    "suffix": "",
+    "ssn": "666154480",
+    "addresses": [
+      {
+        "borrowerResidencyType": "Current",
+        "addressLine1": "1234 MAIN ST",
+        "addressLine2": "",
+        "city": "WAHIAWA",
+        "state": "HI",
+        "postalCode": "96786"
+      }
+    ]
+  },
+  "repositoryIncluded": {
+    "transunion": false,
+    "experian": false,
+    "equifax": true
+  },
+  "responseDetail": {
+    "dateRequested": "2026-03-11T16:14:53.173621Z",
+    "requestingParty": {
+      "name": "FUNDHUB"
+    },
+    "creditBureauContact": {
+      "name": "CREDIT REPORTING SERVICES, INC",
+      "address": {
+        "addressLine1": "1024 IRON POINT ROAD",
+        "city": "FOLSOM",
+        "state": "CA",
+        "postalCode": "95630"
+      }
+    }
+  },
+  "responseAlertMessages": [
+    {
+      "borrowerSourceType": "Borrower",
+      "sourceType": "Equifax",
+      "responseAlertMessageCategoryType": "FACTARiskScoreValue",
+      "responseAlertMessageText": "FACTA: Risk Score Value - The borrower's Risk Score Value was negatively affected by the presence of credit inquiry records on their credit file"
+    },
+    {
+      "borrowerSourceType": "Borrower",
+      "sourceType": "Other",
+      "sourceTypeOtherDescription": "CreditBureau",
+      "responseAlertMessageServiceType": "CRSFraudFinder",
+      "responseAlertMessageText": "CRS Fraud Finder order could not be processed due to missing email address."
+    }
+  ],
+  "creditFiles": [
+    {
+      "creditFileDetail": {
+        "borrowerSourceType": "Borrower",
+        "creditFileInfileDate": "2002-01-17",
+        "creditFileResultStatusType": "FileReturned",
+        "sourceType": "Equifax"
+      },
+      "ssns": [
+        {
+          "ssn": "666154480"
+        }
+      ],
+      "dobs": [
+        {
+          "dob": "1968-01-01"
+        }
+      ],
+      "employments": [
+        {
+          "employerName": "SPL",
+          "employmentStatusType": "Current",
+          "employmentPositionDescription": "TXDOLWB FRQWURO LQVS"
+        }
+      ],
+      "addresses": [
+        {
+          "borrowerResidencyType": "Current",
+          "addressLine1": "2224 AHAMAKA APT B",
+          "city": "WAHIAWA",
+          "state": "HI",
+          "postalCode": "96786",
+          "dateReported": "2025-12-01"
+        }
+      ]
+    }
+  ],
+  "inquiries": [
+    {
+      "creditorName": "KROLL FACTUAL DATA -",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2026-01-06",
+      "businessType": "Miscellaneous",
+      "subscriberCode": "999ZB04441",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "KROLL FACTUAL DATA -",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2026-01-06",
+      "businessType": "Miscellaneous",
+      "subscriberCode": "999ZB04441",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "ONEMAIN FINANCIAL",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2026-01-04",
+      "businessType": "Finance",
+      "subscriberCode": "999FP02420",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CITIGROUP RISK SYSTE",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2026-01-03",
+      "businessType": "Banking",
+      "subscriberCode": "999BB13001",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CITIGROUP RISK SYSTE",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2026-01-03",
+      "businessType": "Banking",
+      "subscriberCode": "999BB13001",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "HOLIDAY FINANCE INC",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-12-13",
+      "businessType": "Finance",
+      "subscriberCode": "838FP00105",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "HOLIDAY FINANCE INC",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-12-13",
+      "businessType": "Finance",
+      "subscriberCode": "838FP00105",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CONSECO FINANCE CORP",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-10-10",
+      "businessType": "Finance",
+      "subscriberCode": "613FP20245",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CONSECO FINANCE CORP",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-10-10",
+      "businessType": "Finance",
+      "subscriberCode": "613FP20245",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "FIRSTPLUS FINANCIAL,",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-09-23",
+      "businessType": "Finance",
+      "subscriberCode": "682FM06156",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "FIRSTPLUS FINANCIAL,",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-09-23",
+      "businessType": "Finance",
+      "subscriberCode": "682FM06156",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "TRULIANT FEDERAL CRE",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-09-21",
+      "businessType": "Finance",
+      "subscriberCode": "848FZ19154",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "TRULIANT FEDERAL CRE",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-09-21",
+      "businessType": "Finance",
+      "subscriberCode": "848FZ19154",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "UNITED FUNDING",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-08-01",
+      "businessType": "Finance",
+      "subscriberCode": "613FZ17060",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "UNITED FUNDING",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-08-01",
+      "businessType": "Finance",
+      "subscriberCode": "613FZ17060",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CONSECO FINANCE CORP",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-07-19",
+      "businessType": "Finance",
+      "subscriberCode": "613FP20245",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CONSECO FINANCE CORP",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-07-19",
+      "businessType": "Finance",
+      "subscriberCode": "613FP20245",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "SELF HELP CREDIT UNI",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-03-28",
+      "businessType": "Finance",
+      "subscriberCode": "805FC85659",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "SELF HELP CREDIT UNI",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2025-03-28",
+      "businessType": "Finance",
+      "subscriberCode": "805FC85659",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "TRAVELERS/AFFINITY",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-08-18",
+      "businessType": "Insurance",
+      "subscriberCode": "502IZ60490",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "TRAVELERS/AFFINITY",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-08-18",
+      "businessType": "Insurance",
+      "subscriberCode": "502IZ60490",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "WASHINGTON MUTUAL FI",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-06-28",
+      "businessType": "Finance",
+      "subscriberCode": "838FP00030",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "WASHINGTON MUTUAL FI",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-06-28",
+      "businessType": "Finance",
+      "subscriberCode": "838FP00030",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "WASHINGTON MUTUAL FI",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-06-27",
+      "businessType": "Finance",
+      "subscriberCode": "285FP00156",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "WASHINGTON MUTUAL FI",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-06-27",
+      "businessType": "Finance",
+      "subscriberCode": "285FP00156",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CITIBANK SD NA",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-06-27",
+      "businessType": "Finance",
+      "subscriberCode": "190FP02874",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CITIBANK SD NA",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-06-27",
+      "businessType": "Finance",
+      "subscriberCode": "190FP02874",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CUSTOMIZED AUTO CRED",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "404FA01000",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CUSTOMIZED AUTO CRED",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "404FA01000",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "UNION ACCEPTANCE COR",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "655FA29197",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "UNION ACCEPTANCE COR",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "655FA29197",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "MYNATT,BEN CHEVROLET",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Automotive",
+      "subscriberCode": "838AN00066",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "MYNATT,BEN CHEVROLET",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Automotive",
+      "subscriberCode": "838AN00066",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "KEY BANK USA, NA-ASF",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "155FA03772",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "KEY BANK USA, NA-ASF",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "155FA03772",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "HOLIDAY FINANCE INC",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "838FP00105",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "HOLIDAY FINANCE INC",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "838FP00105",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "GMFNANCIAL",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "682FA05581",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "GMFNANCIAL",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "682FA05581",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "TRULIANT FEDERAL CRE",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "848FZ80461",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "TRULIANT FEDERAL CRE",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "848FZ80461",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CITIFINANCIAL AUTO",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "682FA04907",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CITIFINANCIAL AUTO",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "682FA04907",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "WACHOVIA BANK, N.A (",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Banking",
+      "subscriberCode": "848BB01717",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "WACHOVIA BANK, N.A (",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Banking",
+      "subscriberCode": "848BB01717",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "GMAC CHARLOTTE SPB",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "241FA00064",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "GMAC CHARLOTTE SPB",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Finance",
+      "subscriberCode": "241FA00064",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "BANK OF AMERICA",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Banking",
+      "subscriberCode": "815BB00544",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "BANK OF AMERICA",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-28",
+      "businessType": "Banking",
+      "subscriberCode": "815BB00544",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CITIBANK SD NA",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-09",
+      "businessType": "Finance",
+      "subscriberCode": "190FP02874",
+      "sourceType": "Equifax"
+    },
+    {
+      "creditorName": "CITIBANK SD NA",
+      "borrowerSourceType": "Borrower",
+      "inquiryDate": "2024-05-09",
+      "businessType": "Finance",
+      "subscriberCode": "190FP02874",
+      "sourceType": "Equifax"
+    }
+  ],
+  "tradelines": [
+    {
+      "accountIdentifier": "1234567",
+      "accountOpenedDate": "2025-03-01",
+      "accountOwnershipType": "Individual",
+      "accountReportedDate": "2025-12-01",
+      "accountStatusType": "Open",
+      "accountType": "Open",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "lastActivityDate": "2025-12-01",
+      "monthlyPaymentAmount": "750",
+      "monthsReviewedCount": "5",
+      "creditorName": "NC DEPARTMENT OF HUM",
+      "subscriberCode": "456VS00497",
+      "currentBalanceAmount": "1842",
+      "loanType": "UnknownLoanType",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "sourceType": "Equifax",
+      "comments": [
+        {
+          "commentCode": "EK",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "CHILD/FAMILY SUPPORT OBLIGATION"
+        }
+      ]
+    },
+    {
+      "accountIdentifier": "1212459",
+      "accountOpenedDate": "2024-07-01",
+      "accountOwnershipType": "Individual",
+      "accountReportedDate": "2025-12-01",
+      "accountStatusType": "Open",
+      "accountType": "Revolving",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "624",
+      "lastActivityDate": "2025-12-01",
+      "monthlyPaymentAmount": "20",
+      "monthsReviewedCount": "16",
+      "creditorName": "CITIBANK SD NA",
+      "subscriberCode": "190FP02874",
+      "currentBalanceAmount": "429",
+      "loanType": "UnknownLoanType",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "sourceType": "Equifax",
+      "comments": [
+        {
+          "commentCode": "AV",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "CHARGE"
+        }
+      ]
+    },
+    {
+      "accountIdentifier": "22359297",
+      "accountOpenedDate": "2021-01-01",
+      "accountOwnershipType": "Individual",
+      "accountReportedDate": "2025-12-01",
+      "accountStatusType": "Open",
+      "accountType": "Open",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": true,
+      "lastActivityDate": "2023-11-01",
+      "monthlyPaymentAmount": "651",
+      "monthsReviewedCount": "32",
+      "creditorName": "CONNECTICUT CHILD SU",
+      "subscriberCode": "414VS00035",
+      "pastDueAmount": "17148",
+      "currentBalanceAmount": "17148",
+      "loanType": "UnknownLoanType",
+      "_30DayLates": "0",
+      "_60DayLates": "28",
+      "_90DayLates": "0",
+      "currentRatingCode": "2",
+      "currentRatingType": "Late60Days",
+      "paymentPatternData": "22222222222XXXX2222222X22",
+      "paymentPatternStartDate": "2025-12-01",
+      "sourceType": "Equifax",
+      "comments": [
+        {
+          "commentCode": "EK",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "CHILD/FAMILY SUPPORT OBLIGATION"
+        },
+        {
+          "commentSourceType": "CreditBureau",
+          "commentType": "BureauRemarks",
+          "commentText": "Late Dates: 12/25-60, 11/25-60, 10/25-60, 09/25-60, 08/25-60, 07/25-60, 06/25-60, 05/25-60, 04/25-60, 03/25-60, 02/25-60, 09/24-60, 08/24-60, 07/24-60, 06/24-60, 05/24-60, 04/24-60, 03/24-60, 01/24-60, 12/23-60"
+        }
+      ],
+      "adverseRatings": {
+        "highestAdverseRatingDate": "2025-12-01",
+        "highestAdverseRatingCode": "2",
+        "highestAdverseRatingType": "Late60Days",
+        "mostRecentAdverseRatingDate": "2025-12-01",
+        "mostRecentAdverseRatingCode": "2",
+        "mostRecentAdverseRatingType": "Late60Days",
+        "priorAdverseRatings": [
+          {
+            "priorAdverseRatingDate": "2025-12-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-11-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-10-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-09-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-08-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-07-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-06-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-05-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-04-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-03-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-02-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2024-09-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2024-08-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2024-07-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2024-06-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2024-05-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2024-04-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2024-03-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2024-01-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          },
+          {
+            "priorAdverseRatingDate": "2023-12-01",
+            "priorAdverseRatingCode": "2",
+            "priorAdverseRatingType": "Late60Days"
+          }
+        ]
+      }
+    },
+    {
+      "accountIdentifier": "56064589023",
+      "accountOpenedDate": "2020-04-01",
+      "accountOwnershipType": "Individual",
+      "accountReportedDate": "2025-12-01",
+      "accountStatusType": "Open",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": true,
+      "highBalanceAmount": "2500",
+      "lastActivityDate": "2025-12-01",
+      "monthlyPaymentAmount": "30",
+      "monthsReviewedCount": "59",
+      "creditorName": "SALLIE MAE STUDENT L",
+      "subscriberCode": "496FZ00045",
+      "currentBalanceAmount": "1853",
+      "loanType": "UnknownLoanType",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "1",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "sourceType": "Equifax",
+      "comments": [
+        {
+          "commentCode": "BU",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "STUDENT LOAN"
+        }
+      ]
+    },
+    {
+      "accountIdentifier": "560645891",
+      "accountOpenedDate": "2021-08-01",
+      "accountOwnershipType": "Individual",
+      "accountReportedDate": "2025-12-01",
+      "accountStatusType": "Open",
+      "accountType": "Open",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": true,
+      "lastActivityDate": "2021-08-01",
+      "monthsReviewedCount": "11",
+      "creditorName": "VERMONT OFFICE OF CH",
+      "subscriberCode": "169VS00161",
+      "currentBalanceAmount": "521",
+      "loanType": "UnknownLoanType",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "4",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "CX4X4XX4X4XXXXXXXXXXXXXXX",
+      "paymentPatternStartDate": "2025-12-01",
+      "sourceType": "Equifax",
+      "comments": [
+        {
+          "commentCode": "EK",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "CHILD/FAMILY SUPPORT OBLIGATION"
+        },
+        {
+          "commentSourceType": "CreditBureau",
+          "commentType": "BureauRemarks",
+          "commentText": "Late Dates: 10/25-120, 08/25-120, 05/25-120, 03/25-120"
+        }
+      ],
+      "adverseRatings": {
+        "highestAdverseRatingDate": "2025-10-01",
+        "highestAdverseRatingCode": "4",
+        "highestAdverseRatingType": "LateOver120Days",
+        "mostRecentAdverseRatingDate": "2025-10-01",
+        "mostRecentAdverseRatingCode": "4",
+        "mostRecentAdverseRatingType": "LateOver120Days",
+        "priorAdverseRatings": [
+          {
+            "priorAdverseRatingDate": "2025-10-01",
+            "priorAdverseRatingCode": "4",
+            "priorAdverseRatingType": "LateOver120Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-08-01",
+            "priorAdverseRatingCode": "4",
+            "priorAdverseRatingType": "LateOver120Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-05-01",
+            "priorAdverseRatingCode": "4",
+            "priorAdverseRatingType": "LateOver120Days"
+          },
+          {
+            "priorAdverseRatingDate": "2025-03-01",
+            "priorAdverseRatingCode": "4",
+            "priorAdverseRatingType": "LateOver120Days"
+          }
+        ]
+      }
+    },
+    {
+      "accountIdentifier": "56064589022",
+      "accountOpenedDate": "2020-04-01",
+      "accountOwnershipType": "Individual",
+      "accountReportedDate": "2025-12-01",
+      "accountStatusType": "Open",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "1750",
+      "lastActivityDate": "2025-12-01",
+      "monthlyPaymentAmount": "19",
+      "monthsReviewedCount": "59",
+      "creditorName": "SALLIE MAE STUDENT L",
+      "subscriberCode": "496FZ00045",
+      "currentBalanceAmount": "1187",
+      "loanType": "UnknownLoanType",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "sourceType": "Equifax",
+      "comments": [
+        {
+          "commentCode": "BU",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "STUDENT LOAN"
+        }
+      ]
+    },
+    {
+      "accountIdentifier": "65656237",
+      "accountOpenedDate": "2024-06-01",
+      "accountOwnershipType": "Individual",
+      "accountReportedDate": "2025-11-01",
+      "accountStatusType": "Open",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "9119",
+      "lastActivityDate": "2025-11-01",
+      "monthlyPaymentAmount": "253",
+      "monthsReviewedCount": "16",
+      "creditorName": "HOLIDAY FINANCE INC",
+      "subscriberCode": "838FP00105",
+      "currentBalanceAmount": "4559",
+      "loanType": "UnknownLoanType",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "sourceType": "Equifax"
+    },
+    {
+      "accountIdentifier": "89237860780801011",
+      "accountOpenedDate": "2023-08-01",
+      "accountOwnershipType": "Individual",
+      "accountReportedDate": "2025-08-01",
+      "accountStatusType": "Open",
+      "accountType": "Open",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": true,
+      "highBalanceAmount": "194",
+      "lastActivityDate": "2024-04-01",
+      "subscriberCode": "241MZ00000",
+      "pastDueAmount": "194",
+      "currentBalanceAmount": "194",
+      "loanType": "UnknownLoanType",
+      "currentRatingCode": "9",
+      "currentRatingType": "ChargeOff",
+      "sourceType": "Equifax",
+      "comments": [
+        {
+          "commentCode": "GS",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "MEDICAL"
+        },
+        {
+          "commentCode": "DB",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "CHARGED OFF ACCOUNT"
+        }
+      ],
+      "adverseRatings": {
+        "highestAdverseRatingDate": "2025-08-01",
+        "highestAdverseRatingCode": "9",
+        "highestAdverseRatingType": "ChargeOff",
+        "mostRecentAdverseRatingDate": "2025-08-01",
+        "mostRecentAdverseRatingCode": "9",
+        "mostRecentAdverseRatingType": "ChargeOff",
+        "priorAdverseRatings": [
+          {
+            "priorAdverseRatingDate": "2025-08-01",
+            "priorAdverseRatingCode": "9",
+            "priorAdverseRatingType": "ChargeOff"
+          }
+        ]
+      }
+    },
+    {
+      "accountClosedDate": "2025-03-01",
+      "accountIdentifier": "56673967451",
+      "accountOpenedDate": "2024-06-01",
+      "accountOwnershipType": "Individual",
+      "accountReportedDate": "2025-07-01",
+      "accountStatusType": "Closed",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "1044",
+      "lastActivityDate": "2025-03-01",
+      "monthsReviewedCount": "12",
+      "creditorName": "HOLIDAY FINANCE INC",
+      "subscriberCode": "838FP00105",
+      "currentBalanceAmount": "0",
+      "loanType": "UnknownLoanType",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "sourceType": "Equifax",
+      "comments": [
+        {
+          "commentCode": "FA",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "CLOSED OR PAID ACCOUNT/ZERO BALANCE"
+        }
+      ]
+    },
+    {
+      "accountIdentifier": "34402359897",
+      "accountOpenedDate": "2020-10-01",
+      "accountOwnershipType": "Undesignated",
+      "accountReportedDate": "2024-04-01",
+      "accountStatusType": "Open",
+      "accountType": "Unknown",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "1640",
+      "lastActivityDate": "2023-11-01",
+      "monthsReviewedCount": "5",
+      "creditorName": "ENCYCLOPEDIA BRITANN",
+      "subscriberCode": "155DZ00320",
+      "currentBalanceAmount": "536",
+      "loanType": "UnknownLoanType",
+      "currentRatingCode": "-",
+      "currentRatingType": "NoDataAvailable",
+      "sourceType": "Equifax"
+    },
+    {
+      "accountIdentifier": "56064589023",
+      "accountOpenedDate": "2020-04-01",
+      "accountOwnershipType": "Individual",
+      "accountPaidDate": "2020-05-01",
+      "accountReportedDate": "2020-05-01",
+      "accountStatusType": "Transferred",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": true,
+      "highBalanceAmount": "2500",
+      "lastActivityDate": "2020-05-01",
+      "creditorName": "STUDENT LOAN MARKETI",
+      "subscriberCode": "491FZ18008",
+      "currentBalanceAmount": "0",
+      "loanType": "UnknownLoanType",
+      "currentRatingCode": "N",
+      "currentRatingType": "TooNew",
+      "sourceType": "Equifax",
+      "comments": [
+        {
+          "commentCode": "BC",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "ACCOUNT TRANSFERRED OR SOLD"
+        },
+        {
+          "commentCode": "DQ",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "STUDENT LOAN - PAYMENT DEFERRED"
+        }
+      ]
+    },
+    {
+      "accountIdentifier": "56064589022",
+      "accountOpenedDate": "2020-04-01",
+      "accountOwnershipType": "Individual",
+      "accountPaidDate": "2020-05-01",
+      "accountReportedDate": "2020-05-01",
+      "accountStatusType": "Transferred",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": true,
+      "highBalanceAmount": "1750",
+      "lastActivityDate": "2020-05-01",
+      "creditorName": "STUDENT LOAN MARKETI",
+      "subscriberCode": "491FZ18008",
+      "currentBalanceAmount": "0",
+      "loanType": "UnknownLoanType",
+      "currentRatingCode": "N",
+      "currentRatingType": "TooNew",
+      "sourceType": "Equifax",
+      "comments": [
+        {
+          "commentCode": "BC",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "ACCOUNT TRANSFERRED OR SOLD"
+        },
+        {
+          "commentCode": "DQ",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "STUDENT LOAN - PAYMENT DEFERRED"
+        }
+      ]
+    },
+    {
+      "accountClosedDate": "2019-09-01",
+      "accountIdentifier": "4-359729617753",
+      "accountOpenedDate": "2014-01-01",
+      "accountOwnershipType": "Undesignated",
+      "accountReportedDate": "2019-09-01",
+      "accountStatusType": "Closed",
+      "accountType": "Unknown",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": true,
+      "lastActivityDate": "2019-09-01",
+      "creditorName": "JC PENNEY",
+      "subscriberCode": "906DC00185",
+      "loanType": "UnknownLoanType",
+      "_30DayLates": "1",
+      "_60DayLates": "1",
+      "_90DayLates": "12",
+      "currentRatingCode": "7",
+      "currentRatingType": "BankruptcyOrWageEarnerPlan",
+      "sourceType": "Equifax",
+      "comments": [
+        {
+          "commentCode": "CF",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "CLOSED ACCOUNT"
+        },
+        {
+          "commentCode": "KC",
+          "commentSourceType": "Equifax",
+          "commentType": "BureauRemarks",
+          "commentText": "BANKRUPTCY DISCHARGED"
+        },
+        {
+          "commentSourceType": "CreditBureau",
+          "commentType": "BureauRemarks",
+          "commentText": "Included in Bankruptcy"
+        }
+      ],
+      "adverseRatings": {
+        "highestAdverseRatingDate": "2019-09-01",
+        "highestAdverseRatingCode": "7",
+        "highestAdverseRatingType": "BankruptcyOrWageEarnerPlan",
+        "mostRecentAdverseRatingDate": "2019-09-01",
+        "mostRecentAdverseRatingCode": "7",
+        "mostRecentAdverseRatingType": "BankruptcyOrWageEarnerPlan",
+        "priorAdverseRatings": [
+          {
+            "priorAdverseRatingDate": "2019-09-01",
+            "priorAdverseRatingCode": "7",
+            "priorAdverseRatingType": "BankruptcyOrWageEarnerPlan"
+          }
+        ]
+      }
+    }
+  ],
+  "publicRecords": [
+    {
+      "accountOwnershipType": "Joint",
+      "borrowerSourceType": "Borrower",
+      "subscriberCode": "414VF00072",
+      "bankruptcyType": "Personal",
+      "dispositionType": "Discharged",
+      "docketIdentifier": "9223539",
+      "filedDate": "2019-09-01",
+      "sourceType": "Equifax",
+      "publicRecordType": "BankruptcyChapter7"
+    }
+  ],
+  "scores": [
+    {
+      "borrowerSourceType": "Borrower",
+      "modelName": "FICO Score 9",
+      "modelNameType": "05206",
+      "sourceType": "Equifax",
+      "factaInquiriesIndicator": true,
+      "scoreValue": "636",
+      "scoreFactors": [
+        {
+          "scoreFactorCode": "38",
+          "scoreFactorText": "SERIOUS DELINQUENCY AND PUBLIC RECORD OR COLLECTION FILED"
+        },
+        {
+          "scoreFactorCode": "5",
+          "scoreFactorText": "TOO MANY ACCOUNTS WITH BALANCES"
+        },
+        {
+          "scoreFactorCode": "12",
+          "scoreFactorText": "LENGTH OF TIME REVOLVING ACCOUNTS HAVE BEEN ESTABLISHED"
+        },
+        {
+          "scoreFactorCode": "10",
+          "scoreFactorText": "RATIO OF BALANCE TO LIMIT ON BANK REVOLVING OR OTHER REV ACCTS TOO HIGH"
+        }
+      ]
+    }
+  ]
+}
