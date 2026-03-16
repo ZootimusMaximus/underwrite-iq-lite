@@ -423,7 +423,6 @@
           allResults.push(result);
           renderSummary(result);
           renderRaw(result);
-
         } catch (err) {
           console.error("[DEBUG] Blob flow error:", err);
           progress.textContent = `ERROR: ${err.message}`;
@@ -432,7 +431,8 @@
       }
 
       async function pollForResult(jobId, startTime) {
-        for (let i = 0; i < 90; i++) { // 3 min timeout (2s intervals)
+        for (let i = 0; i < 90; i++) {
+          // 3 min timeout (2s intervals)
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
           const res = await fetch(`/api/lite/job-status?jobId=${jobId}`);

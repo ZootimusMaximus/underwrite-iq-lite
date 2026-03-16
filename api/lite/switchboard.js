@@ -37,6 +37,9 @@ const { createOrUpdateContact, parseFullName } = require("./ghl-contact-service"
 // Background task queue
 const { enqueueTask } = require("./background-queue");
 
+// GHL + Airtable webhook notifiers (trigger U-02, AX01A workflows)
+const { notifyAnalyzerComplete, notifyAirtableAnalyzerComplete } = require("./ghl-webhook");
+
 // Helper to clean up temp files (prevents /tmp from filling up)
 async function cleanupTempFiles(files) {
   if (!files || !Array.isArray(files)) return;
@@ -552,6 +555,32 @@ module.exports = async function handler(req, res) {
     });
 
     logInfo("Letter delivery enqueued");
+
+    // ----- GHL Webhook: trigger U-02 (analyzer_complete) -----
+    // Fires async — does not block response. U-02 handles: contact merge,
+    // tag assignment (analyzer:complete, path:funding/repair), delivery emails,
+    // Primary Snapshot Source promotion.
+    if (sanitized.email) {
+      notifyAnalyzerComplete({
+        email: sanitized.email,
+        phone: sanitized.phone || "",
+        fullName: sanitized.name || `${firstName} ${lastName}`.trim(),
+        analyzerPath: uw.fundable ? "funding" : "repair",
+        creditScore: m.score || 0,
+        creditSuggestions: Array.isArray(suggestions)
+          ? suggestions.map(s => (typeof s === "string" ? s : s.description || "")).join("; ")
+          : ""
+      }).catch(() => {});
+
+      // ----- Airtable Webhook: trigger AX01A (analyzer → CLIENTS record) -----
+      notifyAirtableAnalyzerComplete({
+        email: sanitized.email,
+        fullName: sanitized.name || `${firstName} ${lastName}`.trim(),
+        phone: sanitized.phone || "",
+        ghlContactId: contactId || "",
+        analyzerReportUrl: redirect.resultUrl || ""
+      }).catch(() => {});
+    }
 
     // ----- Clean up temp files -----
     await cleanupTempFiles(validatedFiles);

@@ -21,6 +21,8 @@ const {
 const { parseFullName } = require("./ghl-contact-service");
 const { logError, logWarn, logInfo } = require("./logger");
 const { enqueueTask } = require("./background-queue");
+const { notifyCRSSnapshotComplete } = require("./ghl-webhook");
+const { derivePerBureauMetrics } = require("./crs/airtable-sync");
 
 // ---------------------------------------------------------------------------
 // Main Handler
@@ -177,19 +179,38 @@ module.exports = async function handler(req, res) {
     }
 
     // ----- GHL Contact (queued) -----
-    if (sanitized.email || formData?.email) {
+    const email = sanitized.email || formData?.email;
+    const phone = sanitized.phone || formData?.phone;
+    if (email) {
       const { firstName, lastName } = parseFullName(submittedName);
       enqueueTask("ghl_sync", {
         firstName,
         lastName,
-        email: sanitized.email || formData?.email,
-        phone: sanitized.phone || formData?.phone,
+        email,
+        phone,
         businessName: sanitized.companyName || formData?.companyName,
         resultType: redirect.resultType,
         creditScore: result.consumerSignals?.scores?.median || 0,
         totalFunding: result.preapprovals?.totalCombined || 0,
         refId
       });
+
+      // ----- GHL Webhook: trigger U-03 (crs_snapshot_complete) -----
+      // Fires async — does not block response. U-03 handles: CRS metric mapping,
+      // CRS Status = Complete, crs:snapshot tag, triggers U-04 (promote Primary Snapshot).
+      const perBureau = derivePerBureauMetrics(result.normalized);
+      notifyCRSSnapshotComplete({
+        email,
+        firstName,
+        lastName,
+        analyzerPath: redirectPath === "funding" ? "funding" : "repair",
+        ficoScore: result.consumerSignals?.scores?.median || 0,
+        utilizationPct: result.consumerSignals?.utilization?.pct || 0,
+        inquiries: { ex: perBureau.ex.inqs, eq: perBureau.eq.inqs, tu: perBureau.tu.inqs },
+        negatives: { ex: perBureau.ex.negs, eq: perBureau.eq.negs, tu: perBureau.tu.negs },
+        // Late payments not yet derived per-bureau; CRS engine aggregates across bureaus
+        lates: { ex: 0, eq: 0, tu: 0 }
+      }).catch(() => {});
     }
 
     // ----- Letter delivery (queued) -----

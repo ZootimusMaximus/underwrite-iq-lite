@@ -18,6 +18,10 @@
   ],
   "routes": [
     {
+      "src": "^/api/lite/airtable-reprocess$",
+      "dest": "/api/lite/airtable-reprocess.js"
+    },
+    {
       "src": "^/api/lite/crs-analyze$",
       "dest": "/api/lite/crs-analyze.js"
     },

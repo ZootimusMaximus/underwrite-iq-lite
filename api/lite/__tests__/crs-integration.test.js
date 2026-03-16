@@ -67,11 +67,11 @@ test("integration: TU only (BARBARA DOTY) → CONDITIONAL_APPROVAL", { skip: !ha
   assert.ok(result.audit.pipeline);
 });
 
-test("integration: EXP only (WILLIE BOOZE) → CONDITIONAL_APPROVAL", { skip: !hasResponses }, () => {
+test("integration: EXP only (WILLIE BOOZE) → REPAIR", { skip: !hasResponses }, () => {
   const result = runEngine([expResponse], { name: "WILLIE BOOZE" });
 
   assert.equal(result.ok, true);
-  assert.equal(result.outcome, "CONDITIONAL_APPROVAL");
+  assert.equal(result.outcome, "REPAIR");
 
   // Score should be 630
   assert.equal(result.consumerSignals.scores.median, 630);

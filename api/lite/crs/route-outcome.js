@@ -127,6 +127,8 @@ function isRepair(cs) {
   if (cs.derogatories.activeBankruptcy) return true;
   if (cs.scores.median !== null && cs.scores.median < 580) return true;
   if (cs.derogatories.active90 > 0 || cs.derogatories.active120Plus > 0) return true;
+  if (cs.derogatories.chargeoffs > 0) return true;
+  if (cs.derogatories.collections > 0) return true;
   if (cs.utilization.band === "critical" && cs.derogatories.active > 0) return true;
   return false;
 }

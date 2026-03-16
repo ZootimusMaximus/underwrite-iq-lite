@@ -40,6 +40,16 @@ const BUSINESS_ENDPOINTS = {
 };
 
 // ---------------------------------------------------------------------------
+// LexisNexis Top Business Endpoints
+// ---------------------------------------------------------------------------
+
+const TOP_BUSINESS_ENDPOINTS = {
+  search: "/api/top-business-search/top-business-search",
+  report: "/api/top-business-report/top-business-report",
+  reportPdf: "/api/top-business-report/pdf/top-business-report"
+};
+
+// ---------------------------------------------------------------------------
 // Token Cache (in-memory, 50-minute refresh)
 // ---------------------------------------------------------------------------
 
@@ -292,6 +302,143 @@ async function pullBusinessReport(bin) {
 }
 
 // ---------------------------------------------------------------------------
+// LexisNexis Top Business
+// ---------------------------------------------------------------------------
+
+/**
+ * searchTopBusiness(params) — Search for a business via LexisNexis.
+ *
+ * @param {Object} params
+ * @param {string} params.companyName
+ * @param {string} [params.streetAddress]
+ * @param {string} [params.city]
+ * @param {string} [params.state] - 2-letter state code
+ * @param {string} [params.zipCode]
+ * @param {number} [params.seleId] - Known SELE ID (skips search if you have it)
+ * @returns {Promise<Object>} Search results with seleID, orgID, ultID
+ */
+async function searchTopBusiness(params) {
+  const token = await authenticate();
+
+  logInfo("Searching LexisNexis Top Business", { companyName: params.companyName });
+
+  const resp = await fetchWithTimeout(
+    `${API_BASE}${TOP_BUSINESS_ENDPOINTS.search}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        companyName: params.companyName,
+        streetAddress: params.streetAddress || "",
+        city: params.city || "",
+        state: params.state || "",
+        zipCode: params.zipCode || "",
+        ...(params.seleId ? { seleId: params.seleId } : {})
+      })
+    },
+    TIMEOUT_MS
+  );
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`Top Business search failed: ${resp.status} ${text.substring(0, 200)}`);
+  }
+
+  return resp.json();
+}
+
+/**
+ * pullTopBusinessReport(ids) — Pull LexisNexis Comprehensive Business Report.
+ *
+ * @param {Object} ids
+ * @param {number} ids.seleID
+ * @param {number} ids.orgID
+ * @param {number} ids.ultID
+ * @returns {Promise<Object>} Full JSON business report
+ */
+async function pullTopBusinessReport(ids) {
+  const token = await authenticate();
+
+  logInfo("Pulling LexisNexis Top Business report", { seleID: ids.seleID });
+
+  const resp = await fetchWithTimeout(
+    `${API_BASE}${TOP_BUSINESS_ENDPOINTS.report}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        seleID: ids.seleID,
+        orgID: ids.orgID,
+        ultID: ids.ultID
+      })
+    },
+    TIMEOUT_MS
+  );
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    logError("Top Business report pull failed", null, {
+      seleID: ids.seleID,
+      status: resp.status,
+      body: text.substring(0, 200)
+    });
+    throw new Error(`Top Business report failed: ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  logInfo("Top Business report pull success", { seleID: ids.seleID });
+  return data;
+}
+
+/**
+ * pullTopBusinessReportPdf(ids) — Pull LexisNexis report as PDF binary.
+ *
+ * @param {Object} ids
+ * @param {number} ids.seleID
+ * @param {number} ids.orgID
+ * @param {number} ids.ultID
+ * @returns {Promise<Buffer>} PDF binary data
+ */
+async function pullTopBusinessReportPdf(ids) {
+  const token = await authenticate();
+
+  logInfo("Pulling LexisNexis Top Business PDF", { seleID: ids.seleID });
+
+  const resp = await fetchWithTimeout(
+    `${API_BASE}${TOP_BUSINESS_ENDPOINTS.reportPdf}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/pdf",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        seleID: ids.seleID,
+        orgID: ids.orgID,
+        ultID: ids.ultID
+      })
+    },
+    TIMEOUT_MS
+  );
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`Top Business PDF failed: ${resp.status} ${text.substring(0, 200)}`);
+  }
+
+  const buffer = await resp.arrayBuffer();
+  logInfo("Top Business PDF pull success", { seleID: ids.seleID });
+  return Buffer.from(buffer);
+}
+
+// ---------------------------------------------------------------------------
 // Full CRS Pull (consumer + optional business)
 // ---------------------------------------------------------------------------
 
@@ -360,9 +507,13 @@ module.exports = {
   pullAllConsumerBureaus,
   searchBusiness,
   pullBusinessReport,
+  searchTopBusiness,
+  pullTopBusinessReport,
+  pullTopBusinessReportPdf,
   pullFullCRS,
   invalidateToken,
   // For testing
   BUREAU_ENDPOINTS,
-  BUSINESS_ENDPOINTS
+  BUSINESS_ENDPOINTS,
+  TOP_BUSINESS_ENDPOINTS
 };
