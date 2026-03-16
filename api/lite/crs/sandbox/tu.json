@@ -1,0 +1,290 @@
+{
+  "requestData": {
+    "birthDate": "1966-01-04",
+    "firstName": "BARBARA",
+    "lastName": "DOTY",
+    "middleName": "M",
+    "suffix": "",
+    "ssn": "666321120",
+    "addresses": [
+      {
+        "borrowerResidencyType": "Current",
+        "addressLine1": "1234 MAIN ST",
+        "addressLine2": "",
+        "city": "DENTON",
+        "state": "TX",
+        "postalCode": "76201"
+      }
+    ]
+  },
+  "repositoryIncluded": {
+    "transunion": true,
+    "experian": false,
+    "equifax": false
+  },
+  "responseDetail": {
+    "dateRequested": "2026-03-11T16:14:50.354421Z",
+    "requestingParty": {
+      "name": "FUNDHUB"
+    },
+    "creditBureauContact": {
+      "name": "CREDIT REPORTING SERVICES, INC",
+      "address": {
+        "addressLine1": "1024 IRON POINT ROAD",
+        "city": "FOLSOM",
+        "state": "CA",
+        "postalCode": "95630"
+      }
+    }
+  },
+  "responseAlertMessages": [
+    {
+      "borrowerSourceType": "Borrower",
+      "sourceType": "TransUnion",
+      "responseAlertMessageCategoryType": "FACTAAddressDiscrepancy",
+      "responseAlertMessageServiceType": "TransUnionIdentifierMismatchAlert",
+      "responseAlertMessageText": "FACTA: Address Discrepancy Alert - There are significant differences between the address submitted in the credit request and the address in the credit file."
+    },
+    {
+      "borrowerSourceType": "Borrower",
+      "sourceType": "Other",
+      "sourceTypeOtherDescription": "CreditBureau",
+      "responseAlertMessageServiceType": "CRSFraudFinder",
+      "responseAlertMessageText": "CRS Fraud Finder order could not be processed due to missing email address."
+    }
+  ],
+  "creditFiles": [
+    {
+      "creditFileDetail": {
+        "borrowerSourceType": "Borrower",
+        "creditFileInfileDate": "2021-01-22",
+        "creditFileResultStatusType": "FileReturned",
+        "sourceType": "TransUnion"
+      },
+      "aliases": [
+        {
+          "firstName": "BARBARA",
+          "lastName": "DOTY",
+          "middleName": "M"
+        }
+      ],
+      "ssns": [
+        {
+          "ssn": "666321120"
+        }
+      ],
+      "employments": [
+        {
+          "employerName": "ABC",
+          "employmentReportedDate": "2026-02-10"
+        },
+        {
+          "employerName": "DATAWORKS",
+          "employmentPositionDescription": "THE BOSS",
+          "employmentReportedDate": "2026-02-10"
+        }
+      ],
+      "addresses": [
+        {
+          "borrowerResidencyType": "Current",
+          "addressLine1": "1100 LYNHURST LN",
+          "city": "DENTON",
+          "state": "TX",
+          "postalCode": "76205",
+          "dateReported": "2026-02-01"
+        }
+      ]
+    }
+  ],
+  "inquiries": [],
+  "tradelines": [
+    {
+      "accountIdentifier": "111110068016",
+      "accountOpenedDate": "2023-01-13",
+      "accountOwnershipType": "JointContractualLiability",
+      "accountReportedDate": "2025-12-05",
+      "accountStatusType": "Open",
+      "accountType": "Revolving",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "0",
+      "lastActivityDate": "2025-12-04",
+      "monthsReviewedCount": "34",
+      "creditorName": "DISCOVERCARD",
+      "subscriberCode": "B 09616003",
+      "pastDueAmount": "0",
+      "currentBalanceAmount": "0",
+      "businessType": "Banking",
+      "loanType": "CreditCard",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+      "paymentPatternStartDate": "2025-12-05",
+      "sourceType": "TransUnion"
+    },
+    {
+      "accountIdentifier": "111110316779",
+      "accountOpenedDate": "2021-01-11",
+      "accountOwnershipType": "AuthorizedUser",
+      "accountReportedDate": "2025-12-03",
+      "accountStatusType": "Open",
+      "accountType": "Revolving",
+      "borrowerSourceType": "Borrower",
+      "creditLimitAmount": "8400",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "0",
+      "lastActivityDate": "2025-12-03",
+      "monthlyPaymentAmount": "20",
+      "monthsReviewedCount": "26",
+      "creditorName": "CITI",
+      "subscriberCode": "B 064DB003",
+      "pastDueAmount": "0",
+      "currentBalanceAmount": "608",
+      "businessType": "Banking",
+      "loanType": "CreditCard",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "CCCCCCCCCCCCCCCCCCCCCCCCCCC",
+      "paymentPatternStartDate": "2025-12-03",
+      "sourceType": "TransUnion"
+    },
+    {
+      "accountClosedDate": "2025-07-21",
+      "accountIdentifier": "1111176726",
+      "accountOpenedDate": "2025-07-31",
+      "accountOwnershipType": "JointContractualLiability",
+      "accountReportedDate": "2025-07-21",
+      "accountStatusType": "Paid",
+      "accountType": "Installment",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "1000",
+      "monthsReviewedCount": "1",
+      "creditorName": "BK OF NY",
+      "subscriberCode": "B 09507001",
+      "pastDueAmount": "0",
+      "termsMonthsCount": "10",
+      "currentBalanceAmount": "0",
+      "businessType": "Banking",
+      "loanType": "CheckCreditOrLineOfCredit",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "C",
+      "currentRatingType": "AsAgreed",
+      "paymentPatternData": "CC",
+      "paymentPatternStartDate": "2025-07-21",
+      "sourceType": "TransUnion"
+    },
+    {
+      "accountIdentifier": "111110068060",
+      "accountOpenedDate": "2023-01-12",
+      "accountOwnershipType": "JointContractualLiability",
+      "accountReportedDate": "2024-12-17",
+      "accountStatusType": "Open",
+      "accountType": "Revolving",
+      "borrowerSourceType": "Borrower",
+      "derogatoryDataIndicator": false,
+      "highBalanceAmount": "0",
+      "lastActivityDate": "2024-07-05",
+      "monthsReviewedCount": "22",
+      "creditorName": "DISCOVERCARD",
+      "subscriberCode": "B 09616003",
+      "pastDueAmount": "0",
+      "currentBalanceAmount": "0",
+      "businessType": "Banking",
+      "loanType": "CreditCard",
+      "_30DayLates": "0",
+      "_60DayLates": "0",
+      "_90DayLates": "0",
+      "currentRatingCode": "-",
+      "currentRatingType": "NoDataAvailable",
+      "paymentPatternData": "XCCCCCCCCCCC",
+      "paymentPatternStartDate": "2024-12-17",
+      "sourceType": "TransUnion",
+      "comments": [
+        {
+          "commentCode": "STL",
+          "commentSourceType": "TransUnion",
+          "commentType": "BureauRemarks",
+          "commentText": "CREDIT CARD LOST OR STOLEN"
+        }
+      ]
+    }
+  ],
+  "publicRecords": [],
+  "scores": [
+    {
+      "borrowerSourceType": "Borrower",
+      "modelName": "FICO® Score 9",
+      "modelNameType": "00W18",
+      "sourceType": "TransUnion",
+      "factaInquiriesIndicator": false,
+      "scoreValue": "725",
+      "scoreRankPercentileValue": "47",
+      "scoreMaximumValue": "850",
+      "scoreMinimumValue": "300",
+      "scoreFactors": [
+        {
+          "scoreFactorCode": "14",
+          "scoreFactorText": "LENGTH OF TIME ACCOUNTS HAVE BEEN ESTABLISHED"
+        },
+        {
+          "scoreFactorCode": "15",
+          "scoreFactorText": "LACK OF RECENT BANK REVOLVING INFORMATION"
+        },
+        {
+          "scoreFactorCode": "17",
+          "scoreFactorText": "NO RECENT NON-MORTGAGE BALANCE INFORMATION"
+        },
+        {
+          "scoreFactorCode": "16",
+          "scoreFactorText": "LACK OF RECENT REVOLVING ACCOUNT INFORMATION"
+        }
+      ]
+    },
+    {
+      "borrowerSourceType": "Borrower",
+      "modelName": "FICO® Score 9",
+      "modelNameType": "00W18",
+      "sourceType": "TransUnion",
+      "factaInquiriesIndicator": false,
+      "scoreValue": "725",
+      "scoreRankPercentileValue": "47",
+      "scoreMaximumValue": "850",
+      "scoreMinimumValue": "300",
+      "scoreFactors": [
+        {
+          "scoreFactorCode": "14",
+          "scoreFactorText": "LENGTH OF TIME ACCOUNTS HAVE BEEN ESTABLISHED"
+        },
+        {
+          "scoreFactorCode": "15",
+          "scoreFactorText": "LACK OF RECENT BANK REVOLVING INFORMATION"
+        },
+        {
+          "scoreFactorCode": "17",
+          "scoreFactorText": "NO RECENT NON-MORTGAGE BALANCE INFORMATION"
+        },
+        {
+          "scoreFactorCode": "16",
+          "scoreFactorText": "LACK OF RECENT REVOLVING ACCOUNT INFORMATION"
+        }
+      ]
+    },
+    {
+      "borrowerSourceType": "Borrower",
+      "modelName": "CreditVision Income Estimator",
+      "modelNameType": "00W16",
+      "sourceType": "TransUnion",
+      "factaInquiriesIndicator": false,
+      "scoreValue": "47 B"
+    }
+  ]
+}

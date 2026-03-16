@@ -12,6 +12,9 @@ pnpm-lock.yaml
 .env
 .env.local
 .env.*.local
+.env.staging
+.env.production
+gdrive
 
 # Test artifacts
 test-results/
@@ -50,4 +53,5 @@ INPUT-SANITIZATION.md
 SECURITY-FIXES-SUMMARY.md
 
 .env*.local
+*.md
 .env.development.local

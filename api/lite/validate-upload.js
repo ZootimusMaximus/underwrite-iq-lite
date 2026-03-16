@@ -1,7 +1,7 @@
 // api/lite/validate-upload.js
 const formidable = require("formidable");
 
-module.exports.config = { api: { bodyParser: false, sizeLimit: "25mb" } };
+module.exports.config = { api: { bodyParser: false, sizeLimit: "20mb" } };
 
 // Minimum size for a real credit report PDF (~50 KB)
 const MIN_PDF_SIZE_BYTES = 50 * 1024;
@@ -26,7 +26,7 @@ module.exports = function handler(req, res) {
   const form = formidable({
     multiples: true,
     keepExtensions: true,
-    maxFileSize: 25 * 1024 * 1024
+    maxFileSize: 20 * 1024 * 1024
   });
 
   form.parse(req, (err, fields, files) => {

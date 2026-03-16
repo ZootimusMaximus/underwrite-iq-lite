@@ -1,0 +1,186 @@
+#!/usr/bin/env node
+/**
+ * Test parallel uploads - simulates multiple concurrent users
+ */
+
+const fs = require("fs");
+const path = require("path");
+
+const baseUrl = process.argv[2] || "https://underwrite-iq-lite-staging.vercel.app";
+
+// Test files with known names - 3 PDFs (1 user, sequential)
+const testCases = [
+  { file: "./gdrive/Brice Pierce Equifax.pdf", name: "Brice Pierce", user: 1 },
+  { file: "./gdrive/Clayton Brown Equifax.pdf", name: "Clayton Brown", user: 1 },
+  { file: "./gdrive/Elisheva Bronsteyn Transunion.pdf", name: "Elisheva Bronsteyn", user: 1 }
+];
+
+async function testUser(pdfNum, pdfPath, name) {
+  const startTime = Date.now();
+  const log = msg => console.log(`[PDF ${pdfNum}] ${msg}`);
+
+  try {
+    log(`Starting: ${path.basename(pdfPath)} (${name})`);
+
+    // Step 1: Create job
+    const tokenRes = await fetch(`${baseUrl}/api/lite/upload-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        email: `user${pdfNum}@test.com`,
+        phone: "555000000" + pdfNum,
+        forceReprocess: true
+      })
+    });
+
+    const tokenData = await tokenRes.json();
+    if (!tokenData.ok) {
+      log(`❌ Failed to create job: ${tokenData.error}`);
+      return { pdfNum, status: "FAILED", error: tokenData.error, time: 0 };
+    }
+
+    const { jobId } = tokenData;
+    log(`Job created: ${jobId}`);
+
+    // Step 2: Upload to Blob
+    const { upload } = await import("@vercel/blob/client");
+    const fileBuffer = fs.readFileSync(pdfPath);
+    const fileName = `user${pdfNum}-${path.basename(pdfPath)}`;
+    const blob = new Blob([fileBuffer], { type: "application/pdf" });
+
+    log(`Uploading...`);
+    await upload(fileName, blob, {
+      access: "public",
+      handleUploadUrl: `${baseUrl}/api/lite/blob-upload`,
+      clientPayload: JSON.stringify({ jobId })
+    });
+    log(`Upload complete`);
+
+    // Step 3: Queue for processing
+    log(`Queueing...`);
+    const processRes = await fetch(`${baseUrl}/api/lite/start-processing`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobId })
+    });
+
+    const processData = await processRes.json();
+
+    if (processData.status === "queued") {
+      log(`Queued at position ${processData.position}`);
+    }
+
+    if (processData.status === "error") {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      log(`❌ FAILED (${elapsed}s): ${processData.error?.code}`);
+      return { pdfNum, name, status: "FAILED", error: processData.error?.code, time: elapsed };
+    }
+
+    // Poll until complete (extended timeout for queue: 10 minutes)
+    let lastStatus = "";
+    for (let i = 0; i < 300; i++) {
+      const statusRes = await fetch(`${baseUrl}/api/lite/job-status?jobId=${jobId}`);
+      const statusData = await statusRes.json();
+      const pollElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      // Log status changes
+      const currentStatus =
+        statusData.status + (statusData.position ? `:${statusData.position}` : "");
+      if (currentStatus !== lastStatus) {
+        if (statusData.status === "queued") {
+          log(`Queue position: ${statusData.position}`);
+        } else if (statusData.status === "processing") {
+          log(`Processing started...`);
+        }
+        lastStatus = currentStatus;
+      }
+
+      if (statusData.status === "complete") {
+        const score = statusData.result?.underwrite?.metrics?.score || "N/A";
+        const resultPath = statusData.result?.redirect?.path || "unknown";
+        log(`✅ SUCCESS (${pollElapsed}s) - Score: ${score}, Path: ${resultPath}`);
+        return { pdfNum, name, status: "SUCCESS", score, path: resultPath, time: pollElapsed };
+      }
+
+      if (statusData.status === "error") {
+        log(`❌ FAILED (${pollElapsed}s): ${statusData.error?.code}`);
+        return { pdfNum, name, status: "FAILED", error: statusData.error?.code, time: pollElapsed };
+      }
+
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
+    log(`❌ TIMEOUT after 10 minutes`);
+    return { pdfNum, name, status: "TIMEOUT", time: "600+" };
+  } catch (err) {
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    log(`❌ ERROR (${elapsed}s): ${err.message}`);
+    return { pdfNum, name, status: "ERROR", error: err.message, time: elapsed };
+  }
+}
+
+async function main() {
+  console.log("\n" + "=".repeat(70));
+  console.log(`SEQUENTIAL UPLOAD TEST - 1 USER, ${testCases.length} PDFs`);
+  console.log("=".repeat(70));
+  console.log(`\nURL: ${baseUrl}\n`);
+
+  const startTime = Date.now();
+
+  // Run sequentially (one at a time)
+  console.log(`Starting ${testCases.length} sequential uploads...\n`);
+
+  const results = [];
+  for (let i = 0; i < testCases.length; i++) {
+    const tc = testCases[i];
+    const result = await testUser(i + 1, tc.file, tc.name);
+    results.push(result);
+  }
+
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
+  // Summary
+  console.log("\n" + "=".repeat(70));
+  console.log("RESULTS");
+  console.log("=".repeat(70));
+  console.log("");
+  console.log(
+    "PDF#".padEnd(8) +
+      "Name".padEnd(22) +
+      "Status".padEnd(10) +
+      "Time".padEnd(10) +
+      "Score".padEnd(8) +
+      "Path/Error"
+  );
+  console.log("-".repeat(70));
+
+  for (const r of results) {
+    console.log(
+      `${r.pdfNum}`.padEnd(8) +
+        (r.name || "").substring(0, 21).padEnd(22) +
+        r.status.padEnd(10) +
+        `${r.time}s`.padEnd(10) +
+        (r.score || "-").toString().padEnd(8) +
+        (r.path || r.error || "-")
+    );
+  }
+
+  console.log("-".repeat(70));
+
+  const successCount = results.filter(r => r.status === "SUCCESS").length;
+  const failedCount = results.filter(r => r.status === "FAILED").length;
+  console.log(`\nTotal time: ${totalTime}s (sequential)`);
+  console.log(`Success: ${successCount}/${testCases.length} | Failed: ${failedCount}`);
+
+  if (successCount === testCases.length) {
+    console.log(`\n✅ All ${testCases.length} uploads completed successfully!`);
+  } else {
+    console.log("\n⚠️  Some requests failed - check logs above");
+  }
+}
+
+main().catch(err => {
+  console.error("Fatal error:", err);
+  process.exit(1);
+});

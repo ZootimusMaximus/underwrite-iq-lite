@@ -9,9 +9,9 @@ const { logWarn, logInfo } = require("./logger");
 const DEFAULT_TIMEOUT_MS = 30000;
 
 // Timeout for OpenAI calls
-// Production: 55s (must fit within Vercel's 60s limit)
-// Local dev: Can be higher via OPENAI_TIMEOUT env var
-const OPENAI_TIMEOUT_MS = parseInt(process.env.OPENAI_TIMEOUT || "55000", 10);
+// Hobby plan: 60s Vercel limit, Pro plan: 300s limit
+// Default 90s - works on Pro, will hit Vercel limit on Hobby for very large files
+const OPENAI_TIMEOUT_MS = parseInt(process.env.OPENAI_TIMEOUT || "90000", 10);
 
 // ============================================================================
 // Circuit Breaker for OpenAI API

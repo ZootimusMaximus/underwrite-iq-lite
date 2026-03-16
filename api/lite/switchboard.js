@@ -3,6 +3,7 @@
 // ============================================================================
 
 const fs = require("fs");
+const crypto = require("crypto");
 const formidable = require("formidable");
 
 const { validateConfig } = require("./config-validator");
@@ -33,7 +34,11 @@ const { logError, logWarn, logInfo } = require("./logger");
 // GHL Contact Service
 const { createOrUpdateContact, parseFullName } = require("./ghl-contact-service");
 
-// Letter Delivery Service (deliverLetters is required inline to avoid circular deps)
+// Background task queue
+const { enqueueTask } = require("./background-queue");
+
+// GHL + Airtable webhook notifiers (trigger U-02, AX01A workflows)
+const { notifyAnalyzerComplete, notifyAirtableAnalyzerComplete } = require("./ghl-webhook");
 
 // Helper to clean up temp files (prevents /tmp from filling up)
 async function cleanupTempFiles(files) {
@@ -225,7 +230,7 @@ module.exports = async function handler(req, res) {
       multiples: true,
       keepExtensions: true,
       uploadDir: "/tmp",
-      maxFileSize: 25 * 1024 * 1024
+      maxFileSize: 20 * 1024 * 1024
     });
 
     const { files, fields } = await new Promise((resolve, reject) =>
@@ -335,6 +340,27 @@ module.exports = async function handler(req, res) {
         });
       }
 
+      // === Parse caching: check cache before expensive AI parsing ===
+      const pdfHash = crypto.createHash("sha256").update(buf).digest("hex");
+      const cacheKey = `uwiq:parse:${pdfHash}`;
+
+      if (dedupeClient) {
+        try {
+          const cached = await dedupeClient.get(cacheKey);
+          if (cached) {
+            logInfo("Cache hit for PDF", {
+              filename: f.originalFilename,
+              hash: pdfHash.substring(0, 8)
+            });
+            parsedResults.push(JSON.parse(cached));
+            continue; // Skip AI parsing entirely!
+          }
+        } catch (cacheErr) {
+          logWarn("Cache check failed", { error: cacheErr.message });
+          // Continue to parse normally
+        }
+      }
+
       // AI Gatekeeper - skip for speed if SKIP_AI_GATEKEEPER=true
       if (IDENTITY_ENABLED && !SKIP_GATEKEEPER) {
         try {
@@ -365,6 +391,16 @@ module.exports = async function handler(req, res) {
             reason: parsed.reason,
             hasBureaus: !!parsed.bureaus
           });
+        }
+
+        // === Cache successful parse for 24 hours ===
+        if (dedupeClient && parsed.ok) {
+          try {
+            await dedupeClient.set(cacheKey, JSON.stringify(parsed), { ex: 86400 }); // 24h TTL
+            logInfo("Cached parse result", { hash: pdfHash.substring(0, 8) });
+          } catch (cacheErr) {
+            logWarn("Cache write failed", { error: cacheErr.message });
+          }
         }
 
         parsedResults.push(parsed);
@@ -506,9 +542,8 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Then deliver letters (blocking to ensure uploads complete before response)
-    const { deliverLetters } = require("./letter-delivery");
-    const letterResult = await deliverLetters({
+    // Deliver letters via background queue (reliable, retried)
+    enqueueTask("deliver_letters", {
       contactId,
       contactData: ghlContactData,
       bureaus: mergedBureaus,
@@ -519,11 +554,33 @@ module.exports = async function handler(req, res) {
       }
     });
 
-    logInfo("Letter delivery complete", {
-      generated: letterResult.letters?.generated,
-      uploaded: letterResult.letters?.uploaded,
-      failed: letterResult.letters?.failed
-    });
+    logInfo("Letter delivery enqueued");
+
+    // ----- GHL Webhook: trigger U-02 (analyzer_complete) -----
+    // Fires async — does not block response. U-02 handles: contact merge,
+    // tag assignment (analyzer:complete, path:funding/repair), delivery emails,
+    // Primary Snapshot Source promotion.
+    if (sanitized.email) {
+      notifyAnalyzerComplete({
+        email: sanitized.email,
+        phone: sanitized.phone || "",
+        fullName: sanitized.name || `${firstName} ${lastName}`.trim(),
+        analyzerPath: uw.fundable ? "funding" : "repair",
+        creditScore: m.score || 0,
+        creditSuggestions: Array.isArray(suggestions)
+          ? suggestions.map(s => (typeof s === "string" ? s : s.description || "")).join("; ")
+          : ""
+      }).catch(() => {});
+
+      // ----- Airtable Webhook: trigger AX01A (analyzer → CLIENTS record) -----
+      notifyAirtableAnalyzerComplete({
+        email: sanitized.email,
+        fullName: sanitized.name || `${firstName} ${lastName}`.trim(),
+        phone: sanitized.phone || "",
+        ghlContactId: contactId || "",
+        analyzerReportUrl: redirect.resultUrl || ""
+      }).catch(() => {});
+    }
 
     // ----- Clean up temp files -----
     await cleanupTempFiles(validatedFiles);

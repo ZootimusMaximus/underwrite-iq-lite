@@ -4,7 +4,409 @@ Credit report analyzer backend for FundHub. Parses credit reports, determines fu
 
 ---
 
-## Architecture Overview
+## How It Works (Simple Overview)
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                        🏦 CREDIT ANALYZER JOURNEY                              ║
+╠═══════════════════════════════════════════════════════════════════════════════╣
+║                                                                                ║
+║   📤 STEP 1: UPLOAD                                                            ║
+║   ─────────────────                                                            ║
+║   User uploads their credit report PDF on fundhub.ai                          ║
+║   (Experian, Equifax, or TransUnion - up to 3 files)                          ║
+║                                                                                ║
+║                              ⬇️                                                ║
+║                                                                                ║
+║   🔍 STEP 2: AI READS THE REPORT                                               ║
+║   ──────────────────────────────                                               ║
+║   Text extraction → GPT-4o-mini (fast & cheap)                                ║
+║   Falls back to GPT-4.1 Vision for scanned PDFs                               ║
+║                                                                                ║
+║   Extracts:                                                                    ║
+║   • Credit score                                                               ║
+║   • Credit card balances & limits                                             ║
+║   • Negative items (collections, late payments)                               ║
+║   • Hard inquiries                                                             ║
+║   • Personal info (name, addresses)                                           ║
+║                                                                                ║
+║                              ⬇️                                                ║
+║                                                                                ║
+║   ✅ STEP 3: VERIFY IDENTITY                                                   ║
+║   ──────────────────────────                                                   ║
+║   System checks:                                                               ║
+║   • Does the name match the report? ✓                                         ║
+║   • Is the report less than 30 days old? ✓                                    ║
+║                                                                                ║
+║                              ⬇️                                                ║
+║                                                                                ║
+║   📊 STEP 4: ANALYZE & DECIDE                                                  ║
+║   ───────────────────────────                                                  ║
+║                                                                                ║
+║   ┌─────────────────────────────────────────────────────────────────────┐     ║
+║   │                    FUNDABLE CRITERIA                                 │     ║
+║   │                                                                      │     ║
+║   │   ✅ Credit Score 700+                                               │     ║
+║   │   ✅ Credit Utilization 30% or less                                  │     ║
+║   │   ✅ Zero negative accounts                                          │     ║
+║   │                                                                      │     ║
+║   │   ALL THREE = APPROVED FOR FUNDING 🎉                                │     ║
+║   │   MISSING ANY = CREDIT REPAIR PATH 🔧                                │     ║
+║   └─────────────────────────────────────────────────────────────────────┘     ║
+║                                                                                ║
+║                      ⬇️                    ⬇️                                  ║
+║                                                                                ║
+║   ┌──────────────────────┐         ┌──────────────────────┐                   ║
+║   │  🎉 FUNDING PATH     │         │  🔧 REPAIR PATH      │                   ║
+║   ├──────────────────────┤         ├──────────────────────┤                   ║
+║   │                      │         │                      │                   ║
+║   │ You qualify for      │         │ Let's fix your       │                   ║
+║   │ business funding!    │         │ credit first!        │                   ║
+║   │                      │         │                      │                   ║
+║   │ 📧 6 Letters:        │         │ 📧 12 Letters:       │                   ║
+║   │ • 3 inquiry removal  │         │ • 9 dispute letters  │                   ║
+║   │ • 3 personal info    │         │   (3 rounds × 3      │                   ║
+║   │                      │         │    bureaus)          │                   ║
+║   │                      │         │ • 3 personal info    │                   ║
+║   │                      │         │                      │                   ║
+║   │ Shows total funding  │         │ Shows what to fix    │                   ║
+║   │ amount available     │         │ and how              │                   ║
+║   └──────────────────────┘         └──────────────────────┘                   ║
+║                                                                                ║
+║                              ⬇️                                                ║
+║                                                                                ║
+║   📬 STEP 5: DELIVER RESULTS                                                   ║
+║   ──────────────────────────                                                   ║
+║   • PDF letters uploaded (available for 72 hours)                             ║
+║   • Contact created/updated in GoHighLevel CRM                                ║
+║   • Email sent with results and letter links                                  ║
+║   • User redirected to results page                                           ║
+║                                                                                ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Processing Time
+
+| Mode | File Size | Typical Time | Cost |
+|------|-----------|--------------|------|
+| **Text** (default) | Any | 5-15 seconds | ~$0.001-0.005 |
+| **Vision** (fallback) | Small (< 3MB) | 30-45 seconds | ~$0.02-0.05 |
+| **Vision** (fallback) | Large (> 6MB) | 60-90 seconds | ~$0.02-0.05 |
+
+Text mode is **10-20x cheaper** and **3-4x faster** than Vision mode.
+
+### PDF Processing Flow
+
+The system uses a **smart 3-tier extraction strategy** optimized for speed and accuracy:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     PDF PROCESSING DECISION FLOW                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                              PDF Uploaded
+                                   │
+                                   ▼
+                    ┌──────────────────────────────┐
+                    │  STEP 1: pdf-parse           │
+                    │  (instant text extraction)   │
+                    │  • Extracts text layer       │
+                    │  • ~50ms for 30 pages        │
+                    └──────────────────────────────┘
+                                   │
+                                   ▼
+                    ┌──────────────────────────────┐
+                    │  STEP 2: Validate Text       │
+                    │  Is this a credit report?    │
+                    │  • Has bureau names?         │
+                    │  • Has score patterns?       │
+                    │  • Has account terms?        │
+                    │  • Has dates & amounts?      │
+                    └──────────────────────────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+                    ▼                             ▼
+            ┌───────────────┐            ┌───────────────┐
+            │  VALID TEXT   │            │ INVALID/EMPTY │
+            │  (High conf)  │            │ (Scanned PDF) │
+            └───────────────┘            └───────────────┘
+                    │                             │
+                    ▼                             ▼
+         ┌──────────────────┐         ┌──────────────────┐
+         │  Send to LLM     │         │  STEP 3: Google  │
+         │  (GPT-4o-mini)   │         │  OCR (parallel)  │
+         │  ~5-10 seconds   │         │  ~5-10 seconds   │
+         └──────────────────┘         └──────────────────┘
+                    │                             │
+                    ▼                             ▼
+         ┌──────────────────┐         ┌──────────────────┐
+         │  ✅ DONE         │         │  Send to LLM     │
+         │  Total: 5-10s    │         │  (GPT-4o-mini)   │
+         └──────────────────┘         └──────────────────┘
+                                              │
+                                              ▼
+                                   ┌──────────────────┐
+                                   │  ✅ DONE         │
+                                   │  Total: 15-20s   │
+                                   └──────────────────┘
+                                              │
+                                   (If OCR fails)
+                                              ▼
+                                   ┌──────────────────┐
+                                   │  STEP 4: Vision  │
+                                   │  (GPT-4.1)       │
+                                   │  Last resort     │
+                                   │  ~30-60 seconds  │
+                                   └──────────────────┘
+```
+
+**Why pdf-parse first?**
+- **Faster**: Instant text extraction vs image conversion
+- **More accurate**: No OCR errors on digitally-generated PDFs (0 vs O, 1 vs l)
+- **Cheaper**: Skip expensive Vision API calls when not needed
+
+**When does OCR get used?**
+| PDF Type | pdf-parse | OCR Used? |
+|----------|-----------|-----------|
+| Digitally-generated (TransUnion, IdentityIQ, SmartCredit) | ✅ Works | ❌ No |
+| Scanned paper report | ❌ No text layer | ✅ Yes |
+| Screenshot/photo PDF | ❌ No text layer | ✅ Yes |
+| Protected/encrypted PDF | ❌ Fails | ✅ Yes |
+
+### What Users See
+
+1. **Upload Page** → Form to enter name, email, phone, and upload PDF
+2. **Loading Screen** → Progress bar with estimated time remaining
+3. **Results Page** → Either funding approval or repair roadmap
+
+---
+
+## Tech Stack Overview
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                           🛠️ TECHNOLOGY STACK                                  ║
+╠═══════════════════════════════════════════════════════════════════════════════╣
+║                                                                                ║
+║   🌐 FRONTEND (What Users See)                                                 ║
+║   ────────────────────────────                                                 ║
+║   • FundHub Website (fundhub.ai)                                              ║
+║   • Hosted on GoHighLevel (GHL)                                               ║
+║   • Custom JavaScript for upload & progress                                   ║
+║                                                                                ║
+║   ☁️ BACKEND (The Brain)                                                       ║
+║   ──────────────────────                                                       ║
+║   • Vercel Serverless Functions                                               ║
+║   • Node.js 22                                                                ║
+║   • Handles all processing logic                                              ║
+║                                                                                ║
+║   🤖 AI PARSING (Dual-Mode)                                                    ║
+║   ─────────────────────────                                                    ║
+║   • Primary: Text extraction + GPT-4o-mini (fast & cheap)                     ║
+║   • Fallback: GPT-4.1 Vision (for scanned PDFs)                               ║
+║   • Mode selection via PARSE_MODE env var (text/vision/auto)                  ║
+║   • Understands any credit report format                                      ║
+║                                                                                ║
+║   📦 FILE STORAGE                                                              ║
+║   ───────────────                                                              ║
+║   ┌─────────────────────────────────────────────────────────────────────┐     ║
+║   │  VERCEL BLOB STORAGE                                                 │     ║
+║   │                                                                      │     ║
+║   │  • PDFs uploaded directly from browser (fast!)                      │     ║
+║   │  • Generated letters stored here                                    │     ║
+║   │  • Links expire after 72 hours (security)                           │     ║
+║   │  • No files stored permanently                                      │     ║
+║   └─────────────────────────────────────────────────────────────────────┘     ║
+║                                                                                ║
+║   🗄️ DATABASE / CACHE                                                         ║
+║   ───────────────────                                                          ║
+║   ┌─────────────────────────────────────────────────────────────────────┐     ║
+║   │  UPSTASH REDIS                                                       │     ║
+║   │                                                                      │     ║
+║   │  • Job tracking (upload progress)                                   │     ║
+║   │  • 30-day result caching (same user = instant results)              │     ║
+║   │  • Rate limiting (prevents abuse)                                   │     ║
+║   │  • No personal data stored (only hashed IDs)                        │     ║
+║   └─────────────────────────────────────────────────────────────────────┘     ║
+║                                                                                ║
+║   📧 CRM & EMAIL                                                               ║
+║   ──────────────                                                               ║
+║   ┌─────────────────────────────────────────────────────────────────────┐     ║
+║   │  GOHIGHLEVEL (GHL)                                                   │     ║
+║   │                                                                      │     ║
+║   │  • Contact management                                               │     ║
+║   │  • Automated email sequences                                        │     ║
+║   │  • Workflow triggers (repair vs funding)                            │     ║
+║   │  • Letter delivery via email                                        │     ║
+║   └─────────────────────────────────────────────────────────────────────┘     ║
+║                                                                                ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Data Flow Diagram
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│    USER      │     │   VERCEL     │     │   OPENAI     │     │     GHL      │
+│   BROWSER    │     │   BACKEND    │     │              │     │     CRM      │
+└──────┬───────┘     └──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+       │                    │                    │                    │
+       │  1. Upload PDF     │                    │                    │
+       │ ─────────────────► │                    │                    │
+       │    (to Blob)       │                    │                    │
+       │                    │                    │                    │
+       │  2. Start job      │                    │                    │
+       │ ─────────────────► │                    │                    │
+       │                    │                    │                    │
+       │                    │  3a. Extract text  │                    │
+       │                    │     (pdf-parse)    │                    │
+       │                    │                    │                    │
+       │                    │  3b. Parse text    │                    │
+       │                    │ ─────────────────► │ GPT-4o-mini        │
+       │                    │                    │ (fast/cheap)       │
+       │                    │                    │                    │
+       │                    │  OR if scanned:    │                    │
+       │                    │ ─────────────────► │ GPT-4.1 Vision     │
+       │                    │                    │ (fallback)         │
+       │                    │                    │                    │
+       │                    │  4. Credit data    │                    │
+       │                    │ ◄───────────────── │                    │
+       │                    │                    │                    │
+       │                    │  5. Create contact + send letters       │
+       │                    │ ──────────────────────────────────────► │
+       │                    │                    │                    │
+       │  6. Results ready  │                    │                    │
+       │ ◄───────────────── │                    │                    │
+       │                    │                    │                    │
+       │  7. Redirect to    │                    │                    │
+       │     results page   │                    │                    │
+       ▼                    ▼                    ▼                    ▼
+```
+
+### Security & Privacy
+
+| Aspect | How We Handle It |
+|--------|------------------|
+| **PDF Storage** | Uploaded to Vercel Blob, deleted after processing |
+| **Letter Storage** | 72-hour expiry links, then auto-deleted |
+| **Personal Data** | Only stored in GHL (your CRM) |
+| **Caching** | Uses hashed IDs only, no PII in Redis |
+| **Rate Limiting** | Prevents abuse, 10 requests per minute |
+
+---
+
+## Concurrent Users & Queue System
+
+### Current State (No Queue)
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                    ⚠️ CURRENT: SYNCHRONOUS PROCESSING                          ║
+╠═══════════════════════════════════════════════════════════════════════════════╣
+║                                                                                ║
+║   When 5 users upload at the same time:                                       ║
+║                                                                                ║
+║   User 1 ──┐                                                                   ║
+║   User 2 ──┼──► ALL hit OpenAI API simultaneously ──► ⚠️ RATE LIMITS!         ║
+║   User 3 ──┤                                                                   ║
+║   User 4 ──┤    Result: Some users get TIMEOUTS                               ║
+║   User 5 ──┘                                                                   ║
+║                                                                                ║
+║   Performance under load:                                                      ║
+║   ┌─────────────────────┬──────────────────┐                                  ║
+║   │ Concurrent Users    │ Success Rate     │                                  ║
+║   ├─────────────────────┼──────────────────┤                                  ║
+║   │ 1-3 users           │ ✅ ~100%          │                                  ║
+║   │ 5 users             │ ⚠️ ~60-80%        │                                  ║
+║   │ 10 users            │ ❌ ~20-40%        │                                  ║
+║   └─────────────────────┴──────────────────┘                                  ║
+║                                                                                ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Planned: Queue-Based Processing
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                    🚀 PLANNED: QUEUE-BASED PROCESSING                          ║
+╠═══════════════════════════════════════════════════════════════════════════════╣
+║                                                                                ║
+║   When 5 users upload at the same time:                                       ║
+║                                                                                ║
+║   User 1 ──┐      ┌─────────────┐      ┌─────────────┐                        ║
+║   User 2 ──┼──►   │   REDIS     │ ──►  │   WORKER    │ ──► OpenAI            ║
+║   User 3 ──┤      │   QUEUE     │      │ (processes  │     (one at           ║
+║   User 4 ──┤      │             │      │  2-3 jobs   │      a time)           ║
+║   User 5 ──┘      │ [1,2,3,4,5] │      │  per tick)  │                        ║
+║                   └─────────────┘      └─────────────┘                        ║
+║                                                                                ║
+║   Benefits:                                                                    ║
+║   ✅ No more timeouts - jobs queue up instead of competing                    ║
+║   ✅ Fair ordering - first come, first served                                 ║
+║   ✅ 100% success rate under any load                                         ║
+║   ⏱️ Trade-off: Higher load = longer wait times                               ║
+║                                                                                ║
+║   Expected wait times:                                                         ║
+║   ┌─────────────────────┬──────────────────┐                                  ║
+║   │ Queue Position      │ Wait Time        │                                  ║
+║   ├─────────────────────┼──────────────────┤                                  ║
+║   │ Position 1          │ ~60 seconds      │                                  ║
+║   │ Position 5          │ ~3 minutes       │                                  ║
+║   │ Position 10         │ ~6 minutes       │                                  ║
+║   └─────────────────────┴──────────────────┘                                  ║
+║                                                                                ║
+║   Status: 📋 PLANNED (requires Vercel Pro for faster cron intervals)          ║
+║                                                                                ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Queue Architecture (When Implemented)
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   BROWSER   │     │  VERCEL     │     │   REDIS     │     │   WORKER    │
+│             │     │  API        │     │   QUEUE     │     │   (CRON)    │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │                   │
+       │ 1. Upload PDF     │                   │                   │
+       │ ─────────────────►│                   │                   │
+       │                   │                   │                   │
+       │                   │ 2. Add to queue   │                   │
+       │                   │ ─────────────────►│                   │
+       │                   │                   │                   │
+       │ 3. "Queued #5"    │                   │                   │
+       │ ◄─────────────────│                   │                   │
+       │                   │                   │                   │
+       │                   │                   │ 4. Every 10-60s   │
+       │                   │                   │ ◄─────────────────│
+       │                   │                   │    "Next job?"    │
+       │                   │                   │                   │
+       │                   │                   │ 5. Pop job        │
+       │                   │                   │ ─────────────────►│
+       │                   │                   │                   │
+       │                   │                   │    6. Process     │
+       │                   │                   │    (OpenAI call)  │
+       │                   │                   │                   │
+       │ 7. Poll status    │                   │                   │
+       │ ─────────────────►│                   │                   │
+       │                   │                   │                   │
+       │ 8. "Complete!"    │                   │                   │
+       │ ◄─────────────────│                   │                   │
+       ▼                   ▼                   ▼                   ▼
+```
+
+### Implementation Options
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Vercel Cron (Pro)** | Simple, built-in | Requires Pro plan ($20/mo), min 10s interval |
+| **Upstash QStash** | Sub-second delivery, retries | Additional service, extra cost |
+| **Self-triggered** | Works on Hobby plan | Complex, less reliable |
+
+---
+
+## Architecture Overview (Technical)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -33,9 +435,9 @@ Credit report analyzer backend for FundHub. Parses credit reports, determines fu
 │            ▼                                                                 │
 │   ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐       │
 │   │  Stage 1        │     │  Stage 2        │     │  Stage 3        │       │
-│   │  Pre-Validate   │────▶│  GPT-4.1 Parse  │────▶│  Bureau Merge   │       │
-│   │  (size, type,   │     │  (Vision API)   │     │  (dedupe check) │       │
-│   │   duplicates)   │     │                 │     │                 │       │
+│   │  Pre-Validate   │────▶│  AI Parse       │────▶│  Bureau Merge   │       │
+│   │  (size, type,   │     │  (text+4o-mini  │     │  (dedupe check) │       │
+│   │   duplicates)   │     │  or Vision)     │     │                 │       │
 │   └─────────────────┘     └─────────────────┘     └─────────────────┘       │
 │                                                          │                   │
 │                                                          ▼                   │
@@ -126,7 +528,9 @@ Credit report analyzer backend for FundHub. Parses credit reports, determines fu
 | Component      | Technology                     |
 | -------------- | ------------------------------ |
 | Backend        | Node.js 22 + Vercel Serverless |
-| AI Parsing     | OpenAI GPT-4.1 Vision          |
+| PDF Text Extraction | pdf-parse                 |
+| AI Parsing (Primary) | OpenAI GPT-4o-mini (text mode) |
+| AI Parsing (Fallback) | OpenAI GPT-4.1 Vision (scanned PDFs) |
 | PDF Generation | pdf-lib                        |
 | PDF Storage    | Vercel Blob (72hr URLs)        |
 | CRM            | GoHighLevel (GHL)              |
@@ -190,6 +594,12 @@ ELSE:
 # OpenAI
 UNDERWRITE_IQ_VISION_KEY=sk-...
 
+# Parse Mode: text (cheap/fast), vision (accurate), auto (text with fallback)
+PARSE_MODE=auto
+
+# Model for text-based parsing (default: gpt-4o-mini)
+PARSE_MODEL=gpt-4o-mini
+
 # Vercel Blob
 BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
 
@@ -215,7 +625,8 @@ REDIRECT_URL_NOT_FUNDABLE=https://fundhub.ai/fix-my-credit
 underwrite-iq-lite/
 ├── api/lite/
 │   ├── switchboard.js        # Main orchestrator
-│   ├── parse-report.js       # GPT-4.1 Vision parser
+│   ├── parse-report.js       # AI parser (text + vision modes)
+│   ├── pdf-text-extractor.js # Text extraction from PDFs
 │   ├── validate-reports.js   # Pre-parse validation
 │   ├── validate-identity.js  # Name match + 30-day check
 │   ├── underwriter.js        # Fundable/repair logic
