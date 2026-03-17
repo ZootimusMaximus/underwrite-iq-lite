@@ -1,0 +1,112 @@
+{
+  "_meta": {
+    "description": "Test scenarios for POST /api/lite/airtable-reprocess (AX07 pipeline)",
+    "usage": "curl -X POST http://localhost:3000/api/lite/airtable-reprocess -H 'Content-Type: application/json' -d @scripts/test-scenarios-ax07.json (pipe individual scenario via jq '.scenarios.strong_funding')",
+    "notes": [
+      "Snapshot-based payloads have no raw tradeline data — utilization defaults to 'unknown' band.",
+      "Because utilization band is never 'excellent' or 'good' from snapshots, isFullStack() cannot pass. Clean files land in CONDITIONAL_APPROVAL.",
+      "Business boost requires bs.available (set by derive-business-signals, NOT by buildBusinessSignalsFromSnapshot), so business boost will not fire through this endpoint."
+    ]
+  },
+
+  "scenarios": {
+    "strong_funding": {
+      "_expected": "CONDITIONAL_APPROVAL (utilization band 'unknown' from snapshots prevents FULL_STACK; clean file, no derogs)",
+      "source": "airtable-ax07",
+      "client": { "email": "test-strong@fundhub.ai" },
+      "round": { "underwriteiq_reference_id": "ref-strong-001" },
+      "submitted_form": { "full_name": "MARCUS JOHNSON" },
+      "consumer_reports": [
+        { "bureau": "TU", "score": 750, "inquiry_count": 0, "derog_count": 0, "late_count": 0 },
+        { "bureau": "EX", "score": 740, "inquiry_count": 0, "derog_count": 0, "late_count": 0 },
+        { "bureau": "EQ", "score": 760, "inquiry_count": 0, "derog_count": 0, "late_count": 0 }
+      ],
+      "business_report": {
+        "business_score": 85,
+        "recommended_limit": 75000,
+        "ucc_count": 1,
+        "public_records_count": 0,
+        "payment_summary": "Satisfactory payment history across 12 tradelines",
+        "payment_stress": "Low",
+        "fraud_flag": "Unknown",
+        "major_fraud_alert": ""
+      }
+    },
+
+    "conditional_thin_file": {
+      "_expected": "CONDITIONAL_APPROVAL (single bureau → bureauConfidence 'low', reason code SINGLE_BUREAU_LOW_CONFIDENCE; score 725 is above repair thresholds)",
+      "source": "airtable-ax07",
+      "client": { "email": "test-thin@fundhub.ai" },
+      "round": { "underwriteiq_reference_id": "ref-thin-002" },
+      "submitted_form": { "full_name": "AISHA PATEL" },
+      "consumer_reports": [
+        { "bureau": "TU", "score": 725, "inquiry_count": 0, "derog_count": 0, "late_count": 0 }
+      ],
+      "business_report": null
+    },
+
+    "repair_chargeoffs": {
+      "_expected": "REPAIR (2 derogs → worstSeverity 5, triggers isRepair; median score 590)",
+      "source": "airtable-ax07",
+      "client": { "email": "test-chargeoff@fundhub.ai" },
+      "round": { "underwriteiq_reference_id": "ref-repair-003" },
+      "submitted_form": { "full_name": "DEREK WILLIAMS" },
+      "consumer_reports": [
+        { "bureau": "EX", "score": 580, "inquiry_count": 3, "derog_count": 1, "late_count": 2 },
+        { "bureau": "EQ", "score": 590, "inquiry_count": 2, "derog_count": 1, "late_count": 1 }
+      ],
+      "business_report": null
+    },
+
+    "repair_heavy_inquiries": {
+      "_expected": "REPAIR (1 derog → worstSeverity 5 triggers isRepair; 15 total inquiries → INQUIRY_STORM reason code; low scores compound the picture)",
+      "source": "airtable-ax07",
+      "client": { "email": "test-inquiries@fundhub.ai" },
+      "round": { "underwriteiq_reference_id": "ref-inquiry-004" },
+      "submitted_form": { "full_name": "NINA TORRES" },
+      "consumer_reports": [
+        { "bureau": "TU", "score": 620, "inquiry_count": 6, "derog_count": 1, "late_count": 0 },
+        { "bureau": "EX", "score": 630, "inquiry_count": 5, "derog_count": 0, "late_count": 0 },
+        { "bureau": "EQ", "score": 640, "inquiry_count": 4, "derog_count": 0, "late_count": 0 }
+      ],
+      "business_report": null
+    },
+
+    "manual_review_mixed": {
+      "_expected": "REPAIR (1 derog → worstSeverity 5 triggers isRepair; large score spread 580-720 with median 690; reason codes include ACTIVE_60_PLUS from derog)",
+      "source": "airtable-ax07",
+      "client": { "email": "test-mixed@fundhub.ai" },
+      "round": { "underwriteiq_reference_id": "ref-mixed-005" },
+      "submitted_form": { "full_name": "CARLOS MENDEZ" },
+      "consumer_reports": [
+        { "bureau": "EX", "score": 580, "inquiry_count": 4, "derog_count": 1, "late_count": 1 },
+        { "bureau": "TU", "score": 720, "inquiry_count": 2, "derog_count": 0, "late_count": 0 },
+        { "bureau": "EQ", "score": 690, "inquiry_count": 2, "derog_count": 0, "late_count": 1 }
+      ],
+      "business_report": null
+    },
+
+    "funding_with_business": {
+      "_expected": "CONDITIONAL_APPROVAL (scores median 715, no derogs, clean file; business data present but bs.available is not set by buildBusinessSignalsFromSnapshot so business boost cannot fire)",
+      "source": "airtable-ax07",
+      "client": { "email": "test-biz@fundhub.ai" },
+      "round": { "underwriteiq_reference_id": "ref-biz-006" },
+      "submitted_form": { "full_name": "RACHEL STONE" },
+      "consumer_reports": [
+        { "bureau": "TU", "score": 710, "inquiry_count": 1, "derog_count": 0, "late_count": 0 },
+        { "bureau": "EX", "score": 720, "inquiry_count": 1, "derog_count": 0, "late_count": 0 },
+        { "bureau": "EQ", "score": 715, "inquiry_count": 0, "derog_count": 0, "late_count": 0 }
+      ],
+      "business_report": {
+        "business_score": 70,
+        "recommended_limit": 50000,
+        "ucc_count": 2,
+        "public_records_count": 0,
+        "payment_summary": "Generally satisfactory with minor slow-pays",
+        "payment_stress": "Moderate",
+        "fraud_flag": "Unknown",
+        "major_fraud_alert": ""
+      }
+    }
+  }
+}
