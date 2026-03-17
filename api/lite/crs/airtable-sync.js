@@ -351,58 +351,6 @@ async function syncCRSResultToAirtable(crsResult, clientRecordId, email) {
   }
 }
 
-/**
- * fetchClientForCRS(recordId) — Fetch client data to trigger a CRS pull.
- *
- * @param {string} recordId - Airtable record ID
- * @returns {Promise<Object>} Client data ready for CRS pull
- */
-async function fetchClientForCRS(recordId) {
-  if (!isConfigured()) throw new Error("Airtable not configured");
-
-  const record = await getRecord(TABLE_CLIENTS, recordId);
-  const f = record.fields || {};
-
-  // Parse full_name into first/last (FUNDHUB MATRIX stores as single field)
-  const nameParts = (f.full_name || "").trim().split(/\s+/);
-  const firstName = nameParts[0] || "";
-  const lastName = nameParts.slice(1).join(" ") || "";
-
-  return {
-    applicant: {
-      firstName,
-      lastName,
-      middleName: "",
-      ssn: f.ssn || "",
-      birthDate: f.birth_date || f.dob || "",
-      email: f.email || "",
-      address: {
-        addressLine1: f.address || "",
-        addressLine2: "",
-        city: f.city || "",
-        state: f.personal_state || f.state || "",
-        postalCode: f.zip || f.postal_code || ""
-      }
-    },
-    business: f.business_state
-      ? {
-          name: f.business_name || "",
-          state: f.business_state || ""
-        }
-      : null,
-    formData: {
-      email: f.email || "",
-      phone: f.phone || "",
-      name: f.full_name || "",
-      companyName: f.business_name || "",
-      hasLLC: !!f.has_llc,
-      llcAgeMonths: f.llc_age_months || null,
-      ref: recordId
-    },
-    airtableRecordId: recordId
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
@@ -419,7 +367,6 @@ module.exports = {
   createRecord,
   findClientByEmail,
   syncCRSResultToAirtable,
-  fetchClientForCRS,
   // For testing
   TABLE_CLIENTS,
   TABLE_SNAPSHOTS,
