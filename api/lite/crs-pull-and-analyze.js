@@ -271,8 +271,9 @@ module.exports = async function handler(req, res) {
 
     // Airtable sync (queued)
     const airtableRecordId = formData?.airtableRecordId || null;
-    if (airtableRecordId) {
-      enqueueTask("airtable_sync", { result, recordId: airtableRecordId });
+    const syncEmail = sanitized.email || formData?.email || null;
+    if (airtableRecordId || syncEmail) {
+      enqueueTask("airtable_sync", { result, recordId: airtableRecordId, email: syncEmail });
     }
 
     // =========================================================================

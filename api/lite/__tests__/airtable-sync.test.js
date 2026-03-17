@@ -8,6 +8,7 @@ const {
   mapSnapshotFields,
   derivePerBureauMetrics,
   getNextAction,
+  findClientByEmail,
   TABLE_CLIENTS,
   TABLE_SNAPSHOTS
 } = require("../crs/airtable-sync");
@@ -215,4 +216,24 @@ test("getNextAction: all outcome tiers", () => {
 test("table names: have defaults", () => {
   assert.equal(TABLE_CLIENTS, "Clients");
   assert.equal(TABLE_SNAPSHOTS, "Credit Snapshots");
+});
+
+// ============================================================================
+// findClientByEmail
+// ============================================================================
+
+test("findClientByEmail: returns null when not configured", async () => {
+  // Without env vars, isConfigured() is false
+  const result = await findClientByEmail("test@example.com");
+  assert.equal(result, null);
+});
+
+test("findClientByEmail: returns null for empty email", async () => {
+  const result = await findClientByEmail("");
+  assert.equal(result, null);
+});
+
+test("findClientByEmail: returns null for null email", async () => {
+  const result = await findClientByEmail(null);
+  assert.equal(result, null);
 });

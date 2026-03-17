@@ -260,36 +260,80 @@ async function createRecord(table, fields) {
 // ---------------------------------------------------------------------------
 
 /**
- * syncCRSResultToAirtable(crsResult, clientRecordId) — Push CRS results back.
+ * findClientByEmail(email) — Look up a client record by email address.
+ *
+ * @param {string} email - Client email
+ * @returns {Promise<string|null>} Airtable record ID, or null if not found
+ */
+async function findClientByEmail(email) {
+  if (!isConfigured() || !email) return null;
+
+  try {
+    const formula = `{email} = "${email.replace(/"/g, '\\"')}"`;
+    const records = await findRecords(TABLE_CLIENTS, formula, 1);
+    if (records.length > 0) {
+      logInfo("Airtable client found by email", { recordId: records[0].id });
+      return records[0].id;
+    }
+    return null;
+  } catch (err) {
+    logWarn("Airtable client lookup by email failed", { error: err.message });
+    return null;
+  }
+}
+
+/**
+ * syncCRSResultToAirtable(crsResult, clientRecordId, email) — Push CRS results back.
+ *
+ * If clientRecordId is not provided but email is, attempts to find the client
+ * by email in Airtable before syncing.
  *
  * @param {Object} crsResult - Full CRS engine output
  * @param {string} [clientRecordId] - Airtable record ID for the client
+ * @param {string} [email] - Client email (fallback lookup when no record ID)
  * @returns {Promise<{ ok: boolean, clientUpdated: boolean, snapshotCreated: boolean }>}
  */
-async function syncCRSResultToAirtable(crsResult, clientRecordId) {
+async function syncCRSResultToAirtable(crsResult, clientRecordId, email) {
   if (!isConfigured()) {
     logWarn("Airtable sync skipped: not configured");
     return { ok: false, error: "not_configured", clientUpdated: false, snapshotCreated: false };
   }
 
+  let resolvedRecordId = clientRecordId;
   let clientUpdated = false;
   let snapshotCreated = false;
 
   try {
-    // 1. Update client record
-    if (clientRecordId) {
-      const clientFields = mapClientFields(crsResult);
-      await updateRecord(TABLE_CLIENTS, clientRecordId, clientFields);
-      clientUpdated = true;
-      logInfo("Airtable client updated", { recordId: clientRecordId, outcome: crsResult.outcome });
+    // If no record ID provided, try email lookup
+    if (!resolvedRecordId && email) {
+      resolvedRecordId = await findClientByEmail(email);
     }
 
-    // 2. Create credit snapshot
+    // 1. Update client record
+    if (resolvedRecordId) {
+      const clientFields = mapClientFields(crsResult);
+      await updateRecord(TABLE_CLIENTS, resolvedRecordId, clientFields);
+      clientUpdated = true;
+      logInfo("Airtable client updated", {
+        recordId: resolvedRecordId,
+        outcome: crsResult.outcome
+      });
+    } else {
+      logWarn("Airtable sync: no client record found", {
+        hasRecordId: !!clientRecordId,
+        hasEmail: !!email
+      });
+    }
+
+    // 2. Create credit snapshot (linked to client if we found one)
     try {
-      const snapshotFields = mapSnapshotFields(crsResult, clientRecordId);
+      const snapshotFields = mapSnapshotFields(crsResult, resolvedRecordId);
       await createRecord(TABLE_SNAPSHOTS, snapshotFields);
       snapshotCreated = true;
-      logInfo("Airtable snapshot created", { outcome: crsResult.outcome });
+      logInfo("Airtable snapshot created", {
+        outcome: crsResult.outcome,
+        linked: !!resolvedRecordId
+      });
     } catch (snapErr) {
       logWarn("Airtable snapshot creation failed", { error: snapErr.message });
     }
@@ -367,6 +411,7 @@ module.exports = {
   findRecords,
   updateRecord,
   createRecord,
+  findClientByEmail,
   syncCRSResultToAirtable,
   fetchClientForCRS,
   // For testing

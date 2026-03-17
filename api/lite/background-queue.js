@@ -214,8 +214,8 @@ async function executeGHLSync(payload) {
  */
 async function executeAirtableSync(payload) {
   const { syncCRSResultToAirtable } = require("./crs/airtable-sync");
-  const { result, recordId } = payload;
-  await syncCRSResultToAirtable(result, recordId);
+  const { result, recordId, email } = payload;
+  await syncCRSResultToAirtable(result, recordId, email);
 }
 
 // ---------------------------------------------------------------------------
