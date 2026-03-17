@@ -96,12 +96,18 @@ function derivePerBureauMetrics(normalized) {
  * Maps CRS engine result to FUNDHUB MATRIX client fields.
  * Only writes fields confirmed to exist in the Airtable schema.
  */
-function mapClientFields(crsResult) {
+function mapClientFields(_crsResult) {
+  // Most CLIENTS fields are computed (formulas/rollups) and auto-update when
+  // a linked SNAPSHOTS record is created. The only writable field we need to
+  // set after a CRS pull is refresh_in_progress = false.
+  //
+  // Computed (NOT writable): employee_next_action_calc, open_inquiries_count,
+  //   snapshot_age_days, ready_for_next_round, round_hold_reason_calc,
+  //   has_applications, has_rounds, link_integrity_flag
+  //
+  // Schema verified against FUNDHUB MATRIX 2026-03-17.
   return {
-    // Status (confirmed fields in Client Control Panel)
-    employee_next_action_calc: getNextAction(crsResult.outcome),
-    open_inquiries_count: crsResult.consumerSignals?.inquiries?.total || 0,
-    fraud_alert: crsResult.identityGate?.outcome === "FRAUD_HOLD"
+    refresh_in_progress: false
   };
 }
 
@@ -141,8 +147,8 @@ function mapSnapshotFields(crsResult, clientRecordId) {
     // Fraud alert
     fraud_alert: crsResult.identityGate?.outcome === "FRAUD_HOLD",
 
-    // Link to client record
-    Client: clientRecordId ? [clientRecordId] : []
+    // Link to client record (field name matches table name in Airtable)
+    CLIENTS: clientRecordId ? [clientRecordId] : []
   };
 }
 
