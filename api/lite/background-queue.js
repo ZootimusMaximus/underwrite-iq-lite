@@ -214,8 +214,12 @@ async function executeGHLSync(payload) {
  */
 async function executeAirtableSync(payload) {
   const { syncCRSResultToAirtable } = require("./crs/airtable-sync");
-  const { result, recordId } = payload;
-  await syncCRSResultToAirtable(result, recordId);
+  const { result, recordId, email } = payload;
+  const syncResult = await syncCRSResultToAirtable(result, recordId, email);
+  if (!syncResult.ok) {
+    throw new Error(syncResult.error || "Airtable sync failed");
+  }
+  return syncResult;
 }
 
 // ---------------------------------------------------------------------------

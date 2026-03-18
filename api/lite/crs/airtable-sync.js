@@ -96,12 +96,18 @@ function derivePerBureauMetrics(normalized) {
  * Maps CRS engine result to FUNDHUB MATRIX client fields.
  * Only writes fields confirmed to exist in the Airtable schema.
  */
-function mapClientFields(crsResult) {
+function mapClientFields(_crsResult) {
+  // Most CLIENTS fields are computed (formulas/rollups) and auto-update when
+  // a linked SNAPSHOTS record is created. The only writable field we need to
+  // set after a CRS pull is refresh_in_progress = false.
+  //
+  // Computed (NOT writable): employee_next_action_calc, open_inquiries_count,
+  //   snapshot_age_days, ready_for_next_round, round_hold_reason_calc,
+  //   has_applications, has_rounds, link_integrity_flag
+  //
+  // Schema verified against FUNDHUB MATRIX 2026-03-17.
   return {
-    // Status (confirmed fields in Client Control Panel)
-    employee_next_action_calc: getNextAction(crsResult.outcome),
-    open_inquiries_count: crsResult.consumerSignals?.inquiries?.total || 0,
-    fraud_alert: crsResult.identityGate?.outcome === "FRAUD_HOLD"
+    refresh_in_progress: false
   };
 }
 
@@ -141,8 +147,8 @@ function mapSnapshotFields(crsResult, clientRecordId) {
     // Fraud alert
     fraud_alert: crsResult.identityGate?.outcome === "FRAUD_HOLD",
 
-    // Link to client record
-    Client: clientRecordId ? [clientRecordId] : []
+    // Link to client record (field name matches table name in Airtable)
+    CLIENTS: clientRecordId ? [clientRecordId] : []
   };
 }
 
@@ -260,38 +266,83 @@ async function createRecord(table, fields) {
 // ---------------------------------------------------------------------------
 
 /**
- * syncCRSResultToAirtable(crsResult, clientRecordId) — Push CRS results back.
+ * findClientByEmail(email) — Look up a client record by email address.
+ *
+ * @param {string} email - Client email
+ * @returns {Promise<string|null>} Airtable record ID, or null if not found
+ */
+async function findClientByEmail(email) {
+  if (!isConfigured() || !email) return null;
+
+  try {
+    const formula = `{email} = "${email.replace(/"/g, '\\"')}"`;
+    const records = await findRecords(TABLE_CLIENTS, formula, 1);
+    if (records.length > 0) {
+      logInfo("Airtable client found by email", { recordId: records[0].id });
+      return records[0].id;
+    }
+    return null;
+  } catch (err) {
+    logWarn("Airtable client lookup by email failed", { error: err.message });
+    return null;
+  }
+}
+
+/**
+ * syncCRSResultToAirtable(crsResult, clientRecordId, email) — Push CRS results back.
+ *
+ * If clientRecordId is not provided but email is, attempts to find the client
+ * by email in Airtable before syncing.
  *
  * @param {Object} crsResult - Full CRS engine output
  * @param {string} [clientRecordId] - Airtable record ID for the client
+ * @param {string} [email] - Client email (fallback lookup when no record ID)
  * @returns {Promise<{ ok: boolean, clientUpdated: boolean, snapshotCreated: boolean }>}
  */
-async function syncCRSResultToAirtable(crsResult, clientRecordId) {
+async function syncCRSResultToAirtable(crsResult, clientRecordId, email) {
   if (!isConfigured()) {
     logWarn("Airtable sync skipped: not configured");
     return { ok: false, error: "not_configured", clientUpdated: false, snapshotCreated: false };
   }
 
+  let resolvedRecordId = clientRecordId;
   let clientUpdated = false;
   let snapshotCreated = false;
 
   try {
-    // 1. Update client record
-    if (clientRecordId) {
-      const clientFields = mapClientFields(crsResult);
-      await updateRecord(TABLE_CLIENTS, clientRecordId, clientFields);
-      clientUpdated = true;
-      logInfo("Airtable client updated", { recordId: clientRecordId, outcome: crsResult.outcome });
+    // If no record ID provided, try email lookup
+    if (!resolvedRecordId && email) {
+      resolvedRecordId = await findClientByEmail(email);
     }
 
-    // 2. Create credit snapshot
+    // 1. Update client record
+    if (resolvedRecordId) {
+      const clientFields = mapClientFields(crsResult);
+      await updateRecord(TABLE_CLIENTS, resolvedRecordId, clientFields);
+      clientUpdated = true;
+      logInfo("Airtable client updated", {
+        recordId: resolvedRecordId,
+        outcome: crsResult.outcome
+      });
+    } else {
+      logWarn("Airtable sync: no client record found", {
+        hasRecordId: !!clientRecordId,
+        hasEmail: !!email
+      });
+    }
+
+    // 2. Create credit snapshot (linked to client if we found one)
     try {
-      const snapshotFields = mapSnapshotFields(crsResult, clientRecordId);
+      const snapshotFields = mapSnapshotFields(crsResult, resolvedRecordId);
       await createRecord(TABLE_SNAPSHOTS, snapshotFields);
       snapshotCreated = true;
-      logInfo("Airtable snapshot created", { outcome: crsResult.outcome });
+      logInfo("Airtable snapshot created", {
+        outcome: crsResult.outcome,
+        linked: !!resolvedRecordId
+      });
     } catch (snapErr) {
-      logWarn("Airtable snapshot creation failed", { error: snapErr.message });
+      logError("Airtable snapshot creation failed", { error: snapErr.message });
+      return { ok: false, error: snapErr.message, clientUpdated, snapshotCreated };
     }
 
     return { ok: true, clientUpdated, snapshotCreated };
@@ -299,58 +350,6 @@ async function syncCRSResultToAirtable(crsResult, clientRecordId) {
     logError("Airtable sync failed", err);
     return { ok: false, error: err.message, clientUpdated, snapshotCreated };
   }
-}
-
-/**
- * fetchClientForCRS(recordId) — Fetch client data to trigger a CRS pull.
- *
- * @param {string} recordId - Airtable record ID
- * @returns {Promise<Object>} Client data ready for CRS pull
- */
-async function fetchClientForCRS(recordId) {
-  if (!isConfigured()) throw new Error("Airtable not configured");
-
-  const record = await getRecord(TABLE_CLIENTS, recordId);
-  const f = record.fields || {};
-
-  // Parse full_name into first/last (FUNDHUB MATRIX stores as single field)
-  const nameParts = (f.full_name || "").trim().split(/\s+/);
-  const firstName = nameParts[0] || "";
-  const lastName = nameParts.slice(1).join(" ") || "";
-
-  return {
-    applicant: {
-      firstName,
-      lastName,
-      middleName: "",
-      ssn: f.ssn || "",
-      birthDate: f.birth_date || f.dob || "",
-      email: f.email || "",
-      address: {
-        addressLine1: f.address || "",
-        addressLine2: "",
-        city: f.city || "",
-        state: f.personal_state || f.state || "",
-        postalCode: f.zip || f.postal_code || ""
-      }
-    },
-    business: f.business_state
-      ? {
-          name: f.business_name || "",
-          state: f.business_state || ""
-        }
-      : null,
-    formData: {
-      email: f.email || "",
-      phone: f.phone || "",
-      name: f.full_name || "",
-      companyName: f.business_name || "",
-      hasLLC: !!f.has_llc,
-      llcAgeMonths: f.llc_age_months || null,
-      ref: recordId
-    },
-    airtableRecordId: recordId
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -367,8 +366,8 @@ module.exports = {
   findRecords,
   updateRecord,
   createRecord,
+  findClientByEmail,
   syncCRSResultToAirtable,
-  fetchClientForCRS,
   // For testing
   TABLE_CLIENTS,
   TABLE_SNAPSHOTS,

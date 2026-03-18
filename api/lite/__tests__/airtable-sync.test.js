@@ -8,6 +8,7 @@ const {
   mapSnapshotFields,
   derivePerBureauMetrics,
   getNextAction,
+  findClientByEmail,
   TABLE_CLIENTS,
   TABLE_SNAPSHOTS
 } = require("../crs/airtable-sync");
@@ -100,32 +101,17 @@ test("isConfigured: returns false without env vars", () => {
 // mapClientFields
 // ============================================================================
 
-test("mapClientFields: maps confirmed Airtable fields", () => {
+test("mapClientFields: sets refresh_in_progress to false", () => {
   const fields = mapClientFields(makeCRSResult());
-
-  assert.equal(fields.employee_next_action_calc, "Submit Applications");
-  assert.equal(fields.open_inquiries_count, 8);
-  assert.equal(fields.fraud_alert, false);
+  assert.equal(fields.refresh_in_progress, false);
 });
 
-test("mapClientFields: fraud_alert true for FRAUD_HOLD", () => {
-  const fields = mapClientFields(
-    makeCRSResult({
-      identityGate: { outcome: "FRAUD_HOLD", passed: false, reasons: ["FRAUD_HIGH_RISK"] }
-    })
-  );
-  assert.equal(fields.fraud_alert, true);
-});
-
-test("mapClientFields: employee_next_action_calc per outcome", () => {
-  assert.equal(
-    mapClientFields(makeCRSResult({ outcome: "REPAIR" })).employee_next_action_calc,
-    "Start Repair Plan"
-  );
-  assert.equal(
-    mapClientFields(makeCRSResult({ outcome: "CONDITIONAL_APPROVAL" })).employee_next_action_calc,
-    "Optimization Review"
-  );
+test("mapClientFields: does not include computed fields", () => {
+  const fields = mapClientFields(makeCRSResult());
+  // These are all formula/rollup fields in Airtable — auto-update from SNAPSHOTS
+  assert.equal(fields.employee_next_action_calc, undefined);
+  assert.equal(fields.open_inquiries_count, undefined);
+  assert.equal(fields.fraud_alert, undefined);
 });
 
 // ============================================================================
@@ -161,14 +147,14 @@ test("mapSnapshotFields: creates snapshot with per-bureau metrics", () => {
   // Fraud alert
   assert.equal(fields.fraud_alert, false);
 
-  // Client link
-  assert.deepEqual(fields.Client, ["rec123"]);
+  // Client link (field name matches table name)
+  assert.deepEqual(fields.CLIENTS, ["rec123"]);
   assert.ok(fields.snapshot_date);
 });
 
 test("mapSnapshotFields: no client link when no recordId", () => {
   const fields = mapSnapshotFields(makeCRSResult(), null);
-  assert.deepEqual(fields.Client, []);
+  assert.deepEqual(fields.CLIENTS, []);
 });
 
 // ============================================================================
@@ -215,4 +201,24 @@ test("getNextAction: all outcome tiers", () => {
 test("table names: have defaults", () => {
   assert.equal(TABLE_CLIENTS, "Clients");
   assert.equal(TABLE_SNAPSHOTS, "Credit Snapshots");
+});
+
+// ============================================================================
+// findClientByEmail
+// ============================================================================
+
+test("findClientByEmail: returns null when not configured", async () => {
+  // Without env vars, isConfigured() is false
+  const result = await findClientByEmail("test@example.com");
+  assert.equal(result, null);
+});
+
+test("findClientByEmail: returns null for empty email", async () => {
+  const result = await findClientByEmail("");
+  assert.equal(result, null);
+});
+
+test("findClientByEmail: returns null for null email", async () => {
+  const result = await findClientByEmail(null);
+  assert.equal(result, null);
 });
