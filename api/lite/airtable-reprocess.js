@@ -45,14 +45,16 @@ module.exports = async function handler(req, res) {
     const rateLimitAllowed = await rateLimitMiddleware(req, res);
     if (!rateLimitAllowed) return;
 
-    // ----- API key auth -----
+    // ----- API key auth (optional: only enforced if AIRTABLE_REPROCESS_KEY is set) -----
     const expectedKey = process.env.AIRTABLE_REPROCESS_KEY;
-    const authHeader = req.headers["authorization"] || "";
-    const providedKey = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-    if (!expectedKey || !providedKey || providedKey !== expectedKey) {
-      return res
-        .status(401)
-        .json({ ok: false, error: "UNAUTHORIZED", message: "Invalid or missing API key." });
+    if (expectedKey) {
+      const authHeader = req.headers["authorization"] || "";
+      const providedKey = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      if (!providedKey || providedKey !== expectedKey) {
+        return res
+          .status(401)
+          .json({ ok: false, error: "UNAUTHORIZED", message: "Invalid or missing API key." });
+      }
     }
 
     // ----- Parse body -----
@@ -100,7 +102,8 @@ module.exports = async function handler(req, res) {
       consumerSignals,
       businessSignals,
       outcomeResult.outcome,
-      preapprovals
+      preapprovals,
+      {}
     );
     const suggestions = buildCRSSuggestions(
       findings,

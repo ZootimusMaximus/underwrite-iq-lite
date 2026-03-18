@@ -341,7 +341,8 @@ async function syncCRSResultToAirtable(crsResult, clientRecordId, email) {
         linked: !!resolvedRecordId
       });
     } catch (snapErr) {
-      logWarn("Airtable snapshot creation failed", { error: snapErr.message });
+      logError("Airtable snapshot creation failed", { error: snapErr.message });
+      return { ok: false, error: snapErr.message, clientUpdated, snapshotCreated };
     }
 
     return { ok: true, clientUpdated, snapshotCreated };
