@@ -1,18 +1,22 @@
 "use strict";
 
 /**
- * airtable-sync.js — Airtable ↔ CRS Integration
+ * airtable-sync.js — Airtable <-> CRS Integration
  *
  * Syncs CRS engine results back to the FUNDHUB MATRIX Airtable base.
  * Handles two directions:
  *   1. Read: Fetch applicant data from Airtable (trigger CRS pull)
  *   2. Write: Push CRS results back to Airtable records
  *
+ * Also syncs tradeline-level data to PERSONAL_TRADELINES and
+ * BUSINESS_TRADELINES tables for granular credit analysis.
+ *
  * Uses Airtable REST API (no SDK dependency).
  */
 
 const { fetchWithTimeout } = require("../fetch-utils");
 const { logInfo, logWarn, logError } = require("../logger");
+const { extractPersonalTradelines, extractBusinessTradelines } = require("./extract-tradelines");
 
 // ---------------------------------------------------------------------------
 // Config
@@ -26,6 +30,10 @@ const AIRTABLE_API_BASE = "https://api.airtable.com/v0";
 const TABLE_CLIENTS = process.env.AIRTABLE_TABLE_CLIENTS || "Clients";
 const TABLE_SNAPSHOTS = process.env.AIRTABLE_TABLE_SNAPSHOTS || "Credit Snapshots";
 const TABLE_APPLICATIONS = process.env.AIRTABLE_TABLE_APPLICATIONS || "Applications";
+const TABLE_PERSONAL_TRADELINES =
+  process.env.AIRTABLE_TABLE_PERSONAL_TRADELINES || "Personal Tradelines";
+const TABLE_BUSINESS_TRADELINES =
+  process.env.AIRTABLE_TABLE_BUSINESS_TRADELINES || "Business Tradelines";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,7 +58,7 @@ function authHeaders() {
 }
 
 // ---------------------------------------------------------------------------
-// Field Mapping: CRS Engine Output → Airtable Fields
+// Field Mapping: CRS Engine Output -> Airtable Fields
 // ---------------------------------------------------------------------------
 // Field names verified against FUNDHUB MATRIX base (appXsq65yB9VuNup5)
 // as of 2026-03-12. Only fields that exist in Airtable are written.
@@ -114,15 +122,24 @@ function mapClientFields(_crsResult) {
 /**
  * Maps CRS engine result to credit snapshot fields.
  * Field names match Credit Snapshot & Trend view exactly.
+ *
+ * @param {Object} crsResult - Full CRS engine output
+ * @param {string} [clientRecordId] - Airtable client record ID for linking
+ * @param {Object} [opts] - Additional options
+ * @param {string} [opts.crs_pull_scope] - "consumer_only" or "consumer_plus_ex_business"
+ * @param {boolean} [opts.businessPullFailed] - Whether business pull was requested but failed
  */
-function mapSnapshotFields(crsResult, clientRecordId) {
+function mapSnapshotFields(crsResult, clientRecordId, opts) {
   const cs = crsResult.consumerSignals || {};
   const perBureau = derivePerBureauMetrics(crsResult.normalized);
+  const pullScope = opts?.crs_pull_scope || "consumer_only";
+  const _businessPullFailed = opts?.businessPullFailed || false;
 
-  return {
+  const fields = {
     // Core snapshot fields
     snapshot_date: new Date().toISOString(),
     snapshot_source: "CRS",
+    crs_pull_scope: pullScope,
 
     // Per-bureau FICO scores
     tu_fico: cs.scores?.perBureau?.tu || null,
@@ -150,6 +167,32 @@ function mapSnapshotFields(crsResult, clientRecordId) {
     // Link to client record (field name matches table name in Airtable)
     CLIENTS: clientRecordId ? [clientRecordId] : []
   };
+
+  // Only populate business-related snapshot fields when a business pull
+  // actually ran AND returned data
+  const hasBusinessData = !!crsResult.businessSignals;
+  if (pullScope === "consumer_plus_ex_business") {
+    fields.business_pull_requested = true;
+    if (hasBusinessData) {
+      fields.business_pull_success = true;
+      // Business signals from the engine (if available)
+      const bs = crsResult.businessSignals || {};
+      if (bs.intelliscore != null) fields.biz_intelliscore = bs.intelliscore;
+      if (bs.fsr != null) fields.biz_fsr = bs.fsr;
+      if (bs.daysBeyondTerms != null) fields.biz_dbt = bs.daysBeyondTerms;
+      if (bs.yearsOnFile != null) fields.biz_years_on_file = bs.yearsOnFile;
+    } else {
+      // Business was requested but failed -- mark clearly
+      fields.business_pull_success = false;
+      fields.business_pull_failed = true;
+    }
+  } else {
+    // consumer_only -- business was never requested, do not mark as successful
+    fields.business_pull_requested = false;
+    fields.business_pull_success = false;
+  }
+
+  return fields;
 }
 
 /**
@@ -178,7 +221,7 @@ function getNextAction(outcome) {
 // ---------------------------------------------------------------------------
 
 /**
- * getRecord(table, recordId) — Fetch a single record.
+ * getRecord(table, recordId) -- Fetch a single record.
  */
 async function getRecord(table, recordId) {
   if (!isConfigured()) throw new Error("Airtable not configured");
@@ -197,7 +240,7 @@ async function getRecord(table, recordId) {
 }
 
 /**
- * findRecords(table, filterFormula, maxRecords) — Search records.
+ * findRecords(table, filterFormula, maxRecords) -- Search records.
  */
 async function findRecords(table, filterFormula, maxRecords = 10) {
   if (!isConfigured()) throw new Error("Airtable not configured");
@@ -222,7 +265,7 @@ async function findRecords(table, filterFormula, maxRecords = 10) {
 }
 
 /**
- * updateRecord(table, recordId, fields) — Update a record.
+ * updateRecord(table, recordId, fields) -- Update a record.
  */
 async function updateRecord(table, recordId, fields) {
   if (!isConfigured()) throw new Error("Airtable not configured");
@@ -242,7 +285,7 @@ async function updateRecord(table, recordId, fields) {
 }
 
 /**
- * createRecord(table, fields) — Create a new record.
+ * createRecord(table, fields) -- Create a new record.
  */
 async function createRecord(table, fields) {
   if (!isConfigured()) throw new Error("Airtable not configured");
@@ -250,7 +293,7 @@ async function createRecord(table, fields) {
   const resp = await fetchWithTimeout(apiUrl(table), {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ fields })
+    body: JSON.stringify({ fields, typecast: true })
   });
 
   if (!resp.ok) {
@@ -261,12 +304,40 @@ async function createRecord(table, fields) {
   return resp.json();
 }
 
+/**
+ * upsertRecord(table, keyField, keyValue, fields) -- Find by key, update or create.
+ *
+ * @param {string} table - Airtable table name
+ * @param {string} keyField - Field name to match on (e.g., "tradeline_key")
+ * @param {string} keyValue - Value to match
+ * @param {Object} fields - Fields to write
+ * @returns {Promise<{ id: string, created: boolean }>}
+ */
+async function upsertRecord(table, keyField, keyValue, fields) {
+  if (!isConfigured()) throw new Error("Airtable not configured");
+
+  // Search for existing record by key
+  const escapedValue = keyValue.replace(/"/g, '\\"');
+  const formula = `{${keyField}} = "${escapedValue}"`;
+  const existing = await findRecords(table, formula, 1);
+
+  if (existing.length > 0) {
+    // Update existing
+    const record = await updateRecord(table, existing[0].id, fields);
+    return { id: record.id, created: false };
+  }
+
+  // Create new
+  const record = await createRecord(table, { ...fields, [keyField]: keyValue });
+  return { id: record.id, created: true };
+}
+
 // ---------------------------------------------------------------------------
 // High-Level Sync Operations
 // ---------------------------------------------------------------------------
 
 /**
- * findClientByEmail(email) — Look up a client record by email address.
+ * findClientByEmail(email) -- Look up a client record by email address.
  *
  * @param {string} email - Client email
  * @returns {Promise<string|null>} Airtable record ID, or null if not found
@@ -289,7 +360,110 @@ async function findClientByEmail(email) {
 }
 
 /**
- * syncCRSResultToAirtable(crsResult, clientRecordId, email) — Push CRS results back.
+ * syncTradelines(crsResult, clientRecordId, snapshotRecordId, opts)
+ *
+ * Extracts personal and business tradelines from CRS results and
+ * upserts them into the corresponding Airtable tables.
+ *
+ * @param {Object} crsResult - Full CRS engine output
+ * @param {string|null} clientRecordId - Airtable client record ID
+ * @param {string|null} snapshotRecordId - Airtable snapshot record ID
+ * @param {Object} [opts] - Additional options
+ * @param {Object} [opts.businessReport] - Raw Experian business report (for business tradelines)
+ * @param {string|null} [opts.businessRecordId] - Airtable business record ID (for linking)
+ * @returns {Promise<{ personal: number, business: number, errors: number }>}
+ */
+async function syncTradelines(crsResult, clientRecordId, snapshotRecordId, opts) {
+  const stats = { personal: 0, business: 0, errors: 0 };
+
+  if (!isConfigured()) {
+    logWarn("Tradeline sync skipped: Airtable not configured");
+    return stats;
+  }
+
+  // 1. Personal tradelines
+  const personalTradelines = extractPersonalTradelines(crsResult.normalized);
+  for (const tl of personalTradelines) {
+    try {
+      const fields = {
+        creditor_name: tl.creditor_name,
+        account_type: tl.account_type,
+        account_status: tl.account_status,
+        bureau: tl.bureau,
+        credit_limit: tl.credit_limit,
+        current_balance: tl.current_balance,
+        monthly_payment: tl.monthly_payment,
+        high_balance: tl.high_balance,
+        date_opened: tl.date_opened,
+        date_reported: tl.date_reported,
+        payment_status: tl.payment_status,
+        late_30_count: tl.late_30_count,
+        late_60_count: tl.late_60_count,
+        late_90_count: tl.late_90_count,
+        utilization_pct: tl.utilization_pct,
+        remarks: tl.remarks
+      };
+
+      // Link to client and snapshot
+      if (clientRecordId) fields.client = [clientRecordId];
+      if (snapshotRecordId) fields.snapshot = [snapshotRecordId];
+
+      await upsertRecord(TABLE_PERSONAL_TRADELINES, "tradeline_key", tl.tradeline_key, fields);
+      stats.personal++;
+    } catch (err) {
+      logError("Personal tradeline upsert failed", {
+        key: tl.tradeline_key,
+        error: err.message
+      });
+      stats.errors++;
+    }
+  }
+
+  // 2. Business tradelines
+  const businessReport = opts?.businessReport || null;
+  const businessTradelines = extractBusinessTradelines(businessReport);
+  for (const bt of businessTradelines) {
+    try {
+      const fields = {
+        creditor_name: bt.creditor_name,
+        account_type: bt.account_type,
+        account_status: bt.account_status,
+        bureau: bt.bureau,
+        credit_limit: bt.credit_limit,
+        current_balance: bt.current_balance,
+        monthly_payment: bt.monthly_payment,
+        high_balance: bt.high_balance,
+        date_opened: bt.date_opened,
+        date_reported: bt.date_reported,
+        payment_status: bt.payment_status,
+        dbt_30: bt.dbt_30,
+        dbt_60: bt.dbt_60,
+        dbt_90: bt.dbt_90,
+        remarks: bt.remarks
+      };
+
+      // Link to client, snapshot, and business
+      if (clientRecordId) fields.client = [clientRecordId];
+      if (snapshotRecordId) fields.snapshot = [snapshotRecordId];
+      if (opts?.businessRecordId) fields.business = [opts.businessRecordId];
+
+      await upsertRecord(TABLE_BUSINESS_TRADELINES, "tradeline_key", bt.tradeline_key, fields);
+      stats.business++;
+    } catch (err) {
+      logError("Business tradeline upsert failed", {
+        key: bt.tradeline_key,
+        error: err.message
+      });
+      stats.errors++;
+    }
+  }
+
+  logInfo("Tradeline sync complete", stats);
+  return stats;
+}
+
+/**
+ * syncCRSResultToAirtable(crsResult, clientRecordId, email, opts) -- Push CRS results back.
  *
  * If clientRecordId is not provided but email is, attempts to find the client
  * by email in Airtable before syncing.
@@ -297,9 +471,14 @@ async function findClientByEmail(email) {
  * @param {Object} crsResult - Full CRS engine output
  * @param {string} [clientRecordId] - Airtable record ID for the client
  * @param {string} [email] - Client email (fallback lookup when no record ID)
- * @returns {Promise<{ ok: boolean, clientUpdated: boolean, snapshotCreated: boolean }>}
+ * @param {Object} [opts] - Additional options
+ * @param {string} [opts.crs_pull_scope] - "consumer_only" or "consumer_plus_ex_business"
+ * @param {boolean} [opts.businessPullFailed] - Whether business pull was requested but failed
+ * @param {Object} [opts.businessReport] - Raw Experian business report (for tradeline extraction)
+ * @param {string} [opts.businessRecordId] - Airtable business record ID (for linking)
+ * @returns {Promise<{ ok: boolean, clientUpdated: boolean, snapshotCreated: boolean, tradelines?: Object }>}
  */
-async function syncCRSResultToAirtable(crsResult, clientRecordId, email) {
+async function syncCRSResultToAirtable(crsResult, clientRecordId, email, opts) {
   if (!isConfigured()) {
     logWarn("Airtable sync skipped: not configured");
     return { ok: false, error: "not_configured", clientUpdated: false, snapshotCreated: false };
@@ -308,6 +487,7 @@ async function syncCRSResultToAirtable(crsResult, clientRecordId, email) {
   let resolvedRecordId = clientRecordId;
   let clientUpdated = false;
   let snapshotCreated = false;
+  let snapshotRecordId = null;
 
   try {
     // If no record ID provided, try email lookup
@@ -333,19 +513,33 @@ async function syncCRSResultToAirtable(crsResult, clientRecordId, email) {
 
     // 2. Create credit snapshot (linked to client if we found one)
     try {
-      const snapshotFields = mapSnapshotFields(crsResult, resolvedRecordId);
-      await createRecord(TABLE_SNAPSHOTS, snapshotFields);
+      const snapshotFields = mapSnapshotFields(crsResult, resolvedRecordId, opts);
+      const snapshotRecord = await createRecord(TABLE_SNAPSHOTS, snapshotFields);
       snapshotCreated = true;
+      snapshotRecordId = snapshotRecord.id;
       logInfo("Airtable snapshot created", {
+        snapshotRecordId,
         outcome: crsResult.outcome,
-        linked: !!resolvedRecordId
+        linked: !!resolvedRecordId,
+        crs_pull_scope: opts?.crs_pull_scope || "consumer_only",
+        businessPullFailed: opts?.businessPullFailed || false
       });
     } catch (snapErr) {
       logError("Airtable snapshot creation failed", { error: snapErr.message });
       return { ok: false, error: snapErr.message, clientUpdated, snapshotCreated };
     }
 
-    return { ok: true, clientUpdated, snapshotCreated };
+    // 3. Sync tradelines (linked to client + snapshot)
+    let tradelineStats = null;
+    try {
+      tradelineStats = await syncTradelines(crsResult, resolvedRecordId, snapshotRecordId, opts);
+    } catch (tlErr) {
+      // Tradeline sync failure is non-fatal -- snapshot was already created
+      logError("Tradeline sync failed (non-fatal)", { error: tlErr.message });
+      tradelineStats = { personal: 0, business: 0, errors: 1 };
+    }
+
+    return { ok: true, clientUpdated, snapshotCreated, tradelines: tradelineStats };
   } catch (err) {
     logError("Airtable sync failed", err);
     return { ok: false, error: err.message, clientUpdated, snapshotCreated };
@@ -366,10 +560,14 @@ module.exports = {
   findRecords,
   updateRecord,
   createRecord,
+  upsertRecord,
   findClientByEmail,
+  syncTradelines,
   syncCRSResultToAirtable,
   // For testing
   TABLE_CLIENTS,
   TABLE_SNAPSHOTS,
-  TABLE_APPLICATIONS
+  TABLE_APPLICATIONS,
+  TABLE_PERSONAL_TRADELINES,
+  TABLE_BUSINESS_TRADELINES
 };

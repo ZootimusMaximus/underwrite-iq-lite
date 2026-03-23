@@ -61,6 +61,13 @@ module.exports = [
     }
   },
   {
-    ignores: ["node_modules/**", "coverage/**", ".vercel/**", "*.min.js", "api/letters/**"]
+    ignores: [
+      "node_modules/**",
+      "coverage/**",
+      ".vercel/**",
+      "*.min.js",
+      "api/letters/**",
+      "scripts/airtable-*.js"
+    ]
   }
 ];

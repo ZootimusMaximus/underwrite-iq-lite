@@ -222,3 +222,29 @@ test("findClientByEmail: returns null for null email", async () => {
   const result = await findClientByEmail(null);
   assert.equal(result, null);
 });
+
+// ============================================================================
+// Tradeline table names
+// ============================================================================
+
+const {
+  syncTradelines,
+  TABLE_PERSONAL_TRADELINES,
+  TABLE_BUSINESS_TRADELINES
+} = require("../crs/airtable-sync");
+
+test("tradeline table names: have defaults", () => {
+  assert.equal(TABLE_PERSONAL_TRADELINES, "Personal Tradelines");
+  assert.equal(TABLE_BUSINESS_TRADELINES, "Business Tradelines");
+});
+
+// ============================================================================
+// syncTradelines (without Airtable configured)
+// ============================================================================
+
+test("syncTradelines: returns zero stats when not configured", async () => {
+  const result = await syncTradelines(makeCRSResult(), null, null, {});
+  assert.equal(result.personal, 0);
+  assert.equal(result.business, 0);
+  assert.equal(result.errors, 0);
+});
