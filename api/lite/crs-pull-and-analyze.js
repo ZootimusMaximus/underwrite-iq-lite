@@ -58,6 +58,32 @@ module.exports = async function handler(req, res) {
     // ----- Validate applicant -----
     const { applicant, business, formData } = body;
 
+    // ----- Validate crs_pull_scope -----
+    const VALID_PULL_SCOPES = ["consumer_only", "consumer_plus_ex_business"];
+    const crs_pull_scope = body.crs_pull_scope || "consumer_only";
+    if (!VALID_PULL_SCOPES.includes(crs_pull_scope)) {
+      return res.status(400).json({
+        ok: false,
+        error: "INVALID_PULL_SCOPE",
+        message: `crs_pull_scope must be one of: ${VALID_PULL_SCOPES.join(", ")}`
+      });
+    }
+
+    // ----- Validate business identity for consumer_plus_ex_business -----
+    if (crs_pull_scope === "consumer_plus_ex_business") {
+      const bizRequired = ["name", "city", "state"];
+      const bizMissing = bizRequired.filter(f => !business?.[f]);
+      if (bizMissing.length > 0) {
+        return res.status(400).json({
+          ok: false,
+          error: "BUSINESS_IDENTITY_MISSING_FOR_REQUESTED_PULL_SCOPE",
+          message: `consumer_plus_ex_business requires business identity. Missing: ${bizMissing.join(", ")}`,
+          required: bizRequired,
+          recommended: ["street", "zip", "phone", "ein"]
+        });
+      }
+    }
+
     if (!applicant) {
       return res
         .status(400)
@@ -130,11 +156,18 @@ module.exports = async function handler(req, res) {
     // =========================================================================
     // Step 1: Pull CRS data from Stitch Credit
     // =========================================================================
-    logInfo("CRS pull starting", { name: submittedName, hasBusiness: !!business });
+    // Determine business info to pass based on pull scope
+    const effectiveBusiness = crs_pull_scope === "consumer_only" ? null : business || null;
+
+    logInfo("CRS pull starting", {
+      name: submittedName,
+      hasBusiness: !!effectiveBusiness,
+      crs_pull_scope
+    });
 
     let pullResult;
     try {
-      pullResult = await pullFullCRS(applicant, business || null);
+      pullResult = await pullFullCRS(applicant, effectiveBusiness);
     } catch (pullErr) {
       logError("CRS pull failed", pullErr);
       return res.status(200).json({
@@ -148,9 +181,22 @@ module.exports = async function handler(req, res) {
 
     const { rawResponses, businessReport, errors: pullErrors } = pullResult;
 
+    // If consumer_plus_ex_business was requested but business pull failed or
+    // returned no data, do NOT silently downgrade — flag the failure clearly.
+    let businessPullFailed = false;
+    let businessPullFailReason = null;
+    if (crs_pull_scope === "consumer_plus_ex_business" && !businessReport) {
+      businessPullFailed = true;
+      const bizError = pullErrors.find(e => e.bureau === "business");
+      businessPullFailReason = bizError
+        ? bizError.error
+        : "Business search returned no results or no BIN found";
+    }
+
     logInfo("CRS pull complete", {
       bureausPulled: rawResponses.length,
       hasBusinessReport: !!businessReport,
+      businessPullFailed,
       pullErrors: pullErrors.length
     });
 
@@ -269,16 +315,37 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Airtable sync (queued)
+    // Airtable sync (queued) — pass crs_pull_scope so snapshot knows whether
+    // business was expected and whether it failed
     const airtableRecordId = formData?.airtableRecordId || null;
     const syncEmail = sanitized.email || formData?.email || null;
     if (airtableRecordId || syncEmail) {
-      enqueueTask("airtable_sync", { result, recordId: airtableRecordId, email: syncEmail });
+      enqueueTask("airtable_sync", {
+        result,
+        recordId: airtableRecordId,
+        email: syncEmail,
+        crs_pull_scope,
+        businessPullFailed,
+        businessReport: businessReport || null
+      });
     }
 
     // =========================================================================
     // Response
     // =========================================================================
+    const pullMeta = {
+      bureausPulled: rawResponses.length,
+      businessPulled: !!businessReport,
+      crs_pull_scope,
+      pullErrors: pullErrors.length > 0 ? pullErrors : undefined
+    };
+
+    // If business was mandatory but failed, include clear failure info
+    if (businessPullFailed) {
+      pullMeta.businessPullFailed = true;
+      pullMeta.businessPullFailReason = businessPullFailReason;
+    }
+
     return res.status(200).json({
       ok: true,
       deduped: false,
@@ -297,11 +364,7 @@ module.exports = async function handler(req, res) {
       redirect,
       audit: result.audit,
       // Pull metadata
-      pull_meta: {
-        bureausPulled: rawResponses.length,
-        businessPulled: !!businessReport,
-        pullErrors: pullErrors.length > 0 ? pullErrors : undefined
-      }
+      pull_meta: pullMeta
     });
   } catch (err) {
     logError("CRS pull-and-analyze fatal error", err);

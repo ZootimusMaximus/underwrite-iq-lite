@@ -58,6 +58,10 @@
       "dest": "/api/lite/process-queue.js"
     },
     {
+      "src": "^/api/lite/trigger-crs-pull$",
+      "dest": "/api/lite/trigger-crs-pull.js"
+    },
+    {
       "src": "^/api/lite/crs-sandbox-data$",
       "dest": "/api/lite/crs-sandbox-data.js"
     },
