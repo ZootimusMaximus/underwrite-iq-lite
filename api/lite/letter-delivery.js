@@ -103,6 +103,16 @@ async function deliverLetters({
           personal
         );
         logInfo("Summary documents generated", { count: summaryDocs.length });
+        // Map summary doc filenames to GHL field keys (customer-facing docs only)
+        if (fieldKeyMap) {
+          for (let i = 0; i < crsDocuments.summaryDocuments.length; i++) {
+            const spec = crsDocuments.summaryDocuments[i];
+            if (spec.fieldKey && summaryDocs[i]) {
+              const fileKey = summaryDocs[i].filename.replace(".pdf", "");
+              fieldKeyMap[fileKey] = spec.fieldKey;
+            }
+          }
+        }
         // Add summary docs to the upload list
         letters.push(...summaryDocs);
       } catch (err) {

@@ -17,8 +17,8 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
 
   if (outcome === "FRAUD_HOLD" || outcome === "MANUAL_REVIEW") {
     const summaryDocs = [];
-    summaryDocs.push({ type: "hold_notice", description: "Application hold notification" });
-    summaryDocs.push({ type: "operator_checklist", description: "Internal review checklist" });
+    summaryDocs.push({ type: "hold_notice", description: "Application hold notification", fieldKey: null });
+    summaryDocs.push({ type: "operator_checklist", description: "Internal review checklist", fieldKey: null });
     return {
       package: "hold",
       letters: [],
@@ -56,14 +56,16 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
     }
 
     const summaryDocs = [];
-    summaryDocs.push({ type: "repair_plan_summary", description: "Customer repair roadmap" });
+    summaryDocs.push({ type: "repair_plan_summary", description: "Customer repair roadmap", fieldKey: "repair_plan_summary_url" });
     summaryDocs.push({
       type: "issue_priority_sheet",
-      description: "Prioritized list of credit issues"
+      description: "Prioritized list of credit issues",
+      fieldKey: null
     });
     summaryDocs.push({
       type: "operator_checklist",
-      description: "Internal repair tracking checklist"
+      description: "Internal repair tracking checklist",
+      fieldKey: null
     });
 
     return {
@@ -103,16 +105,19 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
   const summaryDocs = [];
   summaryDocs.push({
     type: "funding_summary",
-    description: "Pre-approval funding summary for customer"
+    description: "Pre-approval funding summary for customer",
+    fieldKey: "funding_summary_url"
   });
   summaryDocs.push({
     type: "operator_checklist",
-    description: "Internal funding workflow checklist"
+    description: "Internal funding workflow checklist",
+    fieldKey: null
   });
   if (consumerSignals?.tradelines?.thinFile || consumerSignals?.tradelines?.auDominance > 0.6) {
     summaryDocs.push({
       type: "business_prep_summary",
-      description: "Business credit preparation guide"
+      description: "Business credit preparation guide",
+      fieldKey: "business_prep_summary_url"
     });
   }
 
