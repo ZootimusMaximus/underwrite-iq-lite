@@ -179,10 +179,10 @@ function mapSnapshotFields(crsResult, clientRecordId, opts) {
       fields.business_pull_success = true;
       // Business signals from the engine (if available)
       const bs = crsResult.businessSignals || {};
-      if (bs.intelliscore != null) fields.biz_intelliscore = bs.intelliscore;
-      if (bs.fsr != null) fields.biz_fsr = bs.fsr;
-      if (bs.daysBeyondTerms != null) fields.biz_dbt = bs.daysBeyondTerms;
-      if (bs.yearsOnFile != null) fields.biz_years_on_file = bs.yearsOnFile;
+      if (bs.scores?.intelliscore != null) fields.biz_intelliscore = bs.scores.intelliscore;
+      if (bs.scores?.fsr != null) fields.biz_fsr = bs.scores.fsr;
+      if (bs.dbt?.current != null) fields.biz_dbt = bs.dbt.current;
+      if (bs.profile?.ageMonths != null) fields.biz_years_on_file = bs.profile.ageMonths;
     } else {
       // Business was requested but failed -- mark clearly
       fields.business_pull_success = false;
