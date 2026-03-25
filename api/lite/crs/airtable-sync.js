@@ -161,8 +161,10 @@ function mapSnapshotFields(crsResult, clientRecordId, opts) {
     inq_ex: perBureau.ex.inqs,
     inq_eq: perBureau.eq.inqs,
 
-    // Fraud alert
+    // Fraud & security flags
     fraud_alert: crsResult.identityGate?.outcome === "FRAUD_HOLD",
+    security_freeze: !!crsResult.identityGate?.securityFreeze?.detected,
+    fraud_alert_on_file: !!crsResult.identityGate?.fraudAlertOnFile?.detected,
 
     // Link to client record (field name matches table name in Airtable)
     CLIENTS: clientRecordId ? [clientRecordId] : []

@@ -304,6 +304,96 @@ function normalizeAlerts(raw) {
   }));
 }
 
+// Patterns that indicate a security freeze on a bureau file
+const FREEZE_PATTERNS = [
+  /security\s*freeze/i,
+  /frozen\s*file/i,
+  /file\s*frozen/i,
+  /credit\s*freeze/i,
+  /consumer\s*freeze/i
+];
+
+// Patterns that indicate a consumer fraud alert on file
+const FRAUD_ALERT_PATTERNS = [
+  /fraud\s*alert/i,
+  /initial\s*fraud/i,
+  /extended\s*fraud/i,
+  /active\s*duty\s*alert/i,
+  /military\s*alert/i
+];
+
+const FREEZE_CATEGORIES = new Set(["SecurityFreeze", "FrozenFile", "CreditFreeze"]);
+
+const FRAUD_ALERT_CATEGORIES = new Set([
+  "FraudAlert",
+  "InitialFraudAlert",
+  "ExtendedFraudAlert",
+  "ActiveDutyAlert"
+]);
+
+/**
+ * Scan normalized alerts + creditFile statuses for security freezes.
+ * Returns { detected: boolean, bureaus: string[] }
+ */
+function detectSecurityFreezes(alerts, creditFiles) {
+  const frozenBureaus = new Set();
+
+  for (const alert of alerts || []) {
+    const cat = alert.category || "";
+    const text = alert.text || "";
+    if (
+      FREEZE_CATEGORIES.has(cat) ||
+      FREEZE_PATTERNS.some(p => p.test(text)) ||
+      FREEZE_PATTERNS.some(p => p.test(cat))
+    ) {
+      if (alert.source) frozenBureaus.add(alert.source);
+      else frozenBureaus.add("unknown");
+    }
+  }
+
+  // Also check creditFileDetail.creditFileResultStatusType
+  for (const cf of creditFiles || []) {
+    const status = cf?.creditFileDetail?.creditFileResultStatusType || "";
+    if (/frozen|freeze/i.test(status)) {
+      const source = normBureau(cf?.creditFileDetail?.sourceType);
+      frozenBureaus.add(source || "unknown");
+    }
+  }
+
+  return {
+    detected: frozenBureaus.size > 0,
+    bureaus: [...frozenBureaus]
+  };
+}
+
+/**
+ * Scan normalized alerts for consumer fraud alerts on file.
+ * Returns { detected: boolean, bureaus: string[], types: string[] }
+ */
+function detectFraudAlerts(alerts) {
+  const alertBureaus = new Set();
+  const alertTypes = new Set();
+
+  for (const alert of alerts || []) {
+    const cat = alert.category || "";
+    const text = alert.text || "";
+    if (
+      FRAUD_ALERT_CATEGORIES.has(cat) ||
+      FRAUD_ALERT_PATTERNS.some(p => p.test(text)) ||
+      FRAUD_ALERT_PATTERNS.some(p => p.test(cat))
+    ) {
+      if (alert.source) alertBureaus.add(alert.source);
+      alertTypes.add(cat || "FraudAlert");
+    }
+  }
+
+  return {
+    detected: alertBureaus.size > 0,
+    bureaus: [...alertBureaus],
+    types: [...alertTypes]
+  };
+}
+
 function normalizeFraudFinders(raw) {
   if (!raw || !raw.length) return null;
 
@@ -377,6 +467,7 @@ function normalizeSoftPullPayload(rawResponses) {
   const allInquiries = [];
   const allPublicRecords = [];
   const allAlerts = [];
+  const allCreditFiles = [];
   let fraudFinders = null;
   let requestDate = null;
   let requestingParty = null;
@@ -455,6 +546,9 @@ function normalizeSoftPullPayload(rawResponses) {
     // Alerts
     allAlerts.push(...normalizeAlerts(raw.responseAlertMessages));
 
+    // Collect raw creditFiles for freeze detection
+    if (raw.creditFiles) allCreditFiles.push(...raw.creditFiles);
+
     // Fraud finders (TU only)
     if (bureauKey === "transunion" && raw.fraudFinders?.length) {
       fraudFinders = normalizeFraudFinders(raw.fraudFinders);
@@ -470,6 +564,10 @@ function normalizeSoftPullPayload(rawResponses) {
 
   const availableBureaus = Object.keys(bureaus).filter(k => bureaus[k].available);
 
+  // Detect security freezes and consumer fraud alerts from alerts + creditFiles
+  const securityFreezes = detectSecurityFreezes(allAlerts, allCreditFiles);
+  const fraudAlertsOnFile = detectFraudAlerts(allAlerts);
+
   return {
     identity,
     bureaus,
@@ -478,6 +576,8 @@ function normalizeSoftPullPayload(rawResponses) {
     publicRecords: allPublicRecords,
     alerts: allAlerts,
     fraudFinders,
+    securityFreezes,
+    fraudAlertsOnFile,
     meta: {
       requestDate: requestDate || "unknown",
       requestingParty: requestingParty || "unknown",
@@ -494,6 +594,8 @@ function normalizeSoftPullPayload(rawResponses) {
 module.exports = {
   normalizeSoftPullPayload,
   // Exported for testing
+  detectSecurityFreezes,
+  detectFraudAlerts,
   parseAmount,
   normalizeScore,
   normalizeTradeline,

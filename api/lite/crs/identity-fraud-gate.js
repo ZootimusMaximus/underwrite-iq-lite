@@ -152,6 +152,27 @@ function checkFraudSignals(fraudFinders) {
   return { ok: flags.length === 0, available: true, flags };
 }
 
+function checkSecurityFreezes(securityFreezes) {
+  if (!securityFreezes || !securityFreezes.detected) return { ok: true, detected: false };
+  return {
+    ok: false,
+    detected: true,
+    bureaus: securityFreezes.bureaus,
+    reason: "SECURITY_FREEZE_DETECTED"
+  };
+}
+
+function checkConsumerFraudAlerts(fraudAlertsOnFile) {
+  if (!fraudAlertsOnFile || !fraudAlertsOnFile.detected) return { ok: true, detected: false };
+  return {
+    ok: false,
+    detected: true,
+    bureaus: fraudAlertsOnFile.bureaus,
+    types: fraudAlertsOnFile.types,
+    reason: "CONSUMER_FRAUD_ALERT_ON_FILE"
+  };
+}
+
 function checkFileIntegrity(bureaus) {
   const available = Object.values(bureaus).filter(b => b.available);
   if (available.length === 0) return { ok: false, reason: "NO_BUREAUS_AVAILABLE" };
@@ -175,7 +196,7 @@ function checkFileIntegrity(bureaus) {
  * @returns {{ passed, outcome, reasons[], confidence }}
  */
 function runIdentityAndFraudGate(normalized, submittedName, _submittedAddress) {
-  const { identity, bureaus, fraudFinders } = normalized;
+  const { identity, bureaus, fraudFinders, securityFreezes, fraudAlertsOnFile } = normalized;
   const reasons = [];
   let fraudSignalCount = 0;
   let warningCount = 0;
@@ -208,7 +229,45 @@ function runIdentityAndFraudGate(normalized, submittedName, _submittedAddress) {
   const integrityResult = checkFileIntegrity(bureaus);
   if (!integrityResult.ok) reasons.push(integrityResult.reason);
 
+  // 6. Security freezes
+  const freezeResult = checkSecurityFreezes(securityFreezes);
+  if (!freezeResult.ok) {
+    reasons.push(freezeResult.reason);
+  }
+
+  // 7. Consumer fraud alerts on file (distinct from fraudFinders risk scoring)
+  const fraudAlertResult = checkConsumerFraudAlerts(fraudAlertsOnFile);
+  if (!fraudAlertResult.ok) {
+    reasons.push(fraudAlertResult.reason);
+  }
+
   // ── Decision ────────────────────────────────────────────────────────
+
+  // Security freeze → MANUAL_REVIEW (cannot pull full report, hard blocker)
+  if (freezeResult.detected) {
+    return {
+      passed: false,
+      outcome: "MANUAL_REVIEW",
+      reasons,
+      confidence: "high",
+      securityFreeze: { detected: true, bureaus: freezeResult.bureaus }
+    };
+  }
+
+  // Consumer fraud alert on file → MANUAL_REVIEW (hard blocker for funding)
+  if (fraudAlertResult.detected) {
+    return {
+      passed: false,
+      outcome: "MANUAL_REVIEW",
+      reasons,
+      confidence: "high",
+      fraudAlertOnFile: {
+        detected: true,
+        bureaus: fraudAlertResult.bureaus,
+        types: fraudAlertResult.types
+      }
+    };
+  }
 
   // Strong fraud signals → FRAUD_HOLD
   const hasHighRisk = (fraudResult.flags || []).includes("HIGH_FRAUD_RISK_SCORE");
@@ -259,6 +318,8 @@ module.exports = {
   checkReportFreshness,
   checkAddressConflicts,
   checkFraudSignals,
+  checkSecurityFreezes,
+  checkConsumerFraudAlerts,
   checkFileIntegrity,
   MAX_REPORT_AGE_DAYS,
   FRAUD_RISK_THRESHOLD
