@@ -72,9 +72,9 @@ function derivePerBureauMetrics(normalized) {
 
   const bureaus = { transunion: "tu", experian: "ex", equifax: "eq" };
   const metrics = {
-    tu: { bal: 0, lim: 0, negs: 0, inqs: 0 },
-    ex: { bal: 0, lim: 0, negs: 0, inqs: 0 },
-    eq: { bal: 0, lim: 0, negs: 0, inqs: 0 }
+    tu: { bal: 0, lim: 0, negs: 0, inqs: 0, lates: 0 },
+    ex: { bal: 0, lim: 0, negs: 0, inqs: 0, lates: 0 },
+    eq: { bal: 0, lim: 0, negs: 0, inqs: 0, lates: 0 }
   };
 
   for (const tl of tradelines) {
@@ -85,6 +85,8 @@ function derivePerBureauMetrics(normalized) {
       metrics[code].lim += tl.effectiveLimit || tl.creditLimit || tl.highBalance || 0;
     }
     if (tl.isDerogatory) metrics[code].negs++;
+    const lp = tl.latePayments || {};
+    metrics[code].lates += (lp._30 || 0) + (lp._60 || 0) + (lp._90 || 0);
   }
 
   for (const inq of inquiries) {

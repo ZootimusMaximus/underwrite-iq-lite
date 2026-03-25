@@ -113,7 +113,8 @@ async function notifyCRSSnapshotComplete(params) {
     negatives_tu: params.negatives?.tu || 0,
     lates_ex: params.lates?.ex || 0,
     lates_eq: params.lates?.eq || 0,
-    lates_tu: params.lates?.tu || 0
+    lates_tu: params.lates?.tu || 0,
+    credit_suggestions: params.creditSuggestions || ""
   };
 
   return fireWebhook(WEBHOOK_URLS.crs_snapshot_complete, payload, "U-03 crs_snapshot_complete");

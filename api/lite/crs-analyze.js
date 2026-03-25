@@ -209,8 +209,8 @@ module.exports = async function handler(req, res) {
         utilizationPct: result.consumerSignals?.utilization?.pct || 0,
         inquiries: { ex: perBureau.ex.inqs, eq: perBureau.eq.inqs, tu: perBureau.tu.inqs },
         negatives: { ex: perBureau.ex.negs, eq: perBureau.eq.negs, tu: perBureau.tu.negs },
-        // Late payments not yet derived per-bureau; CRS engine aggregates across bureaus
-        lates: { ex: 0, eq: 0, tu: 0 }
+        lates: { ex: perBureau.ex.lates, eq: perBureau.eq.lates, tu: perBureau.tu.lates },
+        creditSuggestions: result.crmPayload?.suggestionSummary || ""
       }).catch(() => {});
     }
 
