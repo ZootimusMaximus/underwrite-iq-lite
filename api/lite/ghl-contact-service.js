@@ -94,6 +94,13 @@ async function createOrUpdateContact(contactData) {
     });
   }
 
+  if (contactData.creditSuggestions) {
+    customFields.push({
+      key: "credit_suggestions",
+      field_value: contactData.creditSuggestions
+    });
+  }
+
   if (customFields.length > 0) {
     payload.customFields = customFields;
   }

@@ -192,6 +192,7 @@ module.exports = async function handler(req, res) {
         resultType: redirect.resultType,
         creditScore: result.consumerSignals?.scores?.median || 0,
         totalFunding: result.preapprovals?.totalCombined || 0,
+        creditSuggestions: result.crmPayload?.suggestionSummary || "",
         refId
       });
 
