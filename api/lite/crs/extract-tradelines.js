@@ -20,7 +20,7 @@ const ACCOUNT_TYPE_LABELS = {
   installment: "Installment",
   mortgage: "Mortgage",
   open: "Open",
-  unknown: "Unknown"
+  unknown: "Other"
 };
 
 /**
@@ -30,18 +30,18 @@ const STATUS_LABELS = {
   open: "Open",
   closed: "Closed",
   paid: "Paid",
-  transferred: "Transferred",
-  unknown: "Unknown"
+  transferred: "Other",
+  unknown: "Other"
 };
 
 /**
  * Map normalized bureau source to Airtable select value.
  */
 const BUREAU_LABELS = {
-  transunion: "TransUnion",
-  experian: "Experian",
-  equifax: "Equifax",
-  unknown: "Unknown"
+  transunion: "TU",
+  experian: "EX",
+  equifax: "EQ",
+  unknown: "EX" // fallback — most single-bureau pulls are Experian
 };
 
 /**
@@ -164,9 +164,9 @@ function mapBusinessTrade(trade) {
   return {
     tradeline_key: businessTradelineKey(trade),
     creditor_name: trade.businessName || "Unknown",
-    account_type: trade.accountType || "Unknown",
-    account_status: trade.accountStatus || "Unknown",
-    bureau: "Experian Business",
+    account_type: trade.accountType || "Other",
+    account_status: trade.accountStatus || "Other",
+    bureau: "EX",
     credit_limit: trade.creditLimitAmount ?? null,
     current_balance: trade.recentHighCredit ?? trade.currentBalance ?? null,
     monthly_payment: trade.termsAmount ?? null,

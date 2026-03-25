@@ -125,14 +125,14 @@ test("mapSnapshotFields: creates snapshot with per-bureau metrics", () => {
   assert.equal(fields.snapshot_source, "CRS");
 
   // Per-bureau FICO scores
-  assert.equal(fields.tu_fico, 715);
-  assert.equal(fields.ex_fico, 725);
-  assert.equal(fields.eq_fico, 720);
+  assert.equal(fields["TU FICO"], 715);
+  assert.equal(fields["EX FICO"], 725);
+  assert.equal(fields["EQ FICO"], 720);
 
   // Per-bureau utilization
-  assert.equal(fields.tu_utilization_pct, 10); // 500/5000
-  assert.equal(fields.ex_utilization_pct, 50); // 1000/2000
-  assert.equal(fields.eq_utilization_pct, 20); // 200/1000
+  assert.equal(fields["TU Util"], 0.1); // 500/5000 = 10% as decimal
+  assert.equal(fields["EX Util"], 0.5); // 1000/2000 = 50% as decimal
+  assert.equal(fields["EQ Util"], 0.2); // 200/1000 = 20% as decimal
 
   // Per-bureau negative counts
   assert.equal(fields.tu_neg_count, 0);
@@ -140,9 +140,9 @@ test("mapSnapshotFields: creates snapshot with per-bureau metrics", () => {
   assert.equal(fields.eq_neg_count, 1); // 1 derogatory installment
 
   // Per-bureau inquiry counts
-  assert.equal(fields.inq_tu, 1);
-  assert.equal(fields.inq_ex, 2);
-  assert.equal(fields.inq_eq, 1);
+  assert.equal(fields["TU inq"], 1);
+  assert.equal(fields["EX inq"], 2);
+  assert.equal(fields["EQ inq"], 1);
 
   // Fraud alert
   assert.equal(fields.fraud_alert, false);

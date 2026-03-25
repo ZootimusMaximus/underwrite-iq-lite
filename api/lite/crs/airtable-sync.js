@@ -142,14 +142,14 @@ function mapSnapshotFields(crsResult, clientRecordId, opts) {
     crs_pull_scope: pullScope,
 
     // Per-bureau FICO scores
-    tu_fico: cs.scores?.perBureau?.tu || null,
-    ex_fico: cs.scores?.perBureau?.ex || null,
-    eq_fico: cs.scores?.perBureau?.eq || null,
+    "TU FICO": cs.scores?.perBureau?.tu || null,
+    "EX FICO": cs.scores?.perBureau?.ex || null,
+    "EQ FICO": cs.scores?.perBureau?.eq || null,
 
     // Per-bureau utilization
-    tu_utilization_pct: perBureau.tu.utilPct,
-    ex_utilization_pct: perBureau.ex.utilPct,
-    eq_utilization_pct: perBureau.eq.utilPct,
+    "TU Util": perBureau.tu.utilPct != null ? perBureau.tu.utilPct / 100 : null,
+    "EX Util": perBureau.ex.utilPct != null ? perBureau.ex.utilPct / 100 : null,
+    "EQ Util": perBureau.eq.utilPct != null ? perBureau.eq.utilPct / 100 : null,
 
     // Per-bureau negative counts
     tu_neg_count: perBureau.tu.negs,
@@ -157,9 +157,9 @@ function mapSnapshotFields(crsResult, clientRecordId, opts) {
     eq_neg_count: perBureau.eq.negs,
 
     // Per-bureau inquiry counts
-    inq_tu: perBureau.tu.inqs,
-    inq_ex: perBureau.ex.inqs,
-    inq_eq: perBureau.eq.inqs,
+    "TU inq": perBureau.tu.inqs,
+    "EX inq": perBureau.ex.inqs,
+    "EQ inq": perBureau.eq.inqs,
 
     // Fraud & security flags
     fraud_alert: crsResult.identityGate?.outcome === "FRAUD_HOLD",
@@ -275,7 +275,7 @@ async function updateRecord(table, recordId, fields) {
   const resp = await fetchWithTimeout(apiUrl(table, recordId), {
     method: "PATCH",
     headers: authHeaders(),
-    body: JSON.stringify({ fields })
+    body: JSON.stringify({ fields, typecast: true })
   });
 
   if (!resp.ok) {

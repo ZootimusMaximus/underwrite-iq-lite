@@ -295,7 +295,7 @@ test("extractPersonalTradelines: extracts single tradeline correctly", () => {
   assert.equal(r.creditor_name, "CHASE BANK");
   assert.equal(r.account_type, "Revolving");
   assert.equal(r.account_status, "Open");
-  assert.equal(r.bureau, "Experian");
+  assert.equal(r.bureau, "EX");
   assert.equal(r.credit_limit, 10000);
   assert.equal(r.current_balance, 2500);
   assert.equal(r.monthly_payment, 100);
@@ -430,7 +430,7 @@ test("mapBusinessTrade: maps complete trade correctly", () => {
   assert.equal(result.creditor_name, "OFFICE DEPOT");
   assert.equal(result.account_type, "Trade");
   assert.equal(result.account_status, "Active");
-  assert.equal(result.bureau, "Experian Business");
+  assert.equal(result.bureau, "EX");
   assert.equal(result.credit_limit, 50000);
   assert.equal(result.current_balance, 25000);
   assert.equal(result.monthly_payment, 5000);
