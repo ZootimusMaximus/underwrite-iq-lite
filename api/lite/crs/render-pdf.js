@@ -623,6 +623,94 @@ function renderHR(ctx) {
 }
 
 // ============================================================================
+// CTA PAGE (Booking URL + QR Placeholder)
+// ============================================================================
+
+function drawCTAPage(ctx, title, cta) {
+  addNewPage(ctx);
+  drawPageHeader(ctx, "NEXT STEPS", "");
+  ctx.y -= 30;
+
+  // Centered heading
+  const headingText = title || "Let Us Build Your Game Plan Together";
+  const headingWidth = ctx.bold.widthOfTextAtSize(headingText, 18);
+  activePage(ctx).drawText(headingText, {
+    x: (PAGE_W - headingWidth) / 2,
+    y: ctx.y,
+    size: 18,
+    font: ctx.bold,
+    color: BRAND.navy
+  });
+  ctx.y -= 30;
+
+  // CTA body text
+  if (cta) {
+    const ctaWidth = CONTENT_W - 60;
+    const ctaX = MARGIN + 30;
+    const ctaText = typeof cta === "string" ? cta : "Review the suggestions above and contact our team to discuss next steps.";
+    drawTextLine(ctx, ctaText, { size: 11, x: ctaX });
+    ctx.y -= 20;
+  }
+
+  // QR Code placeholder box
+  const qrSize = 100;
+  const qrX = (PAGE_W - qrSize) / 2;
+  activePage(ctx).drawRectangle({
+    x: qrX,
+    y: ctx.y - qrSize,
+    width: qrSize,
+    height: qrSize,
+    borderColor: BRAND.grayBorder,
+    borderWidth: 1,
+    color: BRAND.grayLight
+  });
+  const qrLabel = "[ QR CODE ]";
+  const qrLabelWidth = ctx.font.widthOfTextAtSize(qrLabel, 10);
+  activePage(ctx).drawText(qrLabel, {
+    x: (PAGE_W - qrLabelWidth) / 2,
+    y: ctx.y - qrSize / 2 - 4,
+    size: 10,
+    font: ctx.font,
+    color: BRAND.gray
+  });
+  ctx.y -= qrSize + 10;
+
+  // Caption
+  const caption = "Scan to book your call instantly";
+  const capWidth = ctx.font.widthOfTextAtSize(caption, 9);
+  activePage(ctx).drawText(caption, {
+    x: (PAGE_W - capWidth) / 2,
+    y: ctx.y,
+    size: 9,
+    font: ctx.font,
+    color: BRAND.gray
+  });
+  ctx.y -= 20;
+
+  // Booking URL
+  const bookingUrl = process.env.BOOKING_URL || "www.fundhubbookingurl.template";
+  const urlWidth = ctx.bold.widthOfTextAtSize(bookingUrl, 12);
+  activePage(ctx).drawText(bookingUrl, {
+    x: (PAGE_W - urlWidth) / 2,
+    y: ctx.y,
+    size: 12,
+    font: ctx.bold,
+    color: BRAND.navy
+  });
+  ctx.y -= 14;
+
+  const subCaption = "Or copy this link into your browser";
+  const subCapWidth = ctx.font.widthOfTextAtSize(subCaption, 9);
+  activePage(ctx).drawText(subCaption, {
+    x: (PAGE_W - subCapWidth) / 2,
+    y: ctx.y,
+    size: 9,
+    font: ctx.font,
+    color: BRAND.gray
+  });
+}
+
+// ============================================================================
 // NODE DISPATCHER
 // ============================================================================
 
@@ -811,6 +899,12 @@ async function renderDocumentPDF(markdownContent, type, personal, engineData) {
   for (const node of nodes) {
     renderNode(ctx, node);
   }
+
+  // Add CTA page at the end of each document
+  const { getCTA } = require("./build-suggestions");
+  const outcome = engineData?.outcome || engineData?.outcomeResult?.outcome;
+  const ctaText = outcome ? getCTA(outcome) : null;
+  drawCTAPage(ctx, null, ctaText);
 
   drawFooters(ctx, title);
 
