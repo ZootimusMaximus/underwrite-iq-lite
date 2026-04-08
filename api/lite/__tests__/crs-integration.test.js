@@ -250,7 +250,7 @@ test("integration: findings have correct structure per finding", { skip: !hasRes
   for (const finding of result.optimization_findings) {
     assert.equal(typeof finding.code, "string");
     assert.equal(typeof finding.severity, "string");
-    assert.ok(["critical", "high", "medium", "low"].includes(finding.severity));
+    assert.ok(["critical", "high", "medium", "low", "info"].includes(finding.severity));
     assert.equal(typeof finding.category, "string");
     assert.equal(typeof finding.plainEnglishProblem, "string");
     assert.equal(typeof finding.whyItMatters, "string");

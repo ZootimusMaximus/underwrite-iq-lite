@@ -41,8 +41,8 @@ test("buildDocuments: REPAIR → repair package with 3 rounds", () => {
   assert.equal(personal.length, 3);
 
   // Check field key format
-  assert.ok(disputes[0].fieldKey.startsWith("repair_letter_round_"));
-  assert.ok(personal[0].fieldKey.startsWith("repair_letter_personal_info_"));
+  assert.ok(disputes[0].fieldKey.startsWith("repair_letter_url__round_"));
+  assert.ok(personal[0].fieldKey.startsWith("repair_letter_url__personal_info_dispute__"));
 });
 
 test("buildDocuments: REPAIR with 2 bureaus", () => {
@@ -62,8 +62,8 @@ test("buildDocuments: FULL_STACK → funding package", () => {
   assert.equal(inquiryLetters.length, 2);
   assert.equal(personal.length, 3);
 
-  assert.ok(inquiryLetters[0].fieldKey.startsWith("funding_letter_inquiry_"));
-  assert.ok(personal[0].fieldKey.startsWith("funding_letter_personal_info_"));
+  assert.ok(inquiryLetters[0].fieldKey.startsWith("funding_letter_url__inquiry_cleanup__"));
+  assert.ok(personal[0].fieldKey.startsWith("funding_letter_url__personal_info_cleanup__"));
 });
 
 test("buildDocuments: PREMIUM_STACK → funding package", () => {

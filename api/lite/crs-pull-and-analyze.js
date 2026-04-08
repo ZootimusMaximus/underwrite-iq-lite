@@ -23,8 +23,8 @@ const {
 const { parseFullName } = require("./ghl-contact-service");
 const { logError, logInfo } = require("./logger");
 const { enqueueTask } = require("./background-queue");
-const { notifyCRSSnapshotComplete } = require("./ghl-webhook");
-const { derivePerBureauMetrics } = require("./crs/airtable-sync");
+const { notifyAnalyzerStart, notifyCRSSnapshotComplete } = require("./ghl-webhook");
+const { derivePerBureauMetrics, extractReportUrl } = require("./crs/airtable-sync");
 
 // ---------------------------------------------------------------------------
 // Main Handler
@@ -151,6 +151,17 @@ module.exports = async function handler(req, res) {
       if (cached?.redirect) {
         return res.status(200).json({ ok: true, redirect: cached.redirect, deduped: true });
       }
+    }
+
+    // ----- GHL Webhook: trigger U-01 (analyzer_start) -----
+    // Fires async — does not block processing. Notifies GHL that CRS analysis is beginning.
+    const crsEmail = sanitized.email || formData?.email;
+    const crsPhone = sanitized.phone || formData?.phone;
+    if (crsEmail) {
+      notifyAnalyzerStart({
+        email: crsEmail,
+        phone: crsPhone || ""
+      }).catch(() => {});
     }
 
     // =========================================================================
@@ -321,13 +332,20 @@ module.exports = async function handler(req, res) {
     const airtableRecordId = formData?.airtableRecordId || null;
     const syncEmail = sanitized.email || formData?.email || null;
     if (airtableRecordId || syncEmail) {
+      // Extract report URLs from raw CRS responses for Airtable sync
+      const reportUrls = {
+        personal: rawResponses.map(r => extractReportUrl(r)).find(Boolean) || "",
+        business: extractReportUrl(businessReport) || ""
+      };
+
       enqueueTask("airtable_sync", {
         result,
         recordId: airtableRecordId,
         email: syncEmail,
         crs_pull_scope,
         businessPullFailed,
-        businessReport: businessReport || null
+        businessReport: businessReport || null,
+        reportUrls
       });
     }
 

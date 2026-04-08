@@ -10,6 +10,7 @@
 // ============================================================================
 
 const { runCRSEngine } = require("./crs/engine");
+const { enrichSuggestionsWithAI } = require("./crs/suggestion-text-generator");
 const { sanitizeFormFields } = require("./input-sanitizer");
 const { rateLimitMiddleware } = require("./rate-limiter");
 const {
@@ -138,6 +139,17 @@ module.exports = async function handler(req, res) {
         error: "ENGINE_FAILED",
         message: "CRS engine returned a non-ok result."
       });
+    }
+
+    // ----- AI Text Enhancement (non-blocking) -----
+    if (result.suggestions?.fullSuggestions?.length > 0) {
+      try {
+        result.suggestions.fullSuggestions = await enrichSuggestionsWithAI(
+          result.suggestions.fullSuggestions
+        );
+      } catch (_aiErr) {
+        // Falls back to template text — already handled inside the function
+      }
     }
 
     logInfo("CRS engine complete", {

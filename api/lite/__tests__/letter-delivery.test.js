@@ -311,19 +311,19 @@ test("deliverLetters uses CRS path when crsDocuments provided", async () => {
         type: "inquiry_removal",
         bureau: "experian",
         round: null,
-        fieldKey: "funding_letter_inquiry_ex"
+        fieldKey: "funding_letter_url__inquiry_cleanup__ex"
       },
       {
         type: "personal_info",
         bureau: "experian",
         round: null,
-        fieldKey: "funding_letter_personal_info_ex"
+        fieldKey: "funding_letter_url__personal_info_cleanup__ex"
       },
       {
         type: "personal_info",
         bureau: "transunion",
         round: null,
-        fieldKey: "funding_letter_personal_info_tu"
+        fieldKey: "funding_letter_url__personal_info_cleanup__tu"
       }
     ]
   };
@@ -348,32 +348,47 @@ test("deliverLetters uses CRS repair path correctly", async () => {
   const crsDocuments = {
     package: "repair",
     letters: [
-      { type: "dispute", bureau: "experian", round: 1, fieldKey: "repair_letter_round_1_ex" },
-      { type: "dispute", bureau: "transunion", round: 1, fieldKey: "repair_letter_round_1_tu" },
-      { type: "dispute", bureau: "equifax", round: 1, fieldKey: "repair_letter_round_1_eq" },
-      { type: "dispute", bureau: "experian", round: 2, fieldKey: "repair_letter_round_2_ex" },
-      { type: "dispute", bureau: "transunion", round: 2, fieldKey: "repair_letter_round_2_tu" },
-      { type: "dispute", bureau: "equifax", round: 2, fieldKey: "repair_letter_round_2_eq" },
-      { type: "dispute", bureau: "experian", round: 3, fieldKey: "repair_letter_round_3_ex" },
-      { type: "dispute", bureau: "transunion", round: 3, fieldKey: "repair_letter_round_3_tu" },
-      { type: "dispute", bureau: "equifax", round: 3, fieldKey: "repair_letter_round_3_eq" },
+      { type: "dispute", bureau: "experian", round: 1, fieldKey: "repair_letter_url__round_1__ex" },
+      {
+        type: "dispute",
+        bureau: "transunion",
+        round: 1,
+        fieldKey: "repair_letter_url__round_1__tu"
+      },
+      { type: "dispute", bureau: "equifax", round: 1, fieldKey: "repair_letter_url__round_1__eq" },
+      { type: "dispute", bureau: "experian", round: 2, fieldKey: "repair_letter_url__round_2__ex" },
+      {
+        type: "dispute",
+        bureau: "transunion",
+        round: 2,
+        fieldKey: "repair_letter_url__round_2__tu"
+      },
+      { type: "dispute", bureau: "equifax", round: 2, fieldKey: "repair_letter_url__round_2__eq" },
+      { type: "dispute", bureau: "experian", round: 3, fieldKey: "repair_letter_url__round_3__ex" },
+      {
+        type: "dispute",
+        bureau: "transunion",
+        round: 3,
+        fieldKey: "repair_letter_url__round_3__tu"
+      },
+      { type: "dispute", bureau: "equifax", round: 3, fieldKey: "repair_letter_url__round_3__eq" },
       {
         type: "personal_info",
         bureau: "experian",
         round: null,
-        fieldKey: "repair_letter_personal_info_ex"
+        fieldKey: "repair_letter_url__personal_info_dispute__ex"
       },
       {
         type: "personal_info",
         bureau: "transunion",
         round: null,
-        fieldKey: "repair_letter_personal_info_tu"
+        fieldKey: "repair_letter_url__personal_info_dispute__tu"
       },
       {
         type: "personal_info",
         bureau: "equifax",
         round: null,
-        fieldKey: "repair_letter_personal_info_eq"
+        fieldKey: "repair_letter_url__personal_info_dispute__eq"
       }
     ]
   };
@@ -397,15 +412,15 @@ test("generateLettersFromCRS produces correct filenames and fieldKeyMap", async 
       type: "inquiry_removal",
       bureau: "experian",
       round: null,
-      fieldKey: "funding_letter_inquiry_ex"
+      fieldKey: "funding_letter_url__inquiry_cleanup__ex"
     },
     {
       type: "personal_info",
       bureau: "transunion",
       round: null,
-      fieldKey: "funding_letter_personal_info_tu"
+      fieldKey: "funding_letter_url__personal_info_cleanup__tu"
     },
-    { type: "dispute", bureau: "equifax", round: 2, fieldKey: "repair_letter_round_2_eq" }
+    { type: "dispute", bureau: "equifax", round: 2, fieldKey: "repair_letter_url__round_2__eq" }
   ];
 
   const { letters, fieldKeyMap } = await generateLettersFromCRS(specs, { name: "Test" });
@@ -416,9 +431,9 @@ test("generateLettersFromCRS produces correct filenames and fieldKeyMap", async 
   assert.equal(letters[1].filename, "inquiry_ex.pdf");
   assert.equal(letters[2].filename, "personal_info_tu.pdf");
 
-  assert.equal(fieldKeyMap["eq_round2"], "repair_letter_round_2_eq");
-  assert.equal(fieldKeyMap["inquiry_ex"], "funding_letter_inquiry_ex");
-  assert.equal(fieldKeyMap["personal_info_tu"], "funding_letter_personal_info_tu");
+  assert.equal(fieldKeyMap["eq_round2"], "repair_letter_url__round_2__eq");
+  assert.equal(fieldKeyMap["inquiry_ex"], "funding_letter_url__inquiry_cleanup__ex");
+  assert.equal(fieldKeyMap["personal_info_tu"], "funding_letter_url__personal_info_cleanup__tu");
 });
 
 test("generateLettersFromCRS produces valid PDF buffers", async () => {

@@ -126,7 +126,7 @@ test("buildSuggestions: topMoves sorted by severity", () => {
   assert.equal(result.topMoves[2].code, "THIN_FILE");
 });
 
-test("buildSuggestions: topMoves capped at 5", () => {
+test("buildSuggestions: topMoves NOT capped (v3 — all findings)", () => {
   const findings = Array.from({ length: 10 }, (_, i) => ({
     code: `FINDING_${i}`,
     severity: "high",
@@ -137,7 +137,53 @@ test("buildSuggestions: topMoves capped at 5", () => {
     whyItMatters: ""
   }));
   const result = buildSuggestions(findings, "REPAIR", {}, null);
-  assert.equal(result.topMoves.length, 5);
+  assert.equal(result.topMoves.length, 10, "v3 removes the top-5 cap");
+});
+
+test("buildSuggestions: fullSuggestions includes all customer-safe findings", () => {
+  const findings = [
+    {
+      code: "A",
+      severity: "critical",
+      category: "derogatory",
+      customerSafe: true,
+      plainEnglishProblem: "P1",
+      whatToDoNext: "N1",
+      whyItMatters: "M1"
+    },
+    {
+      code: "B",
+      severity: "medium",
+      category: "utilization",
+      customerSafe: true,
+      plainEnglishProblem: "P2",
+      whatToDoNext: "N2",
+      whyItMatters: "M2"
+    },
+    {
+      code: "C",
+      severity: "high",
+      category: "identity",
+      customerSafe: false,
+      plainEnglishProblem: "P3",
+      whatToDoNext: "N3",
+      whyItMatters: "M3"
+    }
+  ];
+  const result = buildSuggestions(findings, "REPAIR", {}, null);
+  assert.equal(result.fullSuggestions.length, 2, "Only customer-safe findings");
+  assert.equal(result.fullSuggestions[0].code, "A"); // critical first
+});
+
+test("buildSuggestions: projectedPreapproval passed through", () => {
+  const projected = { total: 50000, cards: 30000, loans: 20000 };
+  const result = buildSuggestions([], "FULL_STACK_APPROVAL", {}, null, projected);
+  assert.deepStrictEqual(result.projectedPreapproval, projected);
+});
+
+test("buildSuggestions: projectedPreapproval null when not provided", () => {
+  const result = buildSuggestions([], "FULL_STACK_APPROVAL", {}, null);
+  assert.equal(result.projectedPreapproval, null);
 });
 
 test("buildSuggestions: flatList excludes non-customerSafe", () => {

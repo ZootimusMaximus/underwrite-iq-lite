@@ -502,14 +502,14 @@ The system uses a **smart 3-tier extraction strategy** optimized for speed and a
 │   │  credit_suggestions     = "Remove negatives..."                      │   │
 │   │                                                                      │   │
 │   │  REPAIR LETTERS:                                                     │   │
-│   │  repair_letter_round_1_ex/eq/tu                                      │   │
-│   │  repair_letter_round_2_ex/eq/tu                                      │   │
-│   │  repair_letter_round_3_ex/eq/tu                                      │   │
-│   │  repair_letter_personal_info_ex/eq/tu                                │   │
+│   │  repair_letter_url__round_1__ex/eq/tu                                │   │
+│   │  repair_letter_url__round_2__ex/eq/tu                                │   │
+│   │  repair_letter_url__round_3__ex/eq/tu                                │   │
+│   │  repair_letter_url__personal_info_dispute__ex/eq/tu                  │   │
 │   │                                                                      │   │
 │   │  FUNDING LETTERS:                                                    │   │
-│   │  funding_letter_inquiry_ex/eq/tu                                     │   │
-│   │  funding_letter_personal_info_ex/eq/tu                               │   │
+│   │  funding_letter_url__inquiry_cleanup__ex/eq/tu                       │   │
+│   │  funding_letter_url__personal_info_cleanup__ex/eq/tu                               │   │
 │   └─────────────────────────────────────────────────────────────────────┘   │
 │            │                                                                 │
 │            ▼                                                                 │
@@ -690,10 +690,10 @@ npm run lint
   "negative_accounts": 3,
   "credit_suggestions": "Remove collections...",
 
-  "repair_letter_round_1_ex": "https://...",
-  "repair_letter_round_1_eq": "https://...",
-  "repair_letter_round_1_tu": "https://...",
-  "repair_letter_personal_info_ex": "https://...",
+  "repair_letter_url__round_1__ex": "https://...",
+  "repair_letter_url__round_1__eq": "https://...",
+  "repair_letter_url__round_1__tu": "https://...",
+  "repair_letter_url__personal_info_dispute__ex": "https://...",
   ...
 }
 ```

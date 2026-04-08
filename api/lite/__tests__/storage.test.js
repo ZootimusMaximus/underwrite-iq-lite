@@ -33,24 +33,33 @@ test("mapUrlsToGhlFields maps all repair path URLs correctly", () => {
   const result = mapUrlsToGhlFields(urls, "repair");
 
   // Check all Experian round fields
-  assert.equal(result.repair_letter_round_1_ex, "https://blob.vercel.com/ex1.pdf");
-  assert.equal(result.repair_letter_round_2_ex, "https://blob.vercel.com/ex2.pdf");
-  assert.equal(result.repair_letter_round_3_ex, "https://blob.vercel.com/ex3.pdf");
+  assert.equal(result.repair_letter_url__round_1__ex, "https://blob.vercel.com/ex1.pdf");
+  assert.equal(result.repair_letter_url__round_2__ex, "https://blob.vercel.com/ex2.pdf");
+  assert.equal(result.repair_letter_url__round_3__ex, "https://blob.vercel.com/ex3.pdf");
 
   // Check all Equifax round fields
-  assert.equal(result.repair_letter_round_1_eq, "https://blob.vercel.com/eq1.pdf");
-  assert.equal(result.repair_letter_round_2_eq, "https://blob.vercel.com/eq2.pdf");
-  assert.equal(result.repair_letter_round_3_eq, "https://blob.vercel.com/eq3.pdf");
+  assert.equal(result.repair_letter_url__round_1__eq, "https://blob.vercel.com/eq1.pdf");
+  assert.equal(result.repair_letter_url__round_2__eq, "https://blob.vercel.com/eq2.pdf");
+  assert.equal(result.repair_letter_url__round_3__eq, "https://blob.vercel.com/eq3.pdf");
 
   // Check all TransUnion round fields
-  assert.equal(result.repair_letter_round_1_tu, "https://blob.vercel.com/tu1.pdf");
-  assert.equal(result.repair_letter_round_2_tu, "https://blob.vercel.com/tu2.pdf");
-  assert.equal(result.repair_letter_round_3_tu, "https://blob.vercel.com/tu3.pdf");
+  assert.equal(result.repair_letter_url__round_1__tu, "https://blob.vercel.com/tu1.pdf");
+  assert.equal(result.repair_letter_url__round_2__tu, "https://blob.vercel.com/tu2.pdf");
+  assert.equal(result.repair_letter_url__round_3__tu, "https://blob.vercel.com/tu3.pdf");
 
   // Check personal info fields (one per bureau)
-  assert.equal(result.repair_letter_personal_info_ex, "https://blob.vercel.com/pi_ex.pdf");
-  assert.equal(result.repair_letter_personal_info_eq, "https://blob.vercel.com/pi_eq.pdf");
-  assert.equal(result.repair_letter_personal_info_tu, "https://blob.vercel.com/pi_tu.pdf");
+  assert.equal(
+    result.repair_letter_url__personal_info_dispute__ex,
+    "https://blob.vercel.com/pi_ex.pdf"
+  );
+  assert.equal(
+    result.repair_letter_url__personal_info_dispute__eq,
+    "https://blob.vercel.com/pi_eq.pdf"
+  );
+  assert.equal(
+    result.repair_letter_url__personal_info_dispute__tu,
+    "https://blob.vercel.com/pi_tu.pdf"
+  );
 
   // Check state flags
   assert.equal(result.analyzer_path, "repair");
@@ -74,14 +83,32 @@ test("mapUrlsToGhlFields maps fundable path URLs correctly", () => {
   const result = mapUrlsToGhlFields(urls, "fundable");
 
   // Check personal info fields (one per bureau)
-  assert.equal(result.funding_letter_personal_info_ex, "https://blob.vercel.com/pi_ex.pdf");
-  assert.equal(result.funding_letter_personal_info_eq, "https://blob.vercel.com/pi_eq.pdf");
-  assert.equal(result.funding_letter_personal_info_tu, "https://blob.vercel.com/pi_tu.pdf");
+  assert.equal(
+    result.funding_letter_url__personal_info_cleanup__ex,
+    "https://blob.vercel.com/pi_ex.pdf"
+  );
+  assert.equal(
+    result.funding_letter_url__personal_info_cleanup__eq,
+    "https://blob.vercel.com/pi_eq.pdf"
+  );
+  assert.equal(
+    result.funding_letter_url__personal_info_cleanup__tu,
+    "https://blob.vercel.com/pi_tu.pdf"
+  );
 
   // Check inquiry fields (one per bureau)
-  assert.equal(result.funding_letter_inquiry_ex, "https://blob.vercel.com/inq_ex.pdf");
-  assert.equal(result.funding_letter_inquiry_eq, "https://blob.vercel.com/inq_eq.pdf");
-  assert.equal(result.funding_letter_inquiry_tu, "https://blob.vercel.com/inq_tu.pdf");
+  assert.equal(
+    result.funding_letter_url__inquiry_cleanup__ex,
+    "https://blob.vercel.com/inq_ex.pdf"
+  );
+  assert.equal(
+    result.funding_letter_url__inquiry_cleanup__eq,
+    "https://blob.vercel.com/inq_eq.pdf"
+  );
+  assert.equal(
+    result.funding_letter_url__inquiry_cleanup__tu,
+    "https://blob.vercel.com/inq_tu.pdf"
+  );
 
   // Check state flags
   assert.equal(result.analyzer_path, "fundable");
@@ -98,9 +125,9 @@ test("mapUrlsToGhlFields handles empty URLs object", () => {
   assert.equal(result.analyzer_path, "repair");
   assert.equal(result.letters_ready, "true");
   // No URL fields should be set
-  assert.equal(result.repair_letter_round_1_ex, undefined);
-  assert.equal(result.repair_letter_round_1_tu, undefined);
-  assert.equal(result.repair_letter_round_1_eq, undefined);
+  assert.equal(result.repair_letter_url__round_1__ex, undefined);
+  assert.equal(result.repair_letter_url__round_1__tu, undefined);
+  assert.equal(result.repair_letter_url__round_1__eq, undefined);
 });
 
 test("mapUrlsToGhlFields only includes provided URLs", () => {
@@ -110,10 +137,10 @@ test("mapUrlsToGhlFields only includes provided URLs", () => {
 
   const result = mapUrlsToGhlFields(urls, "repair");
 
-  assert.equal(result.repair_letter_round_1_ex, "https://blob.vercel.com/ex1.pdf");
-  assert.equal(result.repair_letter_round_2_ex, undefined);
-  assert.equal(result.repair_letter_round_3_ex, undefined);
-  assert.equal(result.repair_letter_round_1_tu, undefined);
+  assert.equal(result.repair_letter_url__round_1__ex, "https://blob.vercel.com/ex1.pdf");
+  assert.equal(result.repair_letter_url__round_2__ex, undefined);
+  assert.equal(result.repair_letter_url__round_3__ex, undefined);
+  assert.equal(result.repair_letter_url__round_1__tu, undefined);
 });
 
 test("mapUrlsToGhlFields sets path to fundable", () => {
@@ -138,11 +165,11 @@ test("mapUrlsToGhlFields handles partial repair path URLs", () => {
 
   const result = mapUrlsToGhlFields(urls, "repair");
 
-  assert.equal(result.repair_letter_round_1_ex, "https://blob.vercel.com/ex1.pdf");
-  assert.equal(result.repair_letter_round_2_ex, undefined);
-  assert.equal(result.repair_letter_round_1_tu, undefined);
-  assert.equal(result.repair_letter_round_2_tu, "https://blob.vercel.com/tu2.pdf");
-  assert.equal(result.repair_letter_round_3_eq, "https://blob.vercel.com/eq3.pdf");
+  assert.equal(result.repair_letter_url__round_1__ex, "https://blob.vercel.com/ex1.pdf");
+  assert.equal(result.repair_letter_url__round_2__ex, undefined);
+  assert.equal(result.repair_letter_url__round_1__tu, undefined);
+  assert.equal(result.repair_letter_url__round_2__tu, "https://blob.vercel.com/tu2.pdf");
+  assert.equal(result.repair_letter_url__round_3__eq, "https://blob.vercel.com/eq3.pdf");
 });
 
 // ============================================================================

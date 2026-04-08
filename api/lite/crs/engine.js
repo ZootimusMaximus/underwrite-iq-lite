@@ -59,7 +59,7 @@ function buildConsumerSummary(cs) {
   if (cs.tradelines.thinFile) {
     parts.push(`Thin file with only ${cs.tradelines.primary} primary tradeline(s).`);
   }
-  if (cs.tradelines.auDominance > 0.6) {
+  if (cs.tradelines.auDominance > 0.4) {
     parts.push(
       `AU-dominant file (${Math.round(cs.tradelines.auDominance * 100)}% authorized user).`
     );
@@ -119,6 +119,60 @@ function buildBusinessSummary(bs) {
   }
 
   return parts.join(" ");
+}
+
+// ---------------------------------------------------------------------------
+// Projected Signals — clone consumerSignals with fixes applied
+// ---------------------------------------------------------------------------
+
+function buildProjectedSignals(cs, findings) {
+  // Deep clone consumer signals
+  const projected = JSON.parse(JSON.stringify(cs));
+
+  // Apply utilization fixes: assume all cards brought to 10%
+  const hasUtilFindings = findings.some(
+    f => f.code === "UTIL_CARD_OVER_10" || f.code === "UTIL_OVERALL_HIGH"
+  );
+  if (hasUtilFindings && projected.utilization.totalLimit > 0) {
+    projected.utilization.pct = 9;
+    projected.utilization.band = "excellent";
+    projected.utilization.totalBalance = Math.round(projected.utilization.totalLimit * 0.09);
+  }
+
+  // Apply derogatory fixes: assume all resolved
+  const hasNegFindings = findings.some(f =>
+    ["CHARGEOFF_ITEM", "COLLECTION_ITEM", "LATE_PAYMENT_ITEM", "MEDICAL_COLLECTION"].includes(
+      f.code
+    )
+  );
+  if (hasNegFindings) {
+    projected.derogatories.active = 0;
+    projected.derogatories.chargeoffs = 0;
+    projected.derogatories.collections = 0;
+    projected.derogatories.active60 = 0;
+    projected.derogatories.active90 = 0;
+    projected.derogatories.active120Plus = 0;
+    projected.derogatories.worstSeverity = 0;
+    projected.paymentHistory.recentActivity = false;
+  }
+
+  // Apply inquiry fixes: assume reduced to 2
+  const hasInquiryFindings = findings.some(f => ["INQUIRY_STORM", "INQUIRY_HIGH"].includes(f.code));
+  if (hasInquiryFindings) {
+    projected.inquiries.last6Mo = 2;
+    projected.inquiries.pressure = "low";
+  }
+
+  // Bump score estimate based on fixes
+  if (projected.scores.median != null) {
+    let bump = 0;
+    if (hasUtilFindings) bump += 30; // Utilization fix typically adds 20-40 pts
+    if (hasNegFindings) bump += 20; // Removing negatives adds 15-30 pts
+    if (hasInquiryFindings) bump += 5;
+    projected.scores.median = Math.min(850, projected.scores.median + bump);
+  }
+
+  return projected;
 }
 
 // ---------------------------------------------------------------------------
@@ -183,11 +237,22 @@ function runCRSEngine(options) {
     preapprovals,
     {
       tradelines: normalized.tradelines,
+      inquiries: normalized.inquiries,
+      identity: normalized.identity,
       identityGate,
       formData
     }
   );
   timings.findings = Date.now() - t6;
+
+  // 7b. Projected Pre-approvals — re-run with fixes applied
+  const t6b = Date.now();
+  let projectedPreapproval = null;
+  if (findings.length > 0) {
+    const projected = buildProjectedSignals(consumerSignals, findings);
+    projectedPreapproval = estimatePreapprovals(projected, businessSignals, outcomeResult.outcome);
+  }
+  timings.projectedPreapproval = Date.now() - t6b;
 
   // 8. Suggestions
   const t7 = Date.now();
@@ -195,7 +260,8 @@ function runCRSEngine(options) {
     findings,
     outcomeResult.outcome,
     consumerSignals,
-    businessSignals
+    businessSignals,
+    projectedPreapproval
   );
   timings.suggestions = Date.now() - t7;
 
@@ -259,6 +325,7 @@ function runCRSEngine(options) {
     consumer_summary: consumerSummary,
     business_summary: businessSummary,
     preapprovals,
+    projectedPreapproval,
     optimization_findings: findings,
     suggestions,
     cards,

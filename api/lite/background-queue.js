@@ -214,11 +214,20 @@ async function executeGHLSync(payload) {
  */
 async function executeAirtableSync(payload) {
   const { syncCRSResultToAirtable } = require("./crs/airtable-sync");
-  const { result, recordId, email, crs_pull_scope, businessPullFailed, businessReport } = payload;
+  const {
+    result,
+    recordId,
+    email,
+    crs_pull_scope,
+    businessPullFailed,
+    businessReport,
+    reportUrls
+  } = payload;
   const syncResult = await syncCRSResultToAirtable(result, recordId, email, {
     crs_pull_scope,
     businessPullFailed,
-    businessReport: businessReport || null
+    businessReport: businessReport || null,
+    reportUrls: reportUrls || null
   });
   if (!syncResult.ok) {
     throw new Error(syncResult.error || "Airtable sync failed");

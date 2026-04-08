@@ -23,6 +23,7 @@ const GHL_WEBHOOK_BASE =
 // ---------------------------------------------------------------------------
 
 const WEBHOOK_URLS = {
+  analyzer_start: `${GHL_WEBHOOK_BASE}/03f27697-68e1-411a-81e4-6ecff03fb239`,
   analyzer_complete: `${GHL_WEBHOOK_BASE}/330139cd-098d-46f8-9e65-25cd3545a612`,
   crs_snapshot_complete: `${GHL_WEBHOOK_BASE}/faa8c0be-31b0-48a6-97a3-d39eff741665`
 };
@@ -34,6 +35,33 @@ const AIRTABLE_WEBHOOK_URLS = {
 };
 
 const TIMEOUT_MS = 10000;
+
+// ---------------------------------------------------------------------------
+// Notify GHL: Analyzer Start (triggers U-01 workflow)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fire the analyzer_start webhook to GHL.
+ * Triggers U-01 which: notifies CRM that analysis is in progress,
+ * sets tags (analyzer:processing), enables progress tracking.
+ *
+ * @param {Object} params
+ * @param {string} params.email
+ * @param {string} [params.phone]
+ * @param {string} [params.contactId] - GHL contact ID if already known
+ * @returns {Promise<{ ok: boolean, error?: string }>}
+ */
+async function notifyAnalyzerStart(params) {
+  const payload = {
+    event: "underwriteiq_analyzer_start",
+    email: params.email,
+    phone: params.phone || "",
+    contact_id: params.contactId || "",
+    analyzer_status: "processing"
+  };
+
+  return fireWebhook(WEBHOOK_URLS.analyzer_start, payload, "U-01 analyzer_start");
+}
 
 // ---------------------------------------------------------------------------
 // Notify GHL: Analyzer Complete (triggers U-02 workflow)
@@ -197,6 +225,7 @@ async function fireWebhook(url, payload, label) {
 }
 
 module.exports = {
+  notifyAnalyzerStart,
   notifyAnalyzerComplete,
   notifyCRSSnapshotComplete,
   notifyAirtableAnalyzerComplete,

@@ -129,32 +129,38 @@ function mapUrlsToGhlFields(urls, path) {
 
   if (path === "repair") {
     // Repair path - Personal info dispute letters
-    if (urls.personal_info_ex) fields.repair_letter_personal_info_ex = urls.personal_info_ex;
-    if (urls.personal_info_eq) fields.repair_letter_personal_info_eq = urls.personal_info_eq;
-    if (urls.personal_info_tu) fields.repair_letter_personal_info_tu = urls.personal_info_tu;
+    if (urls.personal_info_ex)
+      fields.repair_letter_url__personal_info_dispute__ex = urls.personal_info_ex;
+    if (urls.personal_info_eq)
+      fields.repair_letter_url__personal_info_dispute__eq = urls.personal_info_eq;
+    if (urls.personal_info_tu)
+      fields.repair_letter_url__personal_info_dispute__tu = urls.personal_info_tu;
 
     // Repair path - Round dispute letters
-    if (urls.ex_round1) fields.repair_letter_round_1_ex = urls.ex_round1;
-    if (urls.eq_round1) fields.repair_letter_round_1_eq = urls.eq_round1;
-    if (urls.tu_round1) fields.repair_letter_round_1_tu = urls.tu_round1;
+    if (urls.ex_round1) fields.repair_letter_url__round_1__ex = urls.ex_round1;
+    if (urls.eq_round1) fields.repair_letter_url__round_1__eq = urls.eq_round1;
+    if (urls.tu_round1) fields.repair_letter_url__round_1__tu = urls.tu_round1;
 
-    if (urls.ex_round2) fields.repair_letter_round_2_ex = urls.ex_round2;
-    if (urls.eq_round2) fields.repair_letter_round_2_eq = urls.eq_round2;
-    if (urls.tu_round2) fields.repair_letter_round_2_tu = urls.tu_round2;
+    if (urls.ex_round2) fields.repair_letter_url__round_2__ex = urls.ex_round2;
+    if (urls.eq_round2) fields.repair_letter_url__round_2__eq = urls.eq_round2;
+    if (urls.tu_round2) fields.repair_letter_url__round_2__tu = urls.tu_round2;
 
-    if (urls.ex_round3) fields.repair_letter_round_3_ex = urls.ex_round3;
-    if (urls.eq_round3) fields.repair_letter_round_3_eq = urls.eq_round3;
-    if (urls.tu_round3) fields.repair_letter_round_3_tu = urls.tu_round3;
+    if (urls.ex_round3) fields.repair_letter_url__round_3__ex = urls.ex_round3;
+    if (urls.eq_round3) fields.repair_letter_url__round_3__eq = urls.eq_round3;
+    if (urls.tu_round3) fields.repair_letter_url__round_3__tu = urls.tu_round3;
   } else {
     // Funding path - Personal info cleanup letters
-    if (urls.personal_info_ex) fields.funding_letter_personal_info_ex = urls.personal_info_ex;
-    if (urls.personal_info_eq) fields.funding_letter_personal_info_eq = urls.personal_info_eq;
-    if (urls.personal_info_tu) fields.funding_letter_personal_info_tu = urls.personal_info_tu;
+    if (urls.personal_info_ex)
+      fields.funding_letter_url__personal_info_cleanup__ex = urls.personal_info_ex;
+    if (urls.personal_info_eq)
+      fields.funding_letter_url__personal_info_cleanup__eq = urls.personal_info_eq;
+    if (urls.personal_info_tu)
+      fields.funding_letter_url__personal_info_cleanup__tu = urls.personal_info_tu;
 
     // Funding path - Inquiry cleanup letters
-    if (urls.inquiry_ex) fields.funding_letter_inquiry_ex = urls.inquiry_ex;
-    if (urls.inquiry_eq) fields.funding_letter_inquiry_eq = urls.inquiry_eq;
-    if (urls.inquiry_tu) fields.funding_letter_inquiry_tu = urls.inquiry_tu;
+    if (urls.inquiry_ex) fields.funding_letter_url__inquiry_cleanup__ex = urls.inquiry_ex;
+    if (urls.inquiry_eq) fields.funding_letter_url__inquiry_cleanup__eq = urls.inquiry_eq;
+    if (urls.inquiry_tu) fields.funding_letter_url__inquiry_cleanup__tu = urls.inquiry_tu;
   }
 
   // State flags

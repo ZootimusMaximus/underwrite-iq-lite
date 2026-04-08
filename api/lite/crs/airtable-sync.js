@@ -57,6 +57,23 @@ function authHeaders() {
   };
 }
 
+/**
+ * Extract a report URL from a raw Stitch Credit response.
+ * Checks multiple possible paths since the response format varies.
+ */
+function extractReportUrl(rawResponse) {
+  if (!rawResponse) return "";
+  return (
+    rawResponse.raw_report_url ||
+    rawResponse.reportUrl ||
+    rawResponse.creditReportUrl ||
+    rawResponse.pdf?.url ||
+    rawResponse.pdfUrl ||
+    rawResponse.report?.url ||
+    ""
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Field Mapping: CRS Engine Output -> Airtable Fields
 // ---------------------------------------------------------------------------
@@ -106,19 +123,32 @@ function derivePerBureauMetrics(normalized) {
  * Maps CRS engine result to FUNDHUB MATRIX client fields.
  * Only writes fields confirmed to exist in the Airtable schema.
  */
-function mapClientFields(_crsResult) {
+function mapClientFields(_crsResult, opts) {
   // Most CLIENTS fields are computed (formulas/rollups) and auto-update when
-  // a linked SNAPSHOTS record is created. The only writable field we need to
-  // set after a CRS pull is refresh_in_progress = false.
+  // a linked SNAPSHOTS record is created. Writable fields:
+  //   - refresh_in_progress: clear the "pulling" flag
+  //   - primary_snapshot_date: drives snapshot_age_days formula + ready_for_next_round
+  //   - latest_raw_personal_report_url / latest_raw_business_report_url: report links
   //
   // Computed (NOT writable): employee_next_action_calc, open_inquiries_count,
   //   snapshot_age_days, ready_for_next_round, round_hold_reason_calc,
   //   has_applications, has_rounds, link_integrity_flag
   //
-  // Schema verified against FUNDHUB MATRIX 2026-03-17.
-  return {
-    refresh_in_progress: false
+  // Schema verified against FUNDHUB MATRIX 2026-03-27.
+  const fields = {
+    refresh_in_progress: false,
+    primary_snapshot_date: new Date().toISOString()
   };
+
+  // Write report URLs if available (extracted from raw CRS responses)
+  if (opts?.reportUrls?.personal) {
+    fields.latest_raw_personal_report_url = opts.reportUrls.personal;
+  }
+  if (opts?.reportUrls?.business) {
+    fields.latest_raw_business_report_url = opts.reportUrls.business;
+  }
+
+  return fields;
 }
 
 /**
@@ -167,6 +197,10 @@ function mapSnapshotFields(crsResult, clientRecordId, opts) {
     fraud_alert: crsResult.identityGate?.outcome === "FRAUD_HOLD",
     security_freeze: !!crsResult.identityGate?.securityFreeze?.detected,
     fraud_alert_on_file: !!crsResult.identityGate?.fraudAlertOnFile?.detected,
+
+    // Report URLs (extracted from raw CRS responses)
+    "Raw Report URL": opts?.reportUrls?.personal || "",
+    "Raw Report URL Business": opts?.reportUrls?.business || "",
 
     // Link to client record (field name matches table name in Airtable)
     CLIENTS: clientRecordId ? [clientRecordId] : []
@@ -501,7 +535,7 @@ async function syncCRSResultToAirtable(crsResult, clientRecordId, email, opts) {
 
     // 1. Update client record
     if (resolvedRecordId) {
-      const clientFields = mapClientFields(crsResult);
+      const clientFields = mapClientFields(crsResult, opts);
       await updateRecord(TABLE_CLIENTS, resolvedRecordId, clientFields);
       clientUpdated = true;
       logInfo("Airtable client updated", {
@@ -556,6 +590,7 @@ async function syncCRSResultToAirtable(crsResult, clientRecordId, email, opts) {
 
 module.exports = {
   isConfigured,
+  extractReportUrl,
   mapClientFields,
   mapSnapshotFields,
   derivePerBureauMetrics,

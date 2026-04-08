@@ -43,7 +43,11 @@ async function ghlRequest(method, endpoint, body) {
   const resp = await fetch(url, opts);
   const text = await resp.text();
   let data;
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { raw: text };
+  }
   return { ok: resp.ok, status: resp.status, data };
 }
 
@@ -55,19 +59,22 @@ async function ghlGetContact(contactId) {
   return ghlRequest("GET", `/contacts/${contactId}`);
 }
 
-async function ghlUpdateContact(contactId, payload) {
+async function _ghlUpdateContact(contactId, payload) {
   return ghlRequest("PUT", `/contacts/${contactId}`, payload);
 }
 
 async function ghlSearchContacts(query) {
-  return ghlRequest("GET", `/contacts/?locationId=${GHL_LOCATION}&query=${encodeURIComponent(query)}`);
+  return ghlRequest(
+    "GET",
+    `/contacts/?locationId=${GHL_LOCATION}&query=${encodeURIComponent(query)}`
+  );
 }
 
 async function ghlDeleteContact(contactId) {
   return ghlRequest("DELETE", `/contacts/${contactId}`);
 }
 
-async function ghlGetPipelines() {
+async function _ghlGetPipelines() {
   return ghlRequest("GET", `/opportunities/pipelines?locationId=${GHL_LOCATION}`);
 }
 
@@ -98,7 +105,11 @@ async function atRequest(method, table, params) {
   const resp = await fetch(url, opts);
   const text = await resp.text();
   let data;
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { raw: text };
+  }
   return { ok: resp.ok, status: resp.status, data };
 }
 
@@ -132,8 +143,8 @@ async function atTableExists(table) {
 
 const TEST_PREFIX = "qa-rafael-";
 const TEST_EMAIL_DOMAIN = "@fundhub-qa-test.com";
-let testContactIds = [];
-let testResults = [];
+const testContactIds = [];
+const testResults = [];
 
 function testEmail(name) {
   return `${TEST_PREFIX}${name.toLowerCase().replace(/\s+/g, "-")}${TEST_EMAIL_DOMAIN}`;
@@ -143,7 +154,7 @@ async function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-async function pollContactField(contactId, fieldKey, expectedValue, maxWaitMs = 30000) {
+async function _pollContactField(contactId, fieldKey, expectedValue, maxWaitMs = 30000) {
   const start = Date.now();
   const interval = 3000;
   while (Date.now() - start < maxWaitMs) {
@@ -152,9 +163,7 @@ async function pollContactField(contactId, fieldKey, expectedValue, maxWaitMs = 
     const contact = res.data.contact || res.data;
     // Check custom fields
     const cf = contact.customFields || contact.customField || [];
-    const field = Array.isArray(cf)
-      ? cf.find(f => f.key === fieldKey || f.id === fieldKey)
-      : null;
+    const field = Array.isArray(cf) ? cf.find(f => f.key === fieldKey || f.id === fieldKey) : null;
     const value = field?.value ?? field?.field_value ?? contact[fieldKey];
     if (value === expectedValue) return { found: true, value };
     if (value !== undefined && value !== null && value !== "") {
@@ -195,13 +204,23 @@ async function runPhase0() {
 
   // 0.5 — GHL API connection
   const ghlTest = await ghlSearchContacts("health-check-probe");
-  record(0, "0.5", "GHL API responds", ghlTest.ok || ghlTest.status === 200,
-    `status=${ghlTest.status}`);
+  record(
+    0,
+    "0.5",
+    "GHL API responds",
+    ghlTest.ok || ghlTest.status === 200,
+    `status=${ghlTest.status}`
+  );
 
   // 0.6 — Airtable API connection
   const atTest = await atFindRecords("CLIENTS", "{email}='health-check-probe'", 1);
-  record(0, "0.6", "Airtable API responds", atTest.ok || atTest.status === 200,
-    `status=${atTest.status}`);
+  record(
+    0,
+    "0.6",
+    "Airtable API responds",
+    atTest.ok || atTest.status === 200,
+    `status=${atTest.status}`
+  );
 
   // 0.7 — Airtable tables exist (probe each table directly)
   // Actual Airtable names use UPPER_SNAKE (except "Clients" which also works)
@@ -212,17 +231,25 @@ async function runPhase0() {
     tableResults.push({ table, exists });
   }
   const missingTables = tableResults.filter(t => !t.exists).map(t => t.table);
-  record(0, "0.7", "Required Airtable tables exist",
+  record(
+    0,
+    "0.7",
+    "Required Airtable tables exist",
     missingTables.length === 0,
     missingTables.length > 0
       ? `missing: ${missingTables.join(", ")}`
-      : `found: ${requiredTables.join(", ")}`);
+      : `found: ${requiredTables.join(", ")}`
+  );
 
   // 0.8 — GHL contact search works (pipeline API may need OAuth, use contact search instead)
   const pipelineProbe = await ghlSearchContacts("pipeline-probe");
-  record(0, "0.8", "GHL contact search API works",
+  record(
+    0,
+    "0.8",
+    "GHL contact search API works",
     pipelineProbe.ok,
-    `status=${pipelineProbe.status}`);
+    `status=${pipelineProbe.status}`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -246,8 +273,13 @@ async function runPhase1() {
   });
 
   const contactId = createRes.data?.contact?.id || createRes.data?.id;
-  record(1, "1.1", "Create test contact via GHL API", createRes.ok && !!contactId,
-    contactId ? `id=${contactId}` : `status=${createRes.status}`);
+  record(
+    1,
+    "1.1",
+    "Create test contact via GHL API",
+    createRes.ok && !!contactId,
+    contactId ? `id=${contactId}` : `status=${createRes.status}`
+  );
 
   if (!contactId) {
     record(1, "1.2-1.10", "Skipping remaining Phase 1 tests", false, "no contact created");
@@ -264,15 +296,18 @@ async function runPhase1() {
   // 1.3 — Contact has correct source
   const getRes = await ghlGetContact(contactId);
   const contact = getRes.data?.contact || getRes.data;
-  record(1, "1.3", "Contact source is 'UnderwriteIQ Analyzer'",
+  record(
+    1,
+    "1.3",
+    "Contact source is 'UnderwriteIQ Analyzer'",
     contact?.source === "UnderwriteIQ Analyzer",
-    `source=${contact?.source || "missing"}`);
+    `source=${contact?.source || "missing"}`
+  );
 
   // 1.4 — Contact has tags
   const tags = contact?.tags || [];
   const hasAnalyzerTag = tags.includes("underwriteiq") || tags.includes("credit-analyzer");
-  record(1, "1.4", "Contact has analyzer tags", hasAnalyzerTag,
-    `tags=[${tags.join(", ")}]`);
+  record(1, "1.4", "Contact has analyzer tags", hasAnalyzerTag, `tags=[${tags.join(", ")}]`);
 
   // 1.5 — Create contact with attribution params (S-02)
   const email2 = testEmail("lead-entry-02");
@@ -290,8 +325,13 @@ async function runPhase1() {
     ]
   });
   const attribId = attribRes.data?.contact?.id || attribRes.data?.id;
-  record(1, "1.5", "Create contact with attribution/custom fields", attribRes.ok && !!attribId,
-    attribId ? `id=${attribId}` : `status=${attribRes.status}`);
+  record(
+    1,
+    "1.5",
+    "Create contact with attribution/custom fields",
+    attribRes.ok && !!attribId,
+    attribId ? `id=${attribId}` : `status=${attribRes.status}`
+  );
   if (attribId) testContactIds.push(attribId);
 
   // 1.6 — Verify custom fields were stored
@@ -301,9 +341,13 @@ async function runPhase1() {
     const ac = attribGet.data?.contact || attribGet.data;
     const cf = ac?.customFields || ac?.customField || [];
     const scoreField = Array.isArray(cf) ? cf.find(f => f.key === "credit_score") : null;
-    record(1, "1.6", "Custom fields stored correctly",
+    record(
+      1,
+      "1.6",
+      "Custom fields stored correctly",
       scoreField?.value === "745" || scoreField?.field_value === "745",
-      `credit_score=${scoreField?.value || scoreField?.field_value || "missing"}`);
+      `credit_score=${scoreField?.value || scoreField?.field_value || "missing"}`
+    );
   }
 
   // 1.7 — Duplicate contact handling (same email updates, doesn't create new)
@@ -317,9 +361,13 @@ async function runPhase1() {
   });
   const dupeId = dupeRes.data?.contact?.id || dupeRes.data?.id;
   // GHL should return the same contact or upsert
-  record(1, "1.7", "Duplicate email handled (upsert)",
+  record(
+    1,
+    "1.7",
+    "Duplicate email handled (upsert)",
     dupeRes.ok,
-    dupeId === contactId ? "same id (correct)" : `different id: ${dupeId} (may be upsert)`);
+    dupeId === contactId ? "same id (correct)" : `different id: ${dupeId} (may be upsert)`
+  );
 
   // 1.8 — Contact with phone only (no email)
   const phoneRes = await ghlCreateContact({
@@ -330,8 +378,13 @@ async function runPhase1() {
     tags: ["qa-test"]
   });
   const phoneId = phoneRes.data?.contact?.id || phoneRes.data?.id;
-  record(1, "1.8", "Create contact with phone only (no email)", phoneRes.ok && !!phoneId,
-    phoneId ? `id=${phoneId}` : `status=${phoneRes.status}`);
+  record(
+    1,
+    "1.8",
+    "Create contact with phone only (no email)",
+    phoneRes.ok && !!phoneId,
+    phoneId ? `id=${phoneId}` : `status=${phoneRes.status}`
+  );
   if (phoneId) testContactIds.push(phoneId);
 
   // 1.9 — Airtable sync check (AX-01 should fire after F-01 triggers)
@@ -339,13 +392,22 @@ async function runPhase1() {
   // a GHL workflow, so we check if a CLIENTS record was created.
   // Note: AX-01 only fires after specific workflow triggers (F-01 Funding Intake),
   // not on raw contact creation. We verify the mechanism exists.
-  record(1, "1.9", "AX-01 sync mechanism documented",
-    true, "AX-01 fires on F-01 trigger, not raw contact creation — verified in SOW");
+  record(
+    1,
+    "1.9",
+    "AX-01 sync mechanism documented",
+    true,
+    "AX-01 fires on F-01 trigger, not raw contact creation — verified in SOW"
+  );
 
   // 1.10 — Contact location matches
-  record(1, "1.10", "Contact in correct GHL location",
+  record(
+    1,
+    "1.10",
+    "Contact in correct GHL location",
     contact?.locationId === GHL_LOCATION,
-    `location=${contact?.locationId || "missing"}`);
+    `location=${contact?.locationId || "missing"}`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -363,19 +425,34 @@ async function runPhase2() {
   try {
     const resp = await fetch(crsUrl, { method: "OPTIONS" });
     crsReachable = resp.status === 200 || resp.status === 204;
-  } catch { /* not running */ }
-  record(2, "2.1", "CRS analyze endpoint reachable",
-    crsReachable, crsReachable ? `${crsUrl} OK` : "not running (start with npm run dev)");
+  } catch {
+    /* not running */
+  }
+  record(
+    2,
+    "2.1",
+    "CRS analyze endpoint reachable",
+    crsReachable,
+    crsReachable ? `${crsUrl} OK` : "not running (start with npm run dev)"
+  );
 
   // 2.2 — Airtable reprocess endpoint responds
-  const reprocessUrl = process.env.REPROCESS_URL || "http://localhost:3000/api/lite/airtable-reprocess";
+  const reprocessUrl =
+    process.env.REPROCESS_URL || "http://localhost:3000/api/lite/airtable-reprocess";
   let reprocessReachable = false;
   try {
     const resp = await fetch(reprocessUrl, { method: "OPTIONS" });
     reprocessReachable = resp.status === 200 || resp.status === 204;
-  } catch { /* not running */ }
-  record(2, "2.2", "Airtable reprocess endpoint reachable",
-    reprocessReachable, reprocessReachable ? `${reprocessUrl} OK` : "not running");
+  } catch {
+    /* not running */
+  }
+  record(
+    2,
+    "2.2",
+    "Airtable reprocess endpoint reachable",
+    reprocessReachable,
+    reprocessReachable ? `${reprocessUrl} OK` : "not running"
+  );
 
   // 2.3 — CRS engine modules loadable
   let engineLoadable = false;
@@ -392,22 +469,26 @@ async function runPhase2() {
   try {
     const { isConfigured } = require("../api/lite/crs/airtable-sync");
     syncConfigured = isConfigured();
-  } catch { /* */ }
+  } catch {
+    /* */
+  }
   record(2, "2.4", "Airtable sync configured", syncConfigured);
 
   // 2.5 — Verify mock test clients exist in Airtable (from Task #16)
-  const mockCheck = await atFindRecords("CLIENTS",
-    'SEARCH("fundhub-test.com", {email})', 5);
+  const mockCheck = await atFindRecords("CLIENTS", 'SEARCH("fundhub-test.com", {email})', 5);
   const mockCount = (mockCheck.data?.records || []).length;
-  record(2, "2.5", "Mock test clients exist in Airtable",
-    mockCount > 0, `found ${mockCount} (expected 20)`);
+  record(
+    2,
+    "2.5",
+    "Mock test clients exist in Airtable",
+    mockCount > 0,
+    `found ${mockCount} (expected 20)`
+  );
 
   // 2.6 — Verify snapshots linked to mock clients
-  const snapCheck = await atFindRecords("SNAPSHOTS",
-    '{snapshot_source}="CRS"', 5);
+  const snapCheck = await atFindRecords("SNAPSHOTS", '{snapshot_source}="CRS"', 5);
   const snapCount = (snapCheck.data?.records || []).length;
-  record(2, "2.6", "CRS snapshots exist in Airtable",
-    snapCount > 0, `found ${snapCount}`);
+  record(2, "2.6", "CRS snapshots exist in Airtable", snapCount > 0, `found ${snapCount}`);
 
   // 2.7 — Check snapshot has required fields
   if (snapCount > 0) {
@@ -416,9 +497,13 @@ async function runPhase2() {
     const hasScore = fields.tu_fico != null || fields.ex_fico != null || fields.eq_fico != null;
     const hasDate = !!fields.snapshot_date;
     const hasSource = fields.snapshot_source === "CRS";
-    record(2, "2.7", "Snapshot has required fields (scores, date, source)",
+    record(
+      2,
+      "2.7",
+      "Snapshot has required fields (scores, date, source)",
       hasScore && hasDate && hasSource,
-      `scores=${hasScore}, date=${hasDate}, source=${hasSource}`);
+      `scores=${hasScore}, date=${hasDate}, source=${hasSource}`
+    );
   } else {
     record(2, "2.7", "Snapshot has required fields", false, "no snapshots found");
   }
@@ -427,11 +512,25 @@ async function runPhase2() {
   if (snapCount > 0) {
     const snap = (snapCheck.data.records || [])[0];
     const f = snap?.fields || {};
-    const bureauFields = ["tu_fico", "ex_fico", "eq_fico", "tu_neg_count", "ex_neg_count",
-      "eq_neg_count", "inq_tu", "inq_ex", "inq_eq"];
+    const bureauFields = [
+      "tu_fico",
+      "ex_fico",
+      "eq_fico",
+      "tu_neg_count",
+      "ex_neg_count",
+      "eq_neg_count",
+      "inq_tu",
+      "inq_ex",
+      "inq_eq"
+    ];
     const present = bureauFields.filter(k => f[k] != null);
-    record(2, "2.8", "Per-bureau snapshot fields populated",
-      present.length >= 3, `${present.length}/${bureauFields.length} fields set`);
+    record(
+      2,
+      "2.8",
+      "Per-bureau snapshot fields populated",
+      present.length >= 3,
+      `${present.length}/${bureauFields.length} fields set`
+    );
   } else {
     record(2, "2.8", "Per-bureau snapshot fields populated", false, "no snapshots");
   }
@@ -440,9 +539,13 @@ async function runPhase2() {
   if (snapCount > 0) {
     const snap = (snapCheck.data.records || [])[0];
     const linked = snap?.fields?.CLIENTS;
-    record(2, "2.9", "Snapshot linked to CLIENTS record",
+    record(
+      2,
+      "2.9",
+      "Snapshot linked to CLIENTS record",
       Array.isArray(linked) && linked.length > 0,
-      linked ? `linked to ${linked[0]}` : "not linked");
+      linked ? `linked to ${linked[0]}` : "not linked"
+    );
   } else {
     record(2, "2.9", "Snapshot linked to CLIENTS record", false, "no snapshots");
   }
@@ -452,13 +555,19 @@ async function runPhase2() {
   try {
     const ghlWebhook = require("../api/lite/ghl-webhook");
     webhookConfigured = typeof ghlWebhook.notifyCRSSnapshotComplete === "function";
-  } catch { /* */ }
-  record(2, "2.10", "GHL webhook module loaded (notifyCRSSnapshotComplete)",
-    webhookConfigured);
+  } catch {
+    /* */
+  }
+  record(2, "2.10", "GHL webhook module loaded (notifyCRSSnapshotComplete)", webhookConfigured);
 
   // 2.11 — Verify DPC-01 lock mechanism exists (analyzer_status field)
-  record(2, "2.11", "DPC-01 analyzer lock mechanism",
-    true, "analyzer_status field used as lock — set to 'complete' after processing");
+  record(
+    2,
+    "2.11",
+    "DPC-01 analyzer lock mechanism",
+    true,
+    "analyzer_status field used as lock — set to 'complete' after processing"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -487,8 +596,13 @@ async function runPhase3() {
     ]
   });
   const contactId = res.data?.contact?.id || res.data?.id;
-  record(3, "3.1", "Create funded-path contact with analyzer fields",
-    res.ok && !!contactId, contactId ? `id=${contactId}` : `error`);
+  record(
+    3,
+    "3.1",
+    "Create funded-path contact with analyzer fields",
+    res.ok && !!contactId,
+    contactId ? `id=${contactId}` : `error`
+  );
   if (contactId) testContactIds.push(contactId);
 
   // 3.2 — Verify analyzer fields stored
@@ -498,9 +612,13 @@ async function runPhase3() {
     const c = get.data?.contact || get.data;
     const cf = c?.customFields || c?.customField || [];
     const pathField = Array.isArray(cf) ? cf.find(f => f.key === "analyzer_path") : null;
-    record(3, "3.2", "analyzer_path field set correctly",
+    record(
+      3,
+      "3.2",
+      "analyzer_path field set correctly",
       pathField?.value === "funding" || pathField?.field_value === "funding",
-      `analyzer_path=${pathField?.value || pathField?.field_value || "missing"}`);
+      `analyzer_path=${pathField?.value || pathField?.field_value || "missing"}`
+    );
   }
 
   // 3.3 — Create repair-path contact
@@ -519,8 +637,13 @@ async function runPhase3() {
     ]
   });
   const repairId = res2.data?.contact?.id || res2.data?.id;
-  record(3, "3.3", "Create repair-path contact",
-    res2.ok && !!repairId, repairId ? `id=${repairId}` : "error");
+  record(
+    3,
+    "3.3",
+    "Create repair-path contact",
+    res2.ok && !!repairId,
+    repairId ? `id=${repairId}` : "error"
+  );
   if (repairId) testContactIds.push(repairId);
 
   // 3.4-3.10 — Manual tests (documented but can't automate)
@@ -534,8 +657,13 @@ async function runPhase3() {
     "BS-EMAIL-FUNDING-72HR nurture fires on no-purchase"
   ];
   for (let i = 0; i < manualTests.length; i++) {
-    record(3, `3.${i + 4}`, `[MANUAL] ${manualTests[i]}`, null,
-      "requires GHL calendar/workflow trigger — Phase 2");
+    record(
+      3,
+      `3.${i + 4}`,
+      `[MANUAL] ${manualTests[i]}`,
+      null,
+      "requires GHL calendar/workflow trigger — Phase 2"
+    );
     testResults[testResults.length - 1].status = "SKIP";
   }
 }
@@ -562,8 +690,13 @@ async function runPhase4A() {
       refresh_in_progress: true
     });
     testClientId = rec?.id;
-    record("4A", "4A.1", "Create CLIENTS record via Airtable API",
-      !!testClientId, testClientId ? `id=${testClientId}` : "failed");
+    record(
+      "4A",
+      "4A.1",
+      "Create CLIENTS record via Airtable API",
+      !!testClientId,
+      testClientId ? `id=${testClientId}` : "failed"
+    );
   } catch (err) {
     record("4A", "4A.1", "Create CLIENTS record via Airtable API", false, err.message);
   }
@@ -572,9 +705,13 @@ async function runPhase4A() {
   if (testClientId) {
     const get = await atRequest("GET", "CLIENTS", testClientId);
     const fields = get.data?.fields || {};
-    record("4A", "4A.2", "Client record has name/email/phone",
+    record(
+      "4A",
+      "4A.2",
+      "Client record has name/email/phone",
       fields.full_name === "QA Funding Onboard" && !!fields.email,
-      `name=${fields.full_name}, email=${fields.email}`);
+      `name=${fields.full_name}, email=${fields.email}`
+    );
   }
 
   // 4A.3 — Create snapshot linked to client (simulates C-01 CRS→Airtable Mirror)
@@ -593,8 +730,13 @@ async function runPhase4A() {
     const { createRecord: cr, TABLE_SNAPSHOTS } = require("../api/lite/crs/airtable-sync");
     const snapRec = await cr(TABLE_SNAPSHOTS, snapFields);
     snapId = snapRec?.id;
-    record("4A", "4A.3", "Create snapshot linked to client (C-01 mirror)",
-      !!snapId, snapId ? `id=${snapId}` : "failed");
+    record(
+      "4A",
+      "4A.3",
+      "Create snapshot linked to client (C-01 mirror)",
+      !!snapId,
+      snapId ? `id=${snapId}` : "failed"
+    );
   } catch (err) {
     record("4A", "4A.3", "Create snapshot linked to client", false, err.message);
   }
@@ -603,18 +745,26 @@ async function runPhase4A() {
   if (snapId) {
     const get = await atRequest("GET", "SNAPSHOTS", snapId);
     const f = get.data?.fields || {};
-    record("4A", "4A.4", "Snapshot has FICO scores",
+    record(
+      "4A",
+      "4A.4",
+      "Snapshot has FICO scores",
       f.tu_fico === 740 || f.ex_fico === 735 || f.eq_fico === 742,
-      `tu=${f.tu_fico}, ex=${f.ex_fico}, eq=${f.eq_fico}`);
+      `tu=${f.tu_fico}, ex=${f.ex_fico}, eq=${f.eq_fico}`
+    );
   }
 
   // 4A.5 — Verify snapshot linked back to client
   if (snapId) {
     const get = await atRequest("GET", "SNAPSHOTS", snapId);
     const linked = get.data?.fields?.CLIENTS;
-    record("4A", "4A.5", "Snapshot CLIENTS link populated",
+    record(
+      "4A",
+      "4A.5",
+      "Snapshot CLIENTS link populated",
       Array.isArray(linked) && linked.includes(testClientId),
-      linked ? `linked=${linked[0]}` : "not linked");
+      linked ? `linked=${linked[0]}` : "not linked"
+    );
   }
 
   // 4A.6 — Verify refresh_in_progress can be cleared
@@ -623,10 +773,14 @@ async function runPhase4A() {
       const { updateRecord } = require("../api/lite/crs/airtable-sync");
       await updateRecord("Clients", testClientId, { refresh_in_progress: false });
       const get = await atRequest("GET", "CLIENTS", testClientId);
-      record("4A", "4A.6", "refresh_in_progress cleared after CRS complete",
+      record(
+        "4A",
+        "4A.6",
+        "refresh_in_progress cleared after CRS complete",
         get.data?.fields?.refresh_in_progress === false ||
-        get.data?.fields?.refresh_in_progress === undefined,
-        `value=${get.data?.fields?.refresh_in_progress}`);
+          get.data?.fields?.refresh_in_progress === undefined,
+        `value=${get.data?.fields?.refresh_in_progress}`
+      );
     } catch (err) {
       record("4A", "4A.6", "refresh_in_progress cleared", false, err.message);
     }
@@ -635,12 +789,22 @@ async function runPhase4A() {
   // 4A.7 — GHL contact gets cf_airtable_client_url written back
   // This is done by AX-01 automation, which returns the record URL to GHL.
   // We verify the field concept exists.
-  record("4A", "4A.7", "AX-01 writes cf_airtable_client_url back to GHL",
-    true, "verified in automation audit — AX01A is ON and working");
+  record(
+    "4A",
+    "4A.7",
+    "AX-01 writes cf_airtable_client_url back to GHL",
+    true,
+    "verified in automation audit — AX01A is ON and working"
+  );
 
   // 4A.8 — F-10 Inbox Provisioner
-  record("4A", "4A.8", "[MANUAL] F-10 Inbox Provisioner creates conversation thread",
-    null, "requires GHL workflow trigger — Phase 2");
+  record(
+    "4A",
+    "4A.8",
+    "[MANUAL] F-10 Inbox Provisioner creates conversation thread",
+    null,
+    "requires GHL workflow trigger — Phase 2"
+  );
   testResults[testResults.length - 1].status = "SKIP";
 
   // 4A.9-4A.14 — Workflow-dependent tests
@@ -653,8 +817,13 @@ async function runPhase4A() {
     "F-04 Round Approval routes based on inquiry status"
   ];
   for (let i = 0; i < manualTests4A.length; i++) {
-    record("4A", `4A.${i + 9}`, `[MANUAL] ${manualTests4A[i]}`, null,
-      "requires GHL workflow chain — Phase 2");
+    record(
+      "4A",
+      `4A.${i + 9}`,
+      `[MANUAL] ${manualTests4A[i]}`,
+      null,
+      "requires GHL workflow chain — Phase 2"
+    );
     testResults[testResults.length - 1].status = "SKIP";
   }
 }
@@ -670,26 +839,31 @@ async function runPhase5() {
 
   // 5.1 — Verify FUNDING_ROUNDS table accessible
   const frCheck = await atFindRecords("FUNDING_ROUNDS", "1=1", 1);
-  record(5, "5.1", "FUNDING_ROUNDS table accessible",
-    frCheck.ok, `status=${frCheck.status}`);
+  record(5, "5.1", "FUNDING_ROUNDS table accessible", frCheck.ok, `status=${frCheck.status}`);
 
   // 5.2 — Verify INQUIRY_LOG table accessible
   const ilCheck = await atFindRecords("INQUIRY_LOG", "1=1", 1);
-  record(5, "5.2", "INQUIRY_LOG table accessible",
-    ilCheck.ok, `status=${ilCheck.status}`);
+  record(5, "5.2", "INQUIRY_LOG table accessible", ilCheck.ok, `status=${ilCheck.status}`);
 
   // 5.3 — Check inquiry log has required existing columns
   const ilTables = await atGetTables();
   if (ilTables.ok) {
-    const ilTable = (ilTables.data.tables || []).find(t =>
-      t.name === "INQUIRY_LOG" || t.name === "Inquiry Log");
+    const ilTable = (ilTables.data.tables || []).find(
+      t => t.name === "INQUIRY_LOG" || t.name === "Inquiry Log"
+    );
     if (ilTable) {
       const fieldNames = (ilTable.fields || []).map(f => f.name);
       const required = ["bureau", "Status", "is_open", "Notes"];
-      const found = required.filter(r => fieldNames.some(f =>
-        f.toLowerCase().includes(r.toLowerCase())));
-      record(5, "5.3", "INQUIRY_LOG has required columns",
-        found.length >= 3, `found: ${found.join(", ")}`);
+      const found = required.filter(r =>
+        fieldNames.some(f => f.toLowerCase().includes(r.toLowerCase()))
+      );
+      record(
+        5,
+        "5.3",
+        "INQUIRY_LOG has required columns",
+        found.length >= 3,
+        `found: ${found.join(", ")}`
+      );
     } else {
       record(5, "5.3", "INQUIRY_LOG has required columns", false, "table not found in metadata");
     }
@@ -698,20 +872,40 @@ async function runPhase5() {
   }
 
   // 5.4 — Verify AX-05 (Ready to Fund) automation status
-  record(5, "5.4", "AX-05 (Ready to Fund) automation",
-    true, "verified ON in automation audit — fixed funded_date bug");
+  record(
+    5,
+    "5.4",
+    "AX-05 (Ready to Fund) automation",
+    true,
+    "verified ON in automation audit — fixed funded_date bug"
+  );
 
   // 5.5 — Verify AX-06 (Inquiry Status Update) automation status
-  record(5, "5.5", "AX-06 (Inquiry Status Update) automation",
-    true, "verified — sends inquiry_status_update signal to GHL");
+  record(
+    5,
+    "5.5",
+    "AX-06 (Inquiry Status Update) automation",
+    true,
+    "verified — sends inquiry_status_update signal to GHL"
+  );
 
   // 5.6 — Verify AX-07 (Blocker Task) automation status
-  record(5, "5.6", "AX-07 (Blocker Task) routes by blocker_type",
-    true, "verified in SOW — routes: new_negative, file_prep, reconciliation, fraud_alert, stale_snapshot");
+  record(
+    5,
+    "5.6",
+    "AX-07 (Blocker Task) routes by blocker_type",
+    true,
+    "verified in SOW — routes: new_negative, file_prep, reconciliation, fraud_alert, stale_snapshot"
+  );
 
   // 5.7 — F-05 Inquiry Gate concept
-  record(5, "5.7", "F-05 Inquiry Gate blocks funding when inquiries open",
-    true, "verified in Funding Lane diagram — gates C-02/C-03 Inquiry Ops");
+  record(
+    5,
+    "5.7",
+    "F-05 Inquiry Gate blocks funding when inquiries open",
+    true,
+    "verified in Funding Lane diagram — gates C-02/C-03 Inquiry Ops"
+  );
 
   // 5.8-5.16 — Workflow-dependent tests
   const manualTests5 = [
@@ -726,8 +920,13 @@ async function runPhase5() {
     "F-07 Funding Locked marks client complete"
   ];
   for (let i = 0; i < manualTests5.length; i++) {
-    record(5, `5.${i + 8}`, `[MANUAL] ${manualTests5[i]}`, null,
-      "requires live workflow chain — Phase 2");
+    record(
+      5,
+      `5.${i + 8}`,
+      `[MANUAL] ${manualTests5[i]}`,
+      null,
+      "requires live workflow chain — Phase 2"
+    );
     testResults[testResults.length - 1].status = "SKIP";
   }
 }
@@ -746,24 +945,36 @@ async function runPhase7() {
   try {
     const { rateLimitMiddleware } = require("../api/lite/rate-limiter");
     rateLimiterOk = typeof rateLimitMiddleware === "function";
-  } catch { /* */ }
+  } catch {
+    /* */
+  }
   record(7, "7.1", "Rate limiter module loads", rateLimiterOk);
 
   // 7.2 — Input sanitizer works
   let sanitizerOk = false;
   try {
     const { sanitizeFormFields } = require("../api/lite/input-sanitizer");
-    const result = sanitizeFormFields({ name: "<script>alert(1)</script>" }, { allowedFields: ["name"] });
+    const result = sanitizeFormFields(
+      { name: "<script>alert(1)</script>" },
+      { allowedFields: ["name"] }
+    );
     sanitizerOk = !result.name.includes("<script>");
-  } catch { /* */ }
+  } catch {
+    /* */
+  }
   record(7, "7.2", "Input sanitizer strips XSS", sanitizerOk);
 
   // 7.3 — Logger module works
   let loggerOk = false;
   try {
     const { logInfo, logWarn, logError } = require("../api/lite/logger");
-    loggerOk = typeof logInfo === "function" && typeof logWarn === "function" && typeof logError === "function";
-  } catch { /* */ }
+    loggerOk =
+      typeof logInfo === "function" &&
+      typeof logWarn === "function" &&
+      typeof logError === "function";
+  } catch {
+    /* */
+  }
   record(7, "7.3", "Logger module loads (logInfo/logWarn/logError)", loggerOk);
 
   // 7.4 — GHL webhook module
@@ -771,7 +982,9 @@ async function runPhase7() {
   try {
     const ghlWebhook = require("../api/lite/ghl-webhook");
     webhookOk = typeof ghlWebhook.notifyCRSSnapshotComplete === "function";
-  } catch { /* */ }
+  } catch {
+    /* */
+  }
   record(7, "7.4", "GHL webhook module (notifyCRSSnapshotComplete)", webhookOk);
 
   // 7.5 — Fetch utils module
@@ -779,25 +992,33 @@ async function runPhase7() {
   try {
     const { fetchWithTimeout } = require("../api/lite/fetch-utils");
     fetchOk = typeof fetchWithTimeout === "function";
-  } catch { /* */ }
+  } catch {
+    /* */
+  }
   record(7, "7.5", "Fetch utils module (fetchWithTimeout)", fetchOk);
 
   // 7.6 — Letter generator module
   let letterOk = false;
   try {
     const letterGen = require("../api/lite/letter-generator");
-    letterOk = typeof letterGen.generateDisputeLetterPdf === "function" ||
-               typeof letterGen.generateLetter === "function" ||
-               typeof letterGen === "function";
-  } catch { /* */ }
+    letterOk =
+      typeof letterGen.generateDisputeLetterPdf === "function" ||
+      typeof letterGen.generateLetter === "function" ||
+      typeof letterGen === "function";
+  } catch {
+    /* */
+  }
   record(7, "7.6", "Letter generator module loads", letterOk);
 
   // 7.7 — Dedupe store module
   let dedupeOk = false;
   try {
     const dedupe = require("../api/lite/dedupe-store");
-    dedupeOk = typeof dedupe.checkDedupe === "function" || typeof dedupe.getCachedResult === "function";
-  } catch { /* */ }
+    dedupeOk =
+      typeof dedupe.checkDedupe === "function" || typeof dedupe.getCachedResult === "function";
+  } catch {
+    /* */
+  }
   record(7, "7.7", "Dedupe store module loads", dedupeOk);
 
   // 7.8-7.14 — Manual supporting tests
@@ -811,8 +1032,7 @@ async function runPhase7() {
     "N-04 Post-Funding Nurture fires after F-07"
   ];
   for (let i = 0; i < manualTests7.length; i++) {
-    record(7, `7.${i + 8}`, `[MANUAL] ${manualTests7[i]}`, null,
-      "requires GHL workflow — Phase 2");
+    record(7, `7.${i + 8}`, `[MANUAL] ${manualTests7[i]}`, null, "requires GHL workflow — Phase 2");
     testResults[testResults.length - 1].status = "SKIP";
   }
 }
@@ -845,14 +1065,12 @@ async function cleanupTestContacts() {
   }
 
   // Also clean up Airtable test records
-  const atRes = await atFindRecords("CLIENTS",
-    `SEARCH("${TEST_PREFIX}", {email})`, 50);
+  const atRes = await atFindRecords("CLIENTS", `SEARCH("${TEST_PREFIX}", {email})`, 50);
   const atRecords = atRes.data?.records || [];
   if (atRecords.length > 0) {
     console.log(`  Found ${atRecords.length} Airtable test records.`);
     for (const rec of atRecords) {
-      const delRes = await atRequest("DELETE", "CLIENTS",
-        `?records[]=${rec.id}`);
+      const delRes = await atRequest("DELETE", "CLIENTS", `?records[]=${rec.id}`);
       console.log(`  ${delRes.ok ? "✅" : "❌"} Deleted AT ${rec.fields?.email || rec.id}`);
     }
   }
@@ -876,7 +1094,9 @@ function printSummary() {
   console.log(`  ✅ Pass:  ${pass}`);
   console.log(`  ❌ Fail:  ${fail}`);
   console.log(`  ⏭️  Skip:  ${skip} (manual/Phase 2)`);
-  console.log(`\n  Automated pass rate: ${pass}/${pass + fail} (${Math.round(pass / (pass + fail) * 100) || 0}%)`);
+  console.log(
+    `\n  Automated pass rate: ${pass}/${pass + fail} (${Math.round((pass / (pass + fail)) * 100) || 0}%)`
+  );
 
   // Phase breakdown
   const phases = [...new Set(testResults.map(r => r.phase))];
@@ -935,13 +1155,28 @@ async function main() {
 
   for (const phase of phases) {
     switch (String(phase)) {
-      case "0": await runPhase0(); break;
-      case "1": await runPhase1(); break;
-      case "2": await runPhase2(); break;
-      case "3": await runPhase3(); break;
-      case "4A": case "4a": await runPhase4A(); break;
-      case "5": await runPhase5(); break;
-      case "7": await runPhase7(); break;
+      case "0":
+        await runPhase0();
+        break;
+      case "1":
+        await runPhase1();
+        break;
+      case "2":
+        await runPhase2();
+        break;
+      case "3":
+        await runPhase3();
+        break;
+      case "4A":
+      case "4a":
+        await runPhase4A();
+        break;
+      case "5":
+        await runPhase5();
+        break;
+      case "7":
+        await runPhase7();
+        break;
       default:
         console.log(`\n⏭️  Phase ${phase} — not implemented (Phase 2: needs DisputeFox/manual)`);
     }
@@ -951,7 +1186,9 @@ async function main() {
 
   // Note test contacts created
   if (testContactIds.length > 0) {
-    console.log(`\n📝 Created ${testContactIds.length} test contacts. Run with --cleanup to remove them.`);
+    console.log(
+      `\n📝 Created ${testContactIds.length} test contacts. Run with --cleanup to remove them.`
+    );
   }
 }
 

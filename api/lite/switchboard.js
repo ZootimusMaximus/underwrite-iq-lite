@@ -37,8 +37,12 @@ const { createOrUpdateContact, parseFullName } = require("./ghl-contact-service"
 // Background task queue
 const { enqueueTask } = require("./background-queue");
 
-// GHL + Airtable webhook notifiers (trigger U-02, AX01A workflows)
-const { notifyAnalyzerComplete, notifyAirtableAnalyzerComplete } = require("./ghl-webhook");
+// GHL + Airtable webhook notifiers (trigger U-01, U-02, AX01A workflows)
+const {
+  notifyAnalyzerStart,
+  notifyAnalyzerComplete,
+  notifyAirtableAnalyzerComplete
+} = require("./ghl-webhook");
 
 // Helper to clean up temp files (prevents /tmp from filling up)
 async function cleanupTempFiles(files) {
@@ -278,6 +282,15 @@ module.exports = async function handler(req, res) {
       if (cached?.redirect) {
         return res.status(200).json({ ok: true, redirect: cached.redirect, deduped: true });
       }
+    }
+
+    // ----- GHL Webhook: trigger U-01 (analyzer_start) -----
+    // Fires async — does not block processing. Notifies GHL that analysis is beginning.
+    if (sanitized.email) {
+      notifyAnalyzerStart({
+        email: sanitized.email,
+        phone: sanitized.phone || ""
+      }).catch(() => {});
     }
 
     const rawFiles = files?.file;

@@ -17,8 +17,16 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
 
   if (outcome === "FRAUD_HOLD" || outcome === "MANUAL_REVIEW") {
     const summaryDocs = [];
-    summaryDocs.push({ type: "hold_notice", description: "Application hold notification", fieldKey: null });
-    summaryDocs.push({ type: "operator_checklist", description: "Internal review checklist", fieldKey: null });
+    summaryDocs.push({
+      type: "hold_notice",
+      description: "Application hold notification",
+      fieldKey: null
+    });
+    summaryDocs.push({
+      type: "operator_checklist",
+      description: "Internal review checklist",
+      fieldKey: null
+    });
     return {
       package: "hold",
       letters: [],
@@ -40,7 +48,7 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
           type: "dispute",
           bureau,
           round,
-          fieldKey: `repair_letter_round_${round}_${bureau.substring(0, 2)}`
+          fieldKey: `repair_letter_url__round_${round}__${bureau.substring(0, 2)}`
         });
       }
     }
@@ -51,12 +59,16 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
         type: "personal_info",
         bureau,
         round: null,
-        fieldKey: `repair_letter_personal_info_${bureau.substring(0, 2)}`
+        fieldKey: `repair_letter_url__personal_info_dispute__${bureau.substring(0, 2)}`
       });
     }
 
     const summaryDocs = [];
-    summaryDocs.push({ type: "repair_plan_summary", description: "Customer repair roadmap", fieldKey: "repair_plan_summary_url" });
+    summaryDocs.push({
+      type: "repair_plan_summary",
+      description: "Customer repair roadmap",
+      fieldKey: "repair_plan_summary_url"
+    });
     summaryDocs.push({
       type: "issue_priority_sheet",
       description: "Prioritized list of credit issues",
@@ -87,7 +99,7 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
         type: "inquiry_removal",
         bureau,
         round: null,
-        fieldKey: `funding_letter_inquiry_${bureau.substring(0, 2)}`
+        fieldKey: `funding_letter_url__inquiry_cleanup__${bureau.substring(0, 2)}`
       });
     }
   }
@@ -98,7 +110,7 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
       type: "personal_info",
       bureau,
       round: null,
-      fieldKey: `funding_letter_personal_info_${bureau.substring(0, 2)}`
+      fieldKey: `funding_letter_url__personal_info_cleanup__${bureau.substring(0, 2)}`
     });
   }
 
