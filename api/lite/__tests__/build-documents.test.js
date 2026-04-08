@@ -29,7 +29,7 @@ test("buildDocuments: MANUAL_REVIEW → hold package", () => {
 });
 
 test("buildDocuments: REPAIR → repair package with 3 rounds", () => {
-  const result = buildDocuments("REPAIR", [], makeNormalized(), {});
+  const result = buildDocuments("REPAIR_ONLY", [], makeNormalized(), {});
   assert.equal(result.package, "repair");
 
   const disputes = result.letters.filter(l => l.type === "dispute");
@@ -46,13 +46,13 @@ test("buildDocuments: REPAIR → repair package with 3 rounds", () => {
 });
 
 test("buildDocuments: REPAIR with 2 bureaus", () => {
-  const result = buildDocuments("REPAIR", [], makeNormalized(["transunion", "experian"]), {});
+  const result = buildDocuments("REPAIR_ONLY", [], makeNormalized(["transunion", "experian"]), {});
   const disputes = result.letters.filter(l => l.type === "dispute");
   assert.equal(disputes.length, 6); // 3 rounds × 2 bureaus
 });
 
 test("buildDocuments: FULL_STACK → funding package", () => {
-  const result = buildDocuments("FULL_STACK_APPROVAL", [], makeNormalized(), {});
+  const result = buildDocuments("FULL_FUNDING", [], makeNormalized(), {});
   assert.equal(result.package, "funding");
 
   const inquiryLetters = result.letters.filter(l => l.type === "inquiry_removal");
@@ -72,18 +72,18 @@ test("buildDocuments: PREMIUM_STACK → funding package", () => {
 });
 
 test("buildDocuments: CONDITIONAL → funding package", () => {
-  const result = buildDocuments("CONDITIONAL_APPROVAL", [], makeNormalized(), {});
+  const result = buildDocuments("FUNDING_PLUS_REPAIR", [], makeNormalized(), {});
   assert.equal(result.package, "funding");
 });
 
 test("buildDocuments: summary describes letter counts", () => {
-  const result = buildDocuments("REPAIR", [], makeNormalized(), {});
+  const result = buildDocuments("REPAIR_ONLY", [], makeNormalized(), {});
   assert.ok(result.summary.includes("9 dispute"));
   assert.ok(result.summary.includes("3 personal"));
 });
 
 test("buildDocuments: bureau key abbreviations correct", () => {
-  const result = buildDocuments("REPAIR", [], makeNormalized(), {});
+  const result = buildDocuments("REPAIR_ONLY", [], makeNormalized(), {});
   const keys = result.letters.map(l => l.fieldKey);
   assert.ok(keys.some(k => k.includes("_ex")));
   assert.ok(keys.some(k => k.includes("_eq")));
@@ -108,7 +108,7 @@ test("buildDocuments: summaryDocuments present in hold package", () => {
 });
 
 test("buildDocuments: summaryDocuments present in repair package", () => {
-  const result = buildDocuments("REPAIR", [], makeNormalized(), {});
+  const result = buildDocuments("REPAIR_ONLY", [], makeNormalized(), {});
   assert.ok(Array.isArray(result.summaryDocuments), "summaryDocuments should be an array");
   assert.ok(
     result.summaryDocuments.length > 0,
@@ -121,7 +121,7 @@ test("buildDocuments: summaryDocuments present in repair package", () => {
 });
 
 test("buildDocuments: summaryDocuments present in funding package", () => {
-  const result = buildDocuments("FULL_STACK_APPROVAL", [], makeNormalized(), {});
+  const result = buildDocuments("FULL_FUNDING", [], makeNormalized(), {});
   assert.ok(Array.isArray(result.summaryDocuments), "summaryDocuments should be an array");
   assert.ok(
     result.summaryDocuments.length > 0,

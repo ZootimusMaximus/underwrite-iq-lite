@@ -1,11 +1,12 @@
 "use strict";
 
 /**
- * build-suggestions.js — Stage 08: Suggestion Builder (v3)
+ * build-suggestions.js — Stage 08: Suggestion Builder (v4)
  *
  * Takes optimization findings and organizes them into 4 prioritized layers.
- * No cap on findings — outputs everything.
+ * topMoves capped at 5 for CRM compatibility.
  * Includes projected pre-approval when provided.
+ * Includes getCTA(outcome) for outcome-specific call-to-action text.
  */
 
 const LAYER_CONFIG = [
@@ -34,13 +35,38 @@ const LAYER_CONFIG = [
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
 /**
+ * getCTA(outcome) — Returns outcome-specific call-to-action text.
+ *
+ * @param {string} outcome
+ * @returns {string}
+ */
+function getCTA(outcome) {
+  switch (outcome) {
+    case "PREMIUM_STACK":
+      return "Your profile is in the top tier. Apply now to lock in maximum funding before anything changes.";
+    case "FULL_FUNDING":
+      return "You qualify for full funding. Start your application today while your file is in great shape.";
+    case "FUNDING_PLUS_REPAIR":
+      return "You have clean bureaus ready for funding now. Apply on those while we repair the rest in parallel.";
+    case "REPAIR_ONLY":
+      return "Your dispute letters are ready. Send them out — most clients see results in 30-90 days, then funding opens up.";
+    case "MANUAL_REVIEW":
+      return "Your file needs a manual review. Our team will reach out within 1 business day.";
+    case "FRAUD_HOLD":
+      return "Your application is on hold pending identity verification. Contact our team to resolve this quickly.";
+    default:
+      return "Review the suggestions above and contact our team to discuss next steps.";
+  }
+}
+
+/**
  * buildSuggestions(findings, outcome, consumerSignals, businessSignals, projectedPreapproval)
  *
- * @returns {{ layers[], topMoves[], fullSuggestions[], flatList[], projectedPreapproval }}
+ * @returns {{ layers[], topMoves[], fullSuggestions[], flatList[], projectedPreapproval, cta }}
  */
 function buildSuggestions(
   findings,
-  _outcome,
+  outcome,
   _consumerSignals,
   _businessSignals,
   projectedPreapproval
@@ -57,11 +83,11 @@ function buildSuggestions(
     return { name: config.name, description: config.description, items };
   });
 
-  // All items sorted by severity (no cap)
+  // Top 5 items sorted by severity — capped at 5 for CRM compatibility
   const allItems = layers.flatMap(l => l.items);
-  const topMoves = [...allItems].sort(
-    (a, b) => (SEVERITY_ORDER[a.priority] ?? 4) - (SEVERITY_ORDER[b.priority] ?? 4)
-  );
+  const topMoves = [...allItems]
+    .sort((a, b) => (SEVERITY_ORDER[a.priority] ?? 4) - (SEVERITY_ORDER[b.priority] ?? 4))
+    .slice(0, 5);
 
   // Full suggestions: every customer-safe finding with all detail
   const fullSuggestions = findings
@@ -86,7 +112,8 @@ function buildSuggestions(
     topMoves,
     fullSuggestions,
     flatList,
-    projectedPreapproval: projectedPreapproval || null
+    projectedPreapproval: projectedPreapproval || null,
+    cta: getCTA(outcome)
   };
 }
 
@@ -104,4 +131,4 @@ function mapFindingToItem(f) {
 // Exports
 // ---------------------------------------------------------------------------
 
-module.exports = { buildSuggestions, LAYER_CONFIG };
+module.exports = { buildSuggestions, getCTA, LAYER_CONFIG };

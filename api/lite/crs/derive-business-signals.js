@@ -10,7 +10,7 @@
  * If no business report is provided, returns { available: false }.
  */
 
-const { monthsBetween } = require("./derive-consumer-signals");
+const { monthsBetween, getUtilizationBand } = require("./derive-consumer-signals");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -121,7 +121,34 @@ function deriveBusinessSignals(businessReport) {
   // ── UCC Filings ─────────────────────────────────────────────────────
   const ucc = {
     count: uccFilings.length,
-    caution: uccFilings.length > 3
+    caution: uccFilings.length > 0
+  };
+
+  // ── Business Negative Items (v2) ────────────────────────────────────
+  const bizNegativeItems = {
+    hasNegatives:
+      publicRecords.bankruptcy ||
+      publicRecords.judgment ||
+      publicRecords.taxLien ||
+      (currentDbt != null && currentDbt > 30),
+    items: []
+  };
+  if (publicRecords.bankruptcy) bizNegativeItems.items.push("bankruptcy");
+  if (publicRecords.judgment) bizNegativeItems.items.push("judgment");
+  if (publicRecords.taxLien) bizNegativeItems.items.push("tax_lien");
+  if (currentDbt != null && currentDbt > 30) bizNegativeItems.items.push("high_dbt");
+
+  // ── Business Utilization (v2 — same thresholds as personal) ─────────
+  const bizCreditSummary = creditSummary || {};
+  const bizTotalBalance = bizCreditSummary.currentTotalAccountBalance?.amount ?? null;
+  const bizHighCredit = bizCreditSummary.highestCreditAmount?.amount ?? null;
+  const bizUtilPct =
+    bizTotalBalance != null && bizHighCredit != null && bizHighCredit > 0
+      ? Math.round((bizTotalBalance / bizHighCredit) * 100)
+      : null;
+  const bizUtilization = {
+    pct: bizUtilPct,
+    band: getUtilizationBand(bizUtilPct)
   };
 
   // ── Hard Blocks ─────────────────────────────────────────────────────
@@ -132,6 +159,8 @@ function deriveBusinessSignals(businessReport) {
   if (publicRecords.judgment) blockReasons.push("BUSINESS_JUDGMENT");
   if (publicRecords.taxLien) blockReasons.push("BUSINESS_TAX_LIEN");
   if (fraudShieldSignals.nameVerified === false) blockReasons.push("BUSINESS_VERIFICATION_FAILED");
+  if (bizNegativeItems.hasNegatives) blockReasons.push("BUSINESS_NEGATIVE_ITEMS");
+  if (ucc.caution) blockReasons.push("BUSINESS_UCC_LIEN");
 
   const hardBlock = {
     blocked: blockReasons.length > 0,
@@ -146,6 +175,8 @@ function deriveBusinessSignals(businessReport) {
     fraudShield: fraudShieldSignals,
     publicRecords,
     ucc,
+    bizNegativeItems,
+    bizUtilization,
     hardBlock
   };
 }

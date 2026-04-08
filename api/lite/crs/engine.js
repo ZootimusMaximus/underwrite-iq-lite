@@ -79,17 +79,17 @@ const DECISION_LABELS = {
     explanation:
       "Your application requires additional review by our team. We will follow up within 1-2 business days."
   },
-  REPAIR: {
+  REPAIR_ONLY: {
     label: "Credit Repair Recommended",
     explanation:
       "Based on your credit profile, we recommend addressing some items before pursuing funding. We have prepared a repair plan for you."
   },
-  CONDITIONAL_APPROVAL: {
+  FUNDING_PLUS_REPAIR: {
     label: "Conditionally Approved",
     explanation:
       "You are conditionally approved for funding. Addressing a few remaining items could increase your funding amount."
   },
-  FULL_STACK_APPROVAL: {
+  FULL_FUNDING: {
     label: "Approved for Funding",
     explanation: "Congratulations! Your credit profile qualifies for our full funding programs."
   },

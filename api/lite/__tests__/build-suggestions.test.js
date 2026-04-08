@@ -7,7 +7,7 @@ const { buildSuggestions } = require("../crs/build-suggestions");
 // ============================================================================
 
 test("buildSuggestions: empty findings → empty layers", () => {
-  const result = buildSuggestions([], "FULL_STACK_APPROVAL", {}, null);
+  const result = buildSuggestions([], "FULL_FUNDING", {}, null);
   assert.equal(result.layers.length, 4);
   assert.equal(result.layers[0].items.length, 0);
   assert.equal(result.topMoves.length, 0);
@@ -35,7 +35,7 @@ test("buildSuggestions: critical findings in layer 1", () => {
       whyItMatters: "limits score"
     }
   ];
-  const result = buildSuggestions(findings, "REPAIR", {}, null);
+  const result = buildSuggestions(findings, "REPAIR_ONLY", {}, null);
 
   assert.equal(result.layers[0].name, "Primary Blockers");
   assert.equal(result.layers[0].items.length, 2); // critical + high
@@ -53,7 +53,7 @@ test("buildSuggestions: medium findings in layer 2", () => {
       whyItMatters: "limits"
     }
   ];
-  const result = buildSuggestions(findings, "CONDITIONAL_APPROVAL", {}, null);
+  const result = buildSuggestions(findings, "FUNDING_PLUS_REPAIR", {}, null);
 
   assert.equal(result.layers[1].name, "Next Best Moves");
   assert.equal(result.layers[1].items.length, 1);
@@ -80,7 +80,7 @@ test("buildSuggestions: business findings in layer 4", () => {
       whyItMatters: "limits biz"
     }
   ];
-  const result = buildSuggestions(findings, "CONDITIONAL_APPROVAL", {}, null);
+  const result = buildSuggestions(findings, "FUNDING_PLUS_REPAIR", {}, null);
 
   assert.equal(result.layers[3].name, "Business Prep");
   assert.equal(result.layers[3].items.length, 2);
@@ -119,14 +119,14 @@ test("buildSuggestions: topMoves sorted by severity", () => {
       whyItMatters: ""
     }
   ];
-  const result = buildSuggestions(findings, "REPAIR", {}, null);
+  const result = buildSuggestions(findings, "REPAIR_ONLY", {}, null);
 
   assert.equal(result.topMoves[0].code, "ACTIVE_CHARGEOFF");
   assert.equal(result.topMoves[1].code, "UTIL_STRESS");
   assert.equal(result.topMoves[2].code, "THIN_FILE");
 });
 
-test("buildSuggestions: topMoves NOT capped (v3 — all findings)", () => {
+test("buildSuggestions: topMoves capped at 5 (v4 — CRM compat)", () => {
   const findings = Array.from({ length: 10 }, (_, i) => ({
     code: `FINDING_${i}`,
     severity: "high",
@@ -136,8 +136,8 @@ test("buildSuggestions: topMoves NOT capped (v3 — all findings)", () => {
     whatToDoNext: `Fix ${i}`,
     whyItMatters: ""
   }));
-  const result = buildSuggestions(findings, "REPAIR", {}, null);
-  assert.equal(result.topMoves.length, 10, "v3 removes the top-5 cap");
+  const result = buildSuggestions(findings, "REPAIR_ONLY", {}, null);
+  assert.equal(result.topMoves.length, 5, "v4 caps topMoves at 5 for CRM compat");
 });
 
 test("buildSuggestions: fullSuggestions includes all customer-safe findings", () => {
@@ -170,19 +170,19 @@ test("buildSuggestions: fullSuggestions includes all customer-safe findings", ()
       whyItMatters: "M3"
     }
   ];
-  const result = buildSuggestions(findings, "REPAIR", {}, null);
+  const result = buildSuggestions(findings, "REPAIR_ONLY", {}, null);
   assert.equal(result.fullSuggestions.length, 2, "Only customer-safe findings");
   assert.equal(result.fullSuggestions[0].code, "A"); // critical first
 });
 
 test("buildSuggestions: projectedPreapproval passed through", () => {
   const projected = { total: 50000, cards: 30000, loans: 20000 };
-  const result = buildSuggestions([], "FULL_STACK_APPROVAL", {}, null, projected);
+  const result = buildSuggestions([], "FULL_FUNDING", {}, null, projected);
   assert.deepStrictEqual(result.projectedPreapproval, projected);
 });
 
 test("buildSuggestions: projectedPreapproval null when not provided", () => {
-  const result = buildSuggestions([], "FULL_STACK_APPROVAL", {}, null);
+  const result = buildSuggestions([], "FULL_FUNDING", {}, null);
   assert.equal(result.projectedPreapproval, null);
 });
 
@@ -207,7 +207,7 @@ test("buildSuggestions: flatList excludes non-customerSafe", () => {
       whyItMatters: ""
     }
   ];
-  const result = buildSuggestions(findings, "REPAIR", {}, null);
+  const result = buildSuggestions(findings, "REPAIR_ONLY", {}, null);
   assert.equal(result.flatList.length, 1);
   assert.equal(result.flatList[0], "Fix it");
 });

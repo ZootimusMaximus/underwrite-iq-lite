@@ -19,7 +19,7 @@ const {
 
 const mockCRSResult = {
   ok: true,
-  outcome: "CONDITIONAL_APPROVAL",
+  outcome: "FUNDING_PLUS_REPAIR",
   decision_label: "Conditionally Approved",
   decision_explanation: "You are conditionally approved for funding.",
   reason_codes: ["SCORE_CONDITIONAL_BAND", "INQUIRY_PRESSURE"],
@@ -111,9 +111,9 @@ test("generateOperatorChecklist: produces valid PDF for each outcome", async () 
   const outcomes = [
     "FRAUD_HOLD",
     "MANUAL_REVIEW",
-    "REPAIR",
-    "CONDITIONAL_APPROVAL",
-    "FULL_STACK_APPROVAL",
+    "REPAIR_ONLY",
+    "FUNDING_PLUS_REPAIR",
+    "FULL_FUNDING",
     "PREMIUM_STACK"
   ];
   for (const outcome of outcomes) {
@@ -202,13 +202,13 @@ test("generateAllSummaryDocuments: handles empty specs", async () => {
 // ---------------------------------------------------------------------------
 
 test("generateFundingSummary: handles minimal CRS result", async () => {
-  const minimal = { ok: true, outcome: "FULL_STACK_APPROVAL" };
+  const minimal = { ok: true, outcome: "FULL_FUNDING" };
   const buffer = await generateFundingSummary(minimal, {});
   assert.ok(Buffer.isBuffer(buffer));
 });
 
 test("generateRepairPlanSummary: handles no findings/suggestions", async () => {
-  const minimal = { ok: true, outcome: "REPAIR", optimization_findings: [], suggestions: {} };
+  const minimal = { ok: true, outcome: "REPAIR_ONLY", optimization_findings: [], suggestions: {} };
   const buffer = await generateRepairPlanSummary(minimal, mockPersonal);
   assert.ok(Buffer.isBuffer(buffer));
 });

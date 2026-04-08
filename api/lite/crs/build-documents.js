@@ -38,7 +38,7 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
     };
   }
 
-  if (outcome === "REPAIR") {
+  if (outcome === "REPAIR_ONLY") {
     const letters = [];
 
     // 3 rounds × available bureaus = dispute letters
@@ -88,7 +88,7 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
     };
   }
 
-  // CONDITIONAL_APPROVAL, FULL_STACK_APPROVAL, PREMIUM_STACK → funding package
+  // FULL_FUNDING, FUNDING_PLUS_REPAIR, PREMIUM_STACK → funding package
   const letters = [];
 
   // Inquiry removal letters (1 per bureau with inquiries)

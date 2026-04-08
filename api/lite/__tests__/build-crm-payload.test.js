@@ -12,7 +12,7 @@ function makeOptions(overrides = {}) {
       utilization: { pct: 15, band: "good" }
     },
     businessSignals: { available: true },
-    outcomeResult: { outcome: "FULL_STACK_APPROVAL", reasonCodes: [], businessBoostApplied: false },
+    outcomeResult: { outcome: "FULL_FUNDING", reasonCodes: [], businessBoostApplied: false },
     preapprovals: {
       personalCard: { final: 80000 },
       personalLoan: { final: 60000 },
@@ -39,7 +39,7 @@ test("buildCrmPayload: full stack structure", () => {
   const payload = buildCrmPayload(makeOptions());
 
   assert.equal(payload.contact.email, "test@test.com");
-  assert.equal(payload.outcome, "FULL_STACK_APPROVAL");
+  assert.equal(payload.outcome, "FULL_FUNDING");
   assert.equal(payload.scores.median, 720);
   assert.equal(payload.preapprovals.total, 290000);
   assert.deepEqual(payload.tags, ["full_stack", "business_boost_available"]);
@@ -47,13 +47,13 @@ test("buildCrmPayload: full stack structure", () => {
   assert.equal(payload.redirect.path, "funding");
   assert.equal(payload.customFields.analyzer_path, "funding");
   assert.equal(payload.customFields.analyzer_status, "complete");
-  assert.equal(payload.customFields.outcome_tier, "FULL_STACK_APPROVAL");
+  assert.equal(payload.customFields.outcome_tier, "FULL_FUNDING");
 });
 
 test("buildCrmPayload: repair path", () => {
   const opts = makeOptions({
     outcomeResult: {
-      outcome: "REPAIR",
+      outcome: "REPAIR_ONLY",
       reasonCodes: ["ACTIVE_CHARGEOFF"],
       businessBoostApplied: false
     }
@@ -105,8 +105,8 @@ test("buildCrmPayload: custom fields include business flag", () => {
 });
 
 test("REDIRECT_PATHS: correct mapping", () => {
-  assert.equal(REDIRECT_PATHS.REPAIR, "repair");
-  assert.equal(REDIRECT_PATHS.FULL_STACK_APPROVAL, "funding");
+  assert.equal(REDIRECT_PATHS.REPAIR_ONLY, "repair");
+  assert.equal(REDIRECT_PATHS.FULL_FUNDING, "funding");
   assert.equal(REDIRECT_PATHS.FRAUD_HOLD, null);
   assert.equal(REDIRECT_PATHS.MANUAL_REVIEW, null);
 });
@@ -153,7 +153,7 @@ test("buildCrmPayload: resultType, suggestionSummary, refId fields present", () 
 
 test('buildCrmPayload: resultType is "repair" for REPAIR outcome', () => {
   const opts = makeOptions({
-    outcomeResult: { outcome: "REPAIR", reasonCodes: [], businessBoostApplied: false }
+    outcomeResult: { outcome: "REPAIR_ONLY", reasonCodes: [], businessBoostApplied: false }
   });
   const payload = buildCrmPayload(opts);
   assert.equal(payload.resultType, "repair");

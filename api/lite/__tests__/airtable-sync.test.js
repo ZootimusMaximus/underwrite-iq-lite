@@ -19,7 +19,7 @@ const {
 
 function makeCRSResult(overrides = {}) {
   return {
-    outcome: "FULL_STACK_APPROVAL",
+    outcome: "FULL_FUNDING",
     decision_label: "Approved for Funding",
     confidence: "high",
     reason_codes: ["SCORE_FULL_STACK_BAND"],
@@ -30,7 +30,7 @@ function makeCRSResult(overrides = {}) {
       utilization: { pct: 15, band: "good" },
       inquiries: { total: 8 }
     },
-    identityGate: { outcome: "FULL_STACK_APPROVAL", passed: true, reasons: [] },
+    identityGate: { outcome: "FULL_FUNDING", passed: true, reasons: [] },
     businessSignals: { available: false },
     preapprovals: {
       personalCard: { final: 82500 },
@@ -186,9 +186,9 @@ test("derivePerBureauMetrics: handles empty normalized", () => {
 
 test("getNextAction: all outcome tiers", () => {
   assert.equal(getNextAction("PREMIUM_STACK"), "Submit Applications");
-  assert.equal(getNextAction("FULL_STACK_APPROVAL"), "Submit Applications");
-  assert.equal(getNextAction("CONDITIONAL_APPROVAL"), "Optimization Review");
-  assert.equal(getNextAction("REPAIR"), "Start Repair Plan");
+  assert.equal(getNextAction("FULL_FUNDING"), "Submit Applications");
+  assert.equal(getNextAction("FUNDING_PLUS_REPAIR"), "Optimization Review");
+  assert.equal(getNextAction("REPAIR_ONLY"), "Start Repair Plan");
   assert.equal(getNextAction("MANUAL_REVIEW"), "Manual Review Required");
   assert.equal(getNextAction("FRAUD_HOLD"), "Identity Verification");
   assert.equal(getNextAction("UNKNOWN"), "Review Required");

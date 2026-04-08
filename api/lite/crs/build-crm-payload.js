@@ -9,9 +9,9 @@
 const REDIRECT_PATHS = {
   FRAUD_HOLD: null,
   MANUAL_REVIEW: null,
-  REPAIR: "repair",
-  CONDITIONAL_APPROVAL: "funding",
-  FULL_STACK_APPROVAL: "funding",
+  REPAIR_ONLY: "repair",
+  FUNDING_PLUS_REPAIR: "funding",
+  FULL_FUNDING: "funding",
   PREMIUM_STACK: "funding"
 };
 

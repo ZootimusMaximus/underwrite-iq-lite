@@ -4,7 +4,7 @@
  * estimate-preapprovals.js — Stage 06: Pre-Approval Estimator
  *
  * Calculates funding estimates for personal cards, personal loans,
- * and business credit using anchor tradelines and 7 CRS-era modifiers.
+ * and business credit using anchor tradelines and 2 personal modifiers (v2).
  */
 
 // ---------------------------------------------------------------------------
@@ -29,9 +29,9 @@ function getBusinessAgeMultiplier(ageMonths) {
 
 const OUTCOME_MODIFIER = {
   PREMIUM_STACK: 1.0,
-  FULL_STACK_APPROVAL: 1.0,
-  CONDITIONAL_APPROVAL: 0.6,
-  REPAIR: 0,
+  FULL_FUNDING: 1.0,
+  FUNDING_PLUS_REPAIR: 0.6,
+  REPAIR_ONLY: 0,
   MANUAL_REVIEW: 0,
   FRAUD_HOLD: 0
 };
@@ -102,9 +102,9 @@ function getConfidenceBand(modProduct, bureauConfidence) {
 
 const CUSTOMER_SAFE_OUTCOMES = {
   PREMIUM_STACK: true,
-  FULL_STACK_APPROVAL: true,
-  CONDITIONAL_APPROVAL: true,
-  REPAIR: false,
+  FULL_FUNDING: true,
+  FUNDING_PLUS_REPAIR: true,
+  REPAIR_ONLY: false,
   MANUAL_REVIEW: false,
   FRAUD_HOLD: false
 };
@@ -138,24 +138,18 @@ function estimatePreapprovals(consumerSignals, businessSignals, outcome) {
       ? Math.max(installmentAnchor * PERSONAL_LOAN_MULTIPLIER, PERSONAL_LOAN_FLOOR)
       : 0;
 
-  // Collect modifiers
+  // v2: Only 2 modifiers (utilization + thin file)
   const outcomeMod = OUTCOME_MODIFIER[outcome] ?? 0;
-  const bureauMod = BUREAU_CONFIDENCE_MODIFIER[cs.scores.bureauConfidence] ?? 0.65;
   const utilMod = UTILIZATION_MODIFIER[cs.utilization.band] ?? 0.8;
-  const inquiryMod = INQUIRY_PRESSURE_MODIFIER[cs.inquiries.pressure] ?? 0.85;
-  const auMod = getAuDominanceModifier(cs.tradelines.auDominance);
   const thinMod = getThinFileModifier(cs.tradelines.thinFile);
 
   const modifiers = {
     outcome: outcomeMod,
-    bureauConfidence: bureauMod,
     utilization: utilMod,
-    inquiryPressure: inquiryMod,
-    auDominance: auMod,
     thinFile: thinMod
   };
 
-  const personalModProduct = outcomeMod * bureauMod * utilMod * inquiryMod * auMod * thinMod;
+  const personalModProduct = outcomeMod * utilMod * thinMod;
 
   // Personal card
   const cardFinal = Math.floor(cardBase * personalModProduct);
@@ -175,52 +169,35 @@ function estimatePreapprovals(consumerSignals, businessSignals, outcome) {
     eligible: loanFinal > 0
   };
 
-  // Business
-  const businessAvailable = bs?.available && !bs?.hardBlock?.blocked;
+  // Business (v2: utilization-based, hard block on any negative/UCC)
+  const businessAvailable = bs?.available === true;
+  const bizBlocked =
+    !businessAvailable ||
+    bs?.hardBlock?.blocked ||
+    bs?.bizNegativeItems?.hasNegatives ||
+    bs?.ucc?.caution;
+
   const businessAgeMult = businessAvailable ? getBusinessAgeMultiplier(bs.profile?.ageMonths) : 0;
-  const businessOverlay = businessAvailable
-    ? getBusinessOverlayModifier(bs.scores?.intelliscore)
-    : 0;
+  const bizUtilMod =
+    businessAvailable && bs.bizUtilization?.band
+      ? (UTILIZATION_MODIFIER[bs.bizUtilization.band] ?? 0.8)
+      : 1.0;
   const businessBase = cardBase * businessAgeMult;
-  let businessRaw = businessAvailable ? Math.floor(businessBase * businessOverlay * outcomeMod) : 0;
+  const businessFinal = bizBlocked ? 0 : Math.floor(businessBase * bizUtilMod * outcomeMod);
 
-  // Apply caps per spec Section 12.2
   let capReason = "not_applicable";
-  if (businessAvailable && businessRaw > 0) {
-    const recLimit = bs.scores?.recommendedLimit;
-    if (recLimit != null && recLimit > 0) {
-      // Prefer recommended limit from report as cap
-      const cappedByLimit = Math.floor(recLimit * outcomeMod);
-      if (businessRaw > cappedByLimit) businessRaw = cappedByLimit;
-      capReason = "recommended_limit_from_report";
-    } else if (bs.scores?.intelliscore != null) {
-      capReason = "policy_estimate_from_quality";
-    } else {
-      capReason = "legacy_compatibility_fallback";
-    }
-
-    // UCC caution applies 0.7x cap (spec Section 10.3)
-    if (bs.ucc?.caution) {
-      businessRaw = Math.floor(businessRaw * 0.7);
-      capReason = "ucc_caution_applied";
-    }
-
-    // DBT stress reduces business amount (spec Section 10.3)
-    const dbtStress = bs.dbt?.stress;
-    if (dbtStress === "moderate") businessRaw = Math.floor(businessRaw * 0.8);
-    else if (dbtStress === "high") businessRaw = Math.floor(businessRaw * 0.6);
-    else if (dbtStress === "severe") businessRaw = Math.floor(businessRaw * 0.3);
-  }
-  const businessFinal = businessRaw;
+  if (bizBlocked && bs?.bizNegativeItems?.hasNegatives) capReason = "negative_items_hard_block";
+  else if (bizBlocked && bs?.ucc?.caution) capReason = "ucc_hard_block";
+  else if (bizBlocked && bs?.hardBlock?.blocked) capReason = "hard_block";
+  else if (businessFinal > 0) capReason = "utilization_based";
 
   const business = {
     base: businessBase,
     multiplier: businessAgeMult,
-    modifiers: { businessOverlay, outcome: outcomeMod },
+    modifiers: { bizUtilization: bizUtilMod, outcome: outcomeMod },
     final: businessFinal,
     eligible: businessFinal > 0,
     offerBand: getOfferBand(businessFinal),
-    overlayStrength: businessAvailable ? getOverlayStrength(bs.scores?.intelliscore) : "none",
     capReason
   };
 
@@ -231,12 +208,8 @@ function estimatePreapprovals(consumerSignals, businessSignals, outcome) {
 
   const modifiersApplied = [];
   if (outcomeMod < 1) modifiersApplied.push("outcome");
-  if (bureauMod < 1) modifiersApplied.push("bureauConfidence");
   if (utilMod < 1) modifiersApplied.push("utilization");
-  if (inquiryMod < 1) modifiersApplied.push("inquiryPressure");
-  if (auMod < 1) modifiersApplied.push("auDominance");
   if (thinMod < 1) modifiersApplied.push("thinFile");
-  if (businessOverlay > 0 && businessOverlay !== 1) modifiersApplied.push("businessOverlay");
 
   // Confidence
   const confidenceBand = getConfidenceBand(personalModProduct, cs.scores.bureauConfidence);

@@ -325,7 +325,7 @@ function getChecklistItems(outcome, crsResult) {
         "Check if additional documentation is needed",
         "Determine if applicant can be re-pulled with corrections"
       ];
-    case "REPAIR":
+    case "REPAIR_ONLY":
       return [
         "Confirm dispute letters generated for all bureaus",
         "Schedule follow-up for dispute results (30-45 days)",
@@ -333,7 +333,7 @@ function getChecklistItems(outcome, crsResult) {
         "Set credit monitoring alerts",
         "Schedule re-analysis after disputes complete"
       ];
-    case "CONDITIONAL_APPROVAL":
+    case "FUNDING_PLUS_REPAIR":
       return [
         "Review conditional items with client",
         "Verify pre-approval amounts are realistic",
@@ -341,7 +341,7 @@ function getChecklistItems(outcome, crsResult) {
         "Address optimization findings before submission",
         `Total estimated: $${(crsResult.preapprovals?.totalCombined || 0).toLocaleString()}`
       ];
-    case "FULL_STACK_APPROVAL":
+    case "FULL_FUNDING":
     case "PREMIUM_STACK":
       return [
         "Begin full lender application stack",

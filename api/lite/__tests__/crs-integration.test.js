@@ -44,7 +44,7 @@ test("integration: TU only (BARBARA DOTY) → CONDITIONAL_APPROVAL", { skip: !ha
   const result = runEngine([tuResponse], { name: "BARBARA DOTY" });
 
   assert.equal(result.ok, true);
-  assert.equal(result.outcome, "CONDITIONAL_APPROVAL");
+  assert.equal(result.outcome, "FUNDING_PLUS_REPAIR");
   assert.equal(typeof result.decision_label, "string");
   assert.ok(result.decision_label.length > 0);
 
@@ -71,7 +71,7 @@ test("integration: EXP only (WILLIE BOOZE) → REPAIR", { skip: !hasResponses },
   const result = runEngine([expResponse], { name: "WILLIE BOOZE" });
 
   assert.equal(result.ok, true);
-  assert.equal(result.outcome, "REPAIR");
+  assert.equal(result.outcome, "REPAIR_ONLY");
 
   // Score should be 630
   assert.equal(result.consumerSignals.scores.median, 630);
@@ -92,7 +92,7 @@ test("integration: EFX only (JOHN BIALOGLOW) → REPAIR", { skip: !hasResponses 
   const result = runEngine([efxResponse], { name: "JOHN BIALOGLOW" });
 
   assert.equal(result.ok, true);
-  assert.equal(result.outcome, "REPAIR");
+  assert.equal(result.outcome, "REPAIR_ONLY");
 
   // Score should be 636
   assert.equal(result.consumerSignals.scores.median, 636);
@@ -234,7 +234,7 @@ test("integration: preapprovals have correct structure", { skip: !hasResponses }
 test("integration: REPAIR preapprovals are not customer-safe", { skip: !hasResponses }, () => {
   const result = runEngine([efxResponse], { name: "JOHN BIALOGLOW" });
 
-  assert.equal(result.outcome, "REPAIR");
+  assert.equal(result.outcome, "REPAIR_ONLY");
   assert.equal(result.preapprovals.customerSafe, false);
 });
 

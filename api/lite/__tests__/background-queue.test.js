@@ -94,7 +94,7 @@ test("enqueueTask handles airtable_sync type", async () => {
   resetMocks();
 
   const result = await enqueueTask("airtable_sync", {
-    result: { outcome: "FULL_STACK_APPROVAL" },
+    result: { outcome: "FULL_FUNDING" },
     recordId: "rec123"
   });
 

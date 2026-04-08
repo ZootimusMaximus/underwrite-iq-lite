@@ -49,7 +49,7 @@ function makeBS(overrides = {}) {
 // ============================================================================
 
 test("buildCards: FULL_STACK → full_stack tag", () => {
-  const tags = buildCards("FULL_STACK_APPROVAL", makeCS(), makeBS(), []);
+  const tags = buildCards("FULL_FUNDING", makeCS(), makeBS(), []);
   assert.ok(tags.includes("full_stack"));
   assert.ok(tags.includes("business_boost_available"));
 });
@@ -81,7 +81,7 @@ test("buildCards: REPAIR with derogatories", () => {
       bankruptcyAge: null
     }
   });
-  const tags = buildCards("REPAIR", cs, null, []);
+  const tags = buildCards("REPAIR_ONLY", cs, null, []);
   assert.ok(tags.includes("needs_negative_cleanup"));
 });
 
@@ -89,7 +89,7 @@ test("buildCards: utilization tags", () => {
   const cs = makeCS({
     utilization: { totalBalance: 9000, totalLimit: 10000, pct: 90, band: "critical" }
   });
-  const tags = buildCards("REPAIR", cs, null, []);
+  const tags = buildCards("REPAIR_ONLY", cs, null, []);
   assert.ok(tags.includes("util_critical"));
 });
 
@@ -107,7 +107,7 @@ test("buildCards: thin file + AU dominant", () => {
       thinFile: true
     }
   });
-  const tags = buildCards("CONDITIONAL_APPROVAL", cs, null, []);
+  const tags = buildCards("FUNDING_PLUS_REPAIR", cs, null, []);
   assert.ok(tags.includes("thin_file"));
   assert.ok(tags.includes("au_dominant"));
   assert.ok(tags.includes("needs_file_buildout"));
@@ -115,7 +115,7 @@ test("buildCards: thin file + AU dominant", () => {
 
 test("buildCards: inquiry pressure", () => {
   const cs = makeCS({ inquiries: { total: 15, last6Mo: 12, last12Mo: 15, pressure: "storm" } });
-  const tags = buildCards("CONDITIONAL_APPROVAL", cs, null, []);
+  const tags = buildCards("FUNDING_PLUS_REPAIR", cs, null, []);
   assert.ok(tags.includes("needs_inquiry_cleanup"));
 });
 
@@ -135,12 +135,12 @@ test("buildCards: bankruptcy tags", () => {
       bankruptcyAge: 36
     }
   });
-  const tags = buildCards("CONDITIONAL_APPROVAL", cs, null, []);
+  const tags = buildCards("FUNDING_PLUS_REPAIR", cs, null, []);
   assert.ok(tags.includes("bankruptcy_discharged"));
 });
 
 test("buildCards: near_approval when conditional with no critical findings", () => {
-  const tags = buildCards("CONDITIONAL_APPROVAL", makeCS(), null, [
+  const tags = buildCards("FUNDING_PLUS_REPAIR", makeCS(), null, [
     { severity: "medium", code: "THIN_FILE" }
   ]);
   assert.ok(tags.includes("near_approval"));
@@ -148,7 +148,7 @@ test("buildCards: near_approval when conditional with no critical findings", () 
 });
 
 test("buildCards: NOT near_approval when critical findings exist", () => {
-  const tags = buildCards("CONDITIONAL_APPROVAL", makeCS(), null, [
+  const tags = buildCards("FUNDING_PLUS_REPAIR", makeCS(), null, [
     { severity: "critical", code: "ACTIVE_CHARGEOFF" }
   ]);
   assert.ok(!tags.includes("near_approval"));
@@ -156,7 +156,7 @@ test("buildCards: NOT near_approval when critical findings exist", () => {
 
 test("buildCards: business blocked", () => {
   const bs = makeBS({ hardBlock: { blocked: true, reasons: ["BUSINESS_INACTIVE"] } });
-  const tags = buildCards("CONDITIONAL_APPROVAL", makeCS(), bs, []);
+  const tags = buildCards("FUNDING_PLUS_REPAIR", makeCS(), bs, []);
   assert.ok(tags.includes("business_blocked"));
   assert.ok(!tags.includes("business_boost_available"));
 });
@@ -175,7 +175,7 @@ test("buildCards: no duplicate tags", () => {
       thinFile: true
     }
   });
-  const tags = buildCards("CONDITIONAL_APPROVAL", cs, null, []);
+  const tags = buildCards("FUNDING_PLUS_REPAIR", cs, null, []);
   const unique = new Set(tags);
   assert.equal(tags.length, unique.size);
 });
@@ -212,7 +212,7 @@ test("buildCards: spec alias tags are present (inquiries, negatives, file_buildo
       bankruptcyAge: 36
     }
   });
-  const tags = buildCards("REPAIR", cs, null, []);
+  const tags = buildCards("REPAIR_ONLY", cs, null, []);
   assert.ok(tags.includes("inquiries"), "should include spec alias tag: inquiries");
   assert.ok(tags.includes("negatives"), "should include spec alias tag: negatives");
   assert.ok(tags.includes("file_buildout"), "should include spec alias tag: file_buildout");

@@ -241,6 +241,59 @@ function deriveConsumerSignals(normalized) {
     bankruptcyAge: mostRecentBK?.filedDate ? monthsBetween(mostRecentBK.filedDate, refIso) : null
   };
 
+  // ── Per-Bureau Negatives (v2 — needed for bureau-level routing) ────
+  const bureauNames = ["transunion", "experian", "equifax"];
+  const bureauNegatives = {};
+  for (const bureau of bureauNames) {
+    const bureauTradelines = tradelines.filter(t => t.source === bureau);
+    const negItems = bureauTradelines.filter(
+      t =>
+        t.isDerogatory ||
+        t.currentRatingType === "ChargeOff" ||
+        t.adverseRatings?.highest?.type === "CollectionOrChargeOff" ||
+        (t.latePayments &&
+          (t.latePayments._30 > 0 || t.latePayments._60 > 0 || t.latePayments._90 > 0))
+    );
+    bureauNegatives[bureau] = {
+      pulled: bureauTradelines.length > 0,
+      clean: bureauTradelines.length > 0 && negItems.length === 0,
+      count: negItems.length,
+      items: negItems.map(t => ({
+        creditorName: t.creditorName,
+        type: t.currentRatingType,
+        balance: t.currentBalance,
+        source: t.source
+      }))
+    };
+  }
+  // Only consider bureaus that were actually pulled (had tradelines)
+  const pulledBureaus = bureauNames.filter(b => bureauNegatives[b].pulled);
+  const allBureausClean =
+    pulledBureaus.length > 0 && pulledBureaus.every(b => bureauNegatives[b].clean);
+  const anyBureauClean = pulledBureaus.some(b => bureauNegatives[b].clean);
+
+  // ── AU Impact (v2) ─────────────────────────────────────────────────
+  const auImpact = {
+    harmful: auTradelines
+      .filter(t => {
+        const util = t.effectiveLimit > 0 ? t.currentBalance / t.effectiveLimit : 0;
+        const hasLates =
+          t.latePayments &&
+          (t.latePayments._30 > 0 || t.latePayments._60 > 0 || t.latePayments._90 > 0);
+        return util > 0.3 || hasLates || t.isDerogatory;
+      })
+      .map(t => ({ creditorName: t.creditorName, source: t.source })),
+    neutral: auTradelines
+      .filter(t => {
+        const util = t.effectiveLimit > 0 ? t.currentBalance / t.effectiveLimit : 0;
+        const hasLates =
+          t.latePayments &&
+          (t.latePayments._30 > 0 || t.latePayments._60 > 0 || t.latePayments._90 > 0);
+        return !(util > 0.3 || hasLates || t.isDerogatory);
+      })
+      .map(t => ({ creditorName: t.creditorName, source: t.source }))
+  };
+
   // ── Payment History ─────────────────────────────────────────────────
   const late30 = tradelines.reduce((sum, t) => sum + t.latePayments._30, 0);
   const late60 = tradelines.reduce((sum, t) => sum + t.latePayments._60, 0);
@@ -263,7 +316,11 @@ function deriveConsumerSignals(normalized) {
     utilization,
     inquiries: inquirySignals,
     derogatories: derogSignals,
-    paymentHistory
+    paymentHistory,
+    bureauNegatives,
+    allBureausClean,
+    anyBureauClean,
+    auImpact
   };
 }
 

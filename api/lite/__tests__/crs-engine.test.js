@@ -73,7 +73,7 @@ test("runCRSEngine: all 3 bureaus — full pipeline", { skip: !tuRaw || !expRaw 
   assert.ok(result.consumerSignals.derogatories.chargeoffs >= 1);
 
   // Outcome should reflect the derogatory data
-  assert.ok(["REPAIR", "CONDITIONAL_APPROVAL", "MANUAL_REVIEW"].includes(result.outcome));
+  assert.ok(["REPAIR_ONLY", "FUNDING_PLUS_REPAIR", "MANUAL_REVIEW"].includes(result.outcome));
 
   // CRM payload populated
   assert.equal(result.crmPayload.scores.median, 636);
@@ -312,10 +312,10 @@ test("runCRSEngine: redirect.path is set for funding outcomes", { skip: !tuRaw }
   // For funding outcomes (FULL_STACK, CONDITIONAL, PREMIUM), path should be 'funding'
   // For non-funding (REPAIR), path should be 'repair'
   // For holds (FRAUD_HOLD, MANUAL_REVIEW), path should be null
-  const fundingOutcomes = ["FULL_STACK_APPROVAL", "CONDITIONAL_APPROVAL", "PREMIUM_STACK"];
+  const fundingOutcomes = ["FULL_FUNDING", "FUNDING_PLUS_REPAIR", "PREMIUM_STACK"];
   if (fundingOutcomes.includes(result.outcome)) {
     assert.equal(result.redirect.path, "funding");
-  } else if (result.outcome === "REPAIR") {
+  } else if (result.outcome === "REPAIR_ONLY") {
     assert.equal(result.redirect.path, "repair");
   } else {
     assert.equal(result.redirect.path, null);

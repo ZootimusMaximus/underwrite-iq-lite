@@ -115,7 +115,7 @@ module.exports = async function handler(req, res) {
 
     // ----- Build redirect -----
     const redirectPath =
-      outcomeResult.outcome === "REPAIR" || outcomeResult.outcome === "MANUAL_REVIEW"
+      outcomeResult.outcome === "REPAIR_ONLY" || outcomeResult.outcome === "MANUAL_REVIEW"
         ? "repair"
         : "funding";
 

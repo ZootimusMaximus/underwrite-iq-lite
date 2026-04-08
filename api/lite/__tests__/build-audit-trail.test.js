@@ -22,7 +22,7 @@ function makeAuditOptions() {
       hardBlock: { blocked: false }
     },
     outcomeResult: {
-      outcome: "FULL_STACK_APPROVAL",
+      outcome: "FULL_FUNDING",
       reasonCodes: [],
       confidence: "high",
       businessBoostApplied: false,
@@ -96,7 +96,7 @@ test("buildAuditTrail: decisions log content", () => {
   assert.ok(audit.decisionsLog.some(d => d.includes("medianScore=720")));
   assert.ok(audit.decisionsLog.some(d => d.includes("utilization=15%")));
   assert.ok(audit.decisionsLog.some(d => d.includes("no active derogatories")));
-  assert.ok(audit.decisionsLog.some(d => d.includes("FULL_STACK_APPROVAL")));
+  assert.ok(audit.decisionsLog.some(d => d.includes("FULL_FUNDING")));
   assert.ok(audit.decisionsLog.some(d => d.includes("$290000")));
   // New detailed fields
   assert.ok(audit.decisionsLog.some(d => d.includes("identityGate: PASSED")));

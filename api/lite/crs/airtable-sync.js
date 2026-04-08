@@ -239,11 +239,11 @@ function mapSnapshotFields(crsResult, clientRecordId, opts) {
 function getNextAction(outcome) {
   switch (outcome) {
     case "PREMIUM_STACK":
-    case "FULL_STACK_APPROVAL":
+    case "FULL_FUNDING":
       return "Submit Applications";
-    case "CONDITIONAL_APPROVAL":
+    case "FUNDING_PLUS_REPAIR":
       return "Optimization Review";
-    case "REPAIR":
+    case "REPAIR_ONLY":
       return "Start Repair Plan";
     case "MANUAL_REVIEW":
       return "Manual Review Required";

@@ -25,12 +25,12 @@ function buildCards(outcome, consumerSignals, businessSignals, findings) {
     case "MANUAL_REVIEW":
       tags.push("manual_review");
       break;
-    case "REPAIR":
+    case "REPAIR_ONLY":
       break; // repair tags added via signals below
-    case "CONDITIONAL_APPROVAL":
+    case "FUNDING_PLUS_REPAIR":
       tags.push("conditional");
       break;
-    case "FULL_STACK_APPROVAL":
+    case "FULL_FUNDING":
       tags.push("full_stack");
       break;
     case "PREMIUM_STACK":
@@ -88,7 +88,7 @@ function buildCards(outcome, consumerSignals, businessSignals, findings) {
   }
 
   // Near approval (conditional with few blockers)
-  if (outcome === "CONDITIONAL_APPROVAL") {
+  if (outcome === "FUNDING_PLUS_REPAIR") {
     const criticalFindings = findings.filter(f => f.severity === "critical");
     if (criticalFindings.length === 0) tags.push("near_approval");
   }

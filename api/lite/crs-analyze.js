@@ -11,6 +11,7 @@
 
 const { runCRSEngine } = require("./crs/engine");
 const { enrichSuggestionsWithAI } = require("./crs/suggestion-text-generator");
+const { generateDeliverables } = require("./crs/generate-deliverables");
 const { sanitizeFormFields } = require("./input-sanitizer");
 const { rateLimitMiddleware } = require("./rate-limiter");
 const {
@@ -152,10 +153,26 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // ----- Step 15: Claude API Document Generation (non-blocking) -----
+    let deliverables = null;
+    if (process.env.ANTHROPIC_API_KEY) {
+      try {
+        const personal = {
+          name: submittedName || sanitized.name || "Client",
+          address: submittedAddress || ""
+        };
+        deliverables = await generateDeliverables(result, personal);
+        result.deliverables = deliverables;
+      } catch (_docErr) {
+        logWarn("Document generation failed, continuing without", { error: _docErr.message });
+      }
+    }
+
     logInfo("CRS engine complete", {
       outcome: result.outcome,
       totalCombined: result.preapprovals?.totalCombined,
-      findingsCount: result.optimization_findings?.length
+      findingsCount: result.optimization_findings?.length,
+      documentsGenerated: deliverables?.meta?.documentsGenerated || 0
     });
 
     // ----- Build redirect -----

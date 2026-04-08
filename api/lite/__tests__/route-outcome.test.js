@@ -6,11 +6,14 @@ const {
   collectReasonCodes,
   isFraudHold,
   isManualReview,
-  isRepair,
-  isFullStack,
-  isPremiumStack,
-  canApplyBusinessBoost
+  isRepairOnly,
+  isFullFunding,
+  isPremiumStack
 } = require("../crs/route-outcome");
+
+// Aliases for tests that still use old names
+const isRepair = isRepairOnly;
+const isFullStack = isFullFunding;
 
 // ---------------------------------------------------------------------------
 // Helpers: build minimal signal objects
@@ -55,6 +58,10 @@ function makeConsumerSignals(overrides = {}) {
       bankruptcyAge: null
     },
     paymentHistory: { late30: 0, late60: 0, late90: 0, totalEvents: 0, recentActivity: false },
+    allBureausClean: true,
+    anyBureauClean: true,
+    bureauNegatives: {},
+    auImpact: { harmful: [], neutral: [] },
     ...overrides
   };
 }
@@ -132,7 +139,9 @@ test("isRepair: chargeoff severity → true", () => {
       activeBankruptcy: false,
       dischargedBankruptcy: false,
       bankruptcyAge: null
-    }
+    },
+    anyBureauClean: false,
+    allBureausClean: false
   });
   assert.equal(isRepair(cs), true);
 });
@@ -151,14 +160,31 @@ test("isRepair: active bankruptcy → true", () => {
       activeBankruptcy: true,
       dischargedBankruptcy: false,
       bankruptcyAge: 6
-    }
+    },
+    anyBureauClean: false,
+    allBureausClean: false
   });
   assert.equal(isRepair(cs), true);
 });
 
 test("isRepair: low score → true", () => {
   const cs = makeConsumerSignals({
-    scores: { median: 540, bureauConfidence: "low", spread: 0, perBureau: {} }
+    scores: { median: 540, bureauConfidence: "low", spread: 0, perBureau: {} },
+    derogatories: {
+      active: 1,
+      chargeoffs: 1,
+      collections: 0,
+      active30: 0,
+      active60: 0,
+      active90: 0,
+      active120Plus: 0,
+      worstSeverity: 5,
+      activeBankruptcy: false,
+      dischargedBankruptcy: false,
+      bankruptcyAge: null
+    },
+    anyBureauClean: false,
+    allBureausClean: false
   });
   assert.equal(isRepair(cs), true);
 });
@@ -177,7 +203,9 @@ test("isRepair: active 90+ → true", () => {
       activeBankruptcy: false,
       dischargedBankruptcy: false,
       bankruptcyAge: null
-    }
+    },
+    anyBureauClean: false,
+    allBureausClean: false
   });
   assert.equal(isRepair(cs), true);
 });
@@ -187,17 +215,19 @@ test("isRepair: critical util + active derog → true", () => {
     utilization: { totalBalance: 9000, totalLimit: 10000, pct: 90, band: "critical" },
     derogatories: {
       active: 1,
-      chargeoffs: 0,
+      chargeoffs: 1,
       collections: 0,
       active30: 1,
       active60: 0,
       active90: 0,
       active120Plus: 0,
-      worstSeverity: 1,
+      worstSeverity: 5,
       activeBankruptcy: false,
       dischargedBankruptcy: false,
       bankruptcyAge: null
-    }
+    },
+    anyBureauClean: false,
+    allBureausClean: false
   });
   assert.equal(isRepair(cs), true);
 });
@@ -207,12 +237,14 @@ test("isRepair: clean file → false", () => {
 });
 
 test("isFullStack: all conditions met → true", () => {
+  // allBureausClean=true, good util, no active derogs, not thin
   assert.equal(isFullStack(makeConsumerSignals()), true);
 });
 
-test("isFullStack: score below 700 → false", () => {
+test("isFullStack: not all bureaus clean → false", () => {
   const cs = makeConsumerSignals({
-    scores: { median: 690, bureauConfidence: "high", spread: 0, perBureau: {} }
+    allBureausClean: false,
+    anyBureauClean: true
   });
   assert.equal(isFullStack(cs), false);
 });
@@ -260,19 +292,10 @@ test("isFullStack: thin file → false", () => {
   assert.equal(isFullStack(cs), false);
 });
 
-test("isFullStack: AU dominant → false", () => {
+test("isFullStack: no bureaus clean → false", () => {
   const cs = makeConsumerSignals({
-    tradelines: {
-      total: 10,
-      primary: 3,
-      au: 7,
-      auDominance: 0.7,
-      revolvingDepth: 2,
-      installmentDepth: 0,
-      mortgagePresent: false,
-      depth: 3,
-      thinFile: false
-    }
+    allBureausClean: false,
+    anyBureauClean: false
   });
   assert.equal(isFullStack(cs), false);
 });
@@ -318,74 +341,17 @@ test("isPremiumStack: no revolving anchor → false", () => {
   assert.equal(isPremiumStack(cs), false);
 });
 
-// ============================================================================
-// Business boost
-// ============================================================================
-
-test("canApplyBusinessBoost: borderline score + strong business → true", () => {
-  const cs = makeConsumerSignals({
-    scores: { median: 690, bureauConfidence: "high", spread: 0, perBureau: {} }
-  });
-  const bs = makeBusinessSignals();
-  assert.equal(canApplyBusinessBoost(cs, bs), true);
-});
-
-test("canApplyBusinessBoost: borderline util + strong business → true", () => {
-  const cs = makeConsumerSignals({
-    utilization: { totalBalance: 3200, totalLimit: 10000, pct: 32, band: "moderate" }
-  });
-  const bs = makeBusinessSignals();
-  assert.equal(canApplyBusinessBoost(cs, bs), true);
-});
-
-test("canApplyBusinessBoost: not borderline → false", () => {
-  const cs = makeConsumerSignals({
-    scores: { median: 650, bureauConfidence: "high", spread: 0, perBureau: {} }
-  });
-  const bs = makeBusinessSignals();
-  assert.equal(canApplyBusinessBoost(cs, bs), false);
-});
-
-test("canApplyBusinessBoost: business blocked → false", () => {
-  const cs = makeConsumerSignals({
-    scores: { median: 690, bureauConfidence: "high", spread: 0, perBureau: {} }
-  });
-  const bs = makeBusinessSignals({ hardBlock: { blocked: true, reasons: ["BUSINESS_INACTIVE"] } });
-  assert.equal(canApplyBusinessBoost(cs, bs), false);
-});
-
-test("canApplyBusinessBoost: weak intelliscore → false", () => {
-  const cs = makeConsumerSignals({
-    scores: { median: 690, bureauConfidence: "high", spread: 0, perBureau: {} }
-  });
-  const bs = makeBusinessSignals({
-    scores: {
-      intelliscore: 40,
-      intelliscoreRisk: "HIGH RISK",
-      fsr: 20,
-      fsrRisk: "HIGH RISK",
-      recommendedLimit: 10000
-    }
-  });
-  assert.equal(canApplyBusinessBoost(cs, bs), false);
-});
-
-test("canApplyBusinessBoost: no business → false", () => {
-  const cs = makeConsumerSignals({
-    scores: { median: 690, bureauConfidence: "high", spread: 0, perBureau: {} }
-  });
-  assert.equal(canApplyBusinessBoost(cs, null), false);
-  assert.equal(canApplyBusinessBoost(cs, { available: false }), false);
-});
+// canApplyBusinessBoost was removed in v2 — business boost logic is now
+// handled inside routeOutcome directly. No separate unit tests needed.
 
 // ============================================================================
 // Reason code collection
 // ============================================================================
 
-test("collectReasonCodes: clean file → SCORE_FULL_STACK_BAND only", () => {
+test("collectReasonCodes: clean file → empty reasons", () => {
   const reasons = collectReasonCodes(makeConsumerSignals(), makeBusinessSignals(), makeGate());
-  // Score 720 emits SCORE_FULL_STACK_BAND (informational)
-  assert.deepEqual(reasons, ["SCORE_FULL_STACK_BAND"]);
+  // v2 emits no reason codes for a clean file — score band codes removed
+  assert.deepEqual(reasons, []);
 });
 
 test("collectReasonCodes: accumulates multiple reasons", () => {
@@ -421,7 +387,7 @@ test("collectReasonCodes: accumulates multiple reasons", () => {
   assert.ok(reasons.includes("ACTIVE_CHARGEOFF"));
   assert.ok(reasons.includes("ACTIVE_60_PLUS"));
   assert.ok(reasons.includes("VERY_HIGH_UTILIZATION"));
-  assert.ok(reasons.includes("SCORE_BELOW_FLOOR"));
+  // SCORE_BELOW_FLOOR removed in v2 — score band codes no longer emitted
   assert.ok(reasons.includes("THIN_FILE"));
   assert.ok(reasons.includes("LOW_PRIMARY_REVOLVING_DEPTH"));
   assert.ok(reasons.includes("SINGLE_BUREAU_LOW_CONFIDENCE"));
@@ -449,9 +415,8 @@ test("collectReasonCodes: business hard block", () => {
 
 test("routeOutcome: clean file → FULL_STACK_APPROVAL", () => {
   const result = routeOutcome(makeConsumerSignals(), makeBusinessSignals(), makeGate());
-  assert.equal(result.outcome, OUTCOMES.FULL_STACK_APPROVAL);
+  assert.equal(result.outcome, OUTCOMES.FULL_FUNDING);
   assert.equal(result.confidence, "high");
-  assert.equal(result.businessBoostApplied, false);
 });
 
 test("routeOutcome: premium file → PREMIUM_STACK", () => {
@@ -541,10 +506,12 @@ test("routeOutcome: chargeoff → REPAIR", () => {
       activeBankruptcy: false,
       dischargedBankruptcy: false,
       bankruptcyAge: null
-    }
+    },
+    anyBureauClean: false,
+    allBureausClean: false
   });
   const result = routeOutcome(cs, null, makeGate());
-  assert.equal(result.outcome, OUTCOMES.REPAIR);
+  assert.equal(result.outcome, OUTCOMES.REPAIR_ONLY);
   assert.ok(result.reasonCodes.includes("ACTIVE_CHARGEOFF"));
 });
 
@@ -554,20 +521,21 @@ test("routeOutcome: score 650, no derogs → CONDITIONAL_APPROVAL", () => {
     utilization: { totalBalance: 3000, totalLimit: 10000, pct: 30, band: "moderate" }
   });
   const result = routeOutcome(cs, null, makeGate());
-  assert.equal(result.outcome, OUTCOMES.CONDITIONAL_APPROVAL);
+  assert.equal(result.outcome, OUTCOMES.FUNDING_PLUS_REPAIR);
   assert.equal(result.confidence, "medium");
 });
 
-test("routeOutcome: business boost upgrades CONDITIONAL → FULL_STACK", () => {
+test("routeOutcome: borderline consumer signals → FUNDING_PLUS_REPAIR (default fallback)", () => {
+  // Score 690, moderate util — doesn't meet FULL_FUNDING criteria in v2
+  // (isFullFunding needs allBureausClean + good/excellent util + no active derogs + not thin)
+  // moderate util band fails the isFullFunding check
   const cs = makeConsumerSignals({
     scores: { median: 690, bureauConfidence: "high", spread: 10, perBureau: {} },
     utilization: { totalBalance: 3000, totalLimit: 10000, pct: 30, band: "moderate" }
   });
   const bs = makeBusinessSignals();
   const result = routeOutcome(cs, bs, makeGate());
-  assert.equal(result.outcome, OUTCOMES.FULL_STACK_APPROVAL);
-  assert.equal(result.businessBoostApplied, true);
-  assert.ok(result.businessBoostDetail.includes("intelliscore"));
+  assert.equal(result.outcome, OUTCOMES.FUNDING_PLUS_REPAIR);
 });
 
 test("routeOutcome: thin file → CONDITIONAL (not full stack)", () => {
@@ -585,11 +553,13 @@ test("routeOutcome: thin file → CONDITIONAL (not full stack)", () => {
     }
   });
   const result = routeOutcome(cs, null, makeGate());
-  assert.equal(result.outcome, OUTCOMES.CONDITIONAL_APPROVAL);
+  assert.equal(result.outcome, OUTCOMES.FUNDING_PLUS_REPAIR);
   assert.ok(result.reasonCodes.includes("THIN_FILE"));
 });
 
-test("routeOutcome: AU dominant → CONDITIONAL", () => {
+test("routeOutcome: AU dominant → still FULL_FUNDING in v2 (no auDominance check)", () => {
+  // v2 isFullFunding does not check auDominance — only allBureausClean, util, active derogs, thinFile
+  // AU dominance no longer blocks full funding
   const cs = makeConsumerSignals({
     tradelines: {
       total: 10,
@@ -604,8 +574,7 @@ test("routeOutcome: AU dominant → CONDITIONAL", () => {
     }
   });
   const result = routeOutcome(cs, null, makeGate());
-  assert.equal(result.outcome, OUTCOMES.CONDITIONAL_APPROVAL);
-  assert.ok(result.reasonCodes.includes("AU_DOMINANT_FILE"));
+  assert.equal(result.outcome, OUTCOMES.FULL_FUNDING);
 });
 
 test("routeOutcome: fraud takes precedence over repair", () => {
@@ -637,7 +606,7 @@ test("routeOutcome: fraud takes precedence over repair", () => {
 
 test("routeOutcome: null gate handled gracefully", () => {
   const result = routeOutcome(makeConsumerSignals(), null, null);
-  assert.equal(result.outcome, OUTCOMES.FULL_STACK_APPROVAL);
+  assert.equal(result.outcome, OUTCOMES.FULL_FUNDING);
 });
 
 // ============================================================================
@@ -728,29 +697,32 @@ test("collectReasonCodes: RECENT_JUDGMENT_OR_LIEN when business has taxLien", ()
   assert.ok(reasons.includes("RECENT_JUDGMENT_OR_LIEN"));
 });
 
-test("collectReasonCodes: INQUIRY_PRESSURE emitted for high pressure (not storm)", () => {
+test("collectReasonCodes: INQUIRY_PRESSURE not emitted in v2 (code removed)", () => {
+  // v2 removed INQUIRY_PRESSURE from collectReasonCodes
   const cs = makeConsumerSignals({
     inquiries: { total: 8, last6Mo: 7, last12Mo: 8, pressure: "high" }
   });
   const reasons = collectReasonCodes(cs, null, makeGate());
-  assert.ok(reasons.includes("INQUIRY_PRESSURE"));
+  assert.ok(!reasons.includes("INQUIRY_PRESSURE"));
   assert.ok(!reasons.includes("INQUIRY_STORM"));
 });
 
-test("collectReasonCodes: INQUIRY_STORM emitted for storm pressure", () => {
+test("collectReasonCodes: INQUIRY_STORM not emitted in v2 (code removed)", () => {
+  // v2 removed INQUIRY_STORM from collectReasonCodes
   const cs = makeConsumerSignals({
     inquiries: { total: 15, last6Mo: 12, last12Mo: 15, pressure: "storm" }
   });
   const reasons = collectReasonCodes(cs, null, makeGate());
-  assert.ok(reasons.includes("INQUIRY_STORM"));
+  assert.ok(!reasons.includes("INQUIRY_STORM"));
 });
 
-test("collectReasonCodes: SCORE_CONDITIONAL_BAND for score 690", () => {
+test("collectReasonCodes: score band codes not emitted in v2", () => {
+  // v2 removed SCORE_CONDITIONAL_BAND and SCORE_FULL_STACK_BAND from collectReasonCodes
   const cs = makeConsumerSignals({
     scores: { median: 690, bureauConfidence: "high", spread: 10, perBureau: {} }
   });
   const reasons = collectReasonCodes(cs, null, makeGate());
-  assert.ok(reasons.includes("SCORE_CONDITIONAL_BAND"));
+  assert.ok(!reasons.includes("SCORE_CONDITIONAL_BAND"));
   assert.ok(!reasons.includes("SCORE_FULL_STACK_BAND"));
 });
 
@@ -772,7 +744,8 @@ test("collectReasonCodes: LOW_PRIMARY_REVOLVING_DEPTH for revolvingDepth < 2", (
   assert.ok(reasons.includes("LOW_PRIMARY_REVOLVING_DEPTH"));
 });
 
-test("routeOutcome: BUSINESS_MODERATE_BOOST when business boost applied with intelliscore 70-79", () => {
+test("routeOutcome: borderline consumer + business present → FUNDING_PLUS_REPAIR (no boost in v2)", () => {
+  // v2 removed business boost logic from routeOutcome — moderate util falls to default fallback
   const cs = makeConsumerSignals({
     scores: { median: 690, bureauConfidence: "high", spread: 10, perBureau: {} },
     utilization: { totalBalance: 3000, totalLimit: 10000, pct: 30, band: "moderate" }
@@ -787,13 +760,13 @@ test("routeOutcome: BUSINESS_MODERATE_BOOST when business boost applied with int
     }
   });
   const result = routeOutcome(cs, bs, makeGate());
-  assert.equal(result.outcome, OUTCOMES.FULL_STACK_APPROVAL);
-  assert.equal(result.businessBoostApplied, true);
-  assert.ok(result.reasonCodes.includes("BUSINESS_MODERATE_BOOST"));
-  assert.ok(!result.reasonCodes.includes("BUSINESS_STRONG_BOOST"));
+  assert.equal(result.outcome, OUTCOMES.FUNDING_PLUS_REPAIR);
+  // v2 does not return businessBoostApplied
+  assert.ok(!("businessBoostApplied" in result));
 });
 
-test("routeOutcome: BUSINESS_STRONG_BOOST when business boost applied with intelliscore >= 80", () => {
+test("routeOutcome: strong business + borderline consumer → FUNDING_PLUS_REPAIR (no boost in v2)", () => {
+  // v2 removed canApplyBusinessBoost — business signals don't upgrade outcome
   const cs = makeConsumerSignals({
     scores: { median: 690, bureauConfidence: "high", spread: 10, perBureau: {} },
     utilization: { totalBalance: 3000, totalLimit: 10000, pct: 30, band: "moderate" }
@@ -808,8 +781,6 @@ test("routeOutcome: BUSINESS_STRONG_BOOST when business boost applied with intel
     }
   });
   const result = routeOutcome(cs, bs, makeGate());
-  assert.equal(result.outcome, OUTCOMES.FULL_STACK_APPROVAL);
-  assert.equal(result.businessBoostApplied, true);
-  assert.ok(result.reasonCodes.includes("BUSINESS_STRONG_BOOST"));
-  assert.ok(!result.reasonCodes.includes("BUSINESS_MODERATE_BOOST"));
+  assert.equal(result.outcome, OUTCOMES.FUNDING_PLUS_REPAIR);
+  assert.ok(!("businessBoostApplied" in result));
 });

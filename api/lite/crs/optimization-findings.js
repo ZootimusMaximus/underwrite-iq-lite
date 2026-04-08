@@ -1,9 +1,9 @@
 "use strict";
 
 /**
- * optimization-findings.js — Stage 07: Optimization Findings (v3)
+ * optimization-findings.js — Stage 07: Optimization Findings (v4)
  *
- * Detects 42 categories of credit optimization opportunities.
+ * Detects 37 categories of credit optimization opportunities.
  * Each finding references specific tradelines by name, gives exact
  * dollar amounts, and generates template text at 5th-grade reading level.
  *
@@ -14,7 +14,9 @@
  *   - Utilization target is always under 10%
  *   - Funding before new accounts
  *   - No cap on findings
- *   - Skip business findings if no LLC/business data
+ *   - Inquiries "do not affect funding" — never imply they hurt funding
+ *   - AU findings: client is "not responsible for the debt"
+ *   - Business findings emitted when !hasLLC AND no business report (NO_BUSINESS_ENTITY)
  */
 
 // ---------------------------------------------------------------------------
@@ -63,12 +65,6 @@ function isMedicalCreditor(name) {
     "surgery",
     "emergency"
   ];
-  return keywords.some(kw => lower.includes(kw));
-}
-
-function isSupportCreditor(name) {
-  const lower = (name || "").toLowerCase();
-  const keywords = ["child support", "support enforcement", "family court", "cse ", "dcss"];
   return keywords.some(kw => lower.includes(kw));
 }
 
@@ -139,7 +135,7 @@ function buildOptimizationFindings(
     }
   }
 
-  // UTIL_OVERALL_HIGH — Overall utilization above 10%
+  // UTIL_OVERALL_HIGH — Overall utilization above 30%
   if (cs.utilization.pct != null && cs.utilization.pct > 30) {
     const target10 = Math.round(cs.utilization.totalLimit * 0.1);
     const sev =
@@ -160,11 +156,11 @@ function buildOptimizationFindings(
     );
   }
 
-  // UTIL_GOOD_BUT_NOT_IDEAL — Utilization between 10-30%
+  // UTIL_MODERATE — Utilization between 10-30%
   if (cs.utilization.pct != null && cs.utilization.pct > 10 && cs.utilization.pct <= 30) {
     const target10 = Math.round(cs.utilization.totalLimit * 0.1);
     findings.push(
-      makeFinding("UTIL_GOOD_BUT_NOT_IDEAL", "utilization", "medium", true, {
+      makeFinding("UTIL_MODERATE", "utilization", "medium", true, {
         problem: `Your utilization is at ${cs.utilization.pct}%. That is decent, but you are leaving money on the table.`,
         matters:
           "Under 10% is where the magic happens for funding. The lower your utilization, the higher your pre-approval amount.",
@@ -176,16 +172,16 @@ function buildOptimizationFindings(
     );
   }
 
-  // UTIL_AU_DRAGGING — AU card with high utilization
+  // AU_HIGH_UTIL — AU card with utilization over 30%
   const auCards = tradelines.filter(
     tl => tl.isAU && tl.status === "open" && tl.accountType === "revolving" && tl.effectiveLimit > 0
   );
   for (const tl of auCards) {
     const util = Math.round((tl.currentBalance / tl.effectiveLimit) * 100);
-    if (util > 50) {
+    if (util > 30) {
       findings.push(
-        makeFinding("UTIL_AU_DRAGGING", "utilization", "medium", true, {
-          problem: `You are listed as an authorized user on a ${tl.creditorName} card, and it is at ${util}% utilization.`,
+        makeFinding("AU_HIGH_UTIL", "utilization", "medium", true, {
+          problem: `You are listed as an authorized user on a ${tl.creditorName} card, and it is at ${util}% utilization. You are not responsible for this debt — it is someone else's account.`,
           matters:
             "Even though this is not your debt, it still counts against your credit utilization.",
           next: `Ask the main cardholder to pay it down, or call ${tl.creditorName} and ask to be removed from the card.`,
@@ -288,7 +284,8 @@ function buildOptimizationFindings(
     }
   }
 
-  // LATE_PAYMENT_ITEM — Account with late payments
+  // LATE_PAYMENT_RECENT — Account with late payments in the last 12 months
+  // LATE_PAYMENT_OLD — Account with late payments only older than 12 months
   const withLates = tradelines.filter(
     tl =>
       !tl.isAU &&
@@ -299,23 +296,48 @@ function buildOptimizationFindings(
     const total = tl.latePayments._30 + tl.latePayments._60 + tl.latePayments._90;
     const worst =
       tl.latePayments._90 > 0 ? "90-day" : tl.latePayments._60 > 0 ? "60-day" : "30-day";
-    findings.push(
-      makeFinding("LATE_PAYMENT_ITEM", "derogatory", "high", true, {
-        problem: `Your ${tl.creditorName} account shows ${total} late payment(s), including ${worst} lates.`,
-        matters: "Late payments stay on your report for 7 years, but their impact fades over time.",
-        next: `If you have been paying on time since, write a goodwill letter asking ${tl.creditorName} to remove them. We included a template. Another option: dispute with the bureaus. Sometimes the creditor does not respond and it gets removed.`,
-        target: "Zero late payments",
-        docs: ["dispute_letter"],
-        tags: ["needs_negative_cleanup"],
-        accountData: {
-          creditorName: tl.creditorName,
-          late30: tl.latePayments._30,
-          late60: tl.latePayments._60,
-          late90: tl.latePayments._90,
-          worstLevel: worst
-        }
-      })
-    );
+    // Determine recency: check if account has recent activity (last 12 months)
+    const acctAge = monthsAgo(tl.openedDate);
+    const isRecent = acctAge != null && acctAge <= 12;
+    if (isRecent) {
+      findings.push(
+        makeFinding("LATE_PAYMENT_RECENT", "derogatory", "high", true, {
+          problem: `Your ${tl.creditorName} account shows ${total} late payment(s) in the last 12 months, including ${worst} lates.`,
+          matters:
+            "Recent late payments are the most damaging — lenders see them as a current risk signal.",
+          next: `Get current immediately. Then write a goodwill letter to ${tl.creditorName} asking them to remove the lates. We included a template. Paying on time from here forward is the most important thing you can do.`,
+          target: "Zero recent late payments",
+          docs: ["dispute_letter"],
+          tags: ["needs_negative_cleanup"],
+          accountData: {
+            creditorName: tl.creditorName,
+            late30: tl.latePayments._30,
+            late60: tl.latePayments._60,
+            late90: tl.latePayments._90,
+            worstLevel: worst
+          }
+        })
+      );
+    } else {
+      findings.push(
+        makeFinding("LATE_PAYMENT_OLD", "derogatory", "medium", true, {
+          problem: `Your ${tl.creditorName} account shows ${total} late payment(s), including ${worst} lates. These are older than 12 months.`,
+          matters:
+            "Late payments stay on your report for 7 years, but their impact fades over time. Older lates hurt less.",
+          next: `If you have been paying on time since, write a goodwill letter asking ${tl.creditorName} to remove them. We included a template. Another option: dispute with the bureaus. Sometimes the creditor does not respond and it gets removed.`,
+          target: "Zero late payments",
+          docs: ["dispute_letter"],
+          tags: ["needs_negative_cleanup"],
+          accountData: {
+            creditorName: tl.creditorName,
+            late30: tl.latePayments._30,
+            late60: tl.latePayments._60,
+            late90: tl.latePayments._90,
+            worstLevel: worst
+          }
+        })
+      );
+    }
   }
 
   // BANKRUPTCY_ACTIVE
@@ -348,7 +370,6 @@ function buildOptimizationFindings(
   }
 
   // JUDGMENT_ITEM / TAX_LIEN — from public records or derogatory tradelines
-  // These are detected via tradeline comments or adverseRatings
   const judgmentTradelines = tradelines.filter(tl => {
     const comments = (tl.comments || []).map(c => (c.text || "").toLowerCase());
     return comments.some(c => c.includes("judgment"));
@@ -378,23 +399,6 @@ function buildOptimizationFindings(
         next: "Contact the IRS or state tax authority to set up a payment plan. Once paid in full, request a Certificate of Release and send to all three bureaus.",
         target: "Tax lien released",
         docs: ["dispute_letter"],
-        tags: ["needs_negative_cleanup"]
-      })
-    );
-  }
-
-  // SUPPORT_DELINQUENCY — child support (internal only)
-  const supportTradelines = tradelines.filter(tl =>
-    isSupportCreditor(tl.creditorName || tl.subscriberName)
-  );
-  if (supportTradelines.length > 0 && cs.derogatories.active > 0) {
-    findings.push(
-      makeFinding("SUPPORT_DELINQUENCY", "derogatory", "critical", false, {
-        problem: "A child support or government support obligation appears delinquent.",
-        matters:
-          "Support obligations are treated as priority debts and can block funding programs.",
-        next: "Contact the support enforcement agency to resolve arrears before applying.",
-        target: "Support obligations current",
         tags: ["needs_negative_cleanup"]
       })
     );
@@ -456,25 +460,6 @@ function buildOptimizationFindings(
     );
   }
 
-  // CREDIT_MIX_IMBALANCED — Only one type of credit
-  const hasRevolving = cs.tradelines.revolvingDepth > 0;
-  const hasInstallment = cs.tradelines.installmentDepth > 0;
-  if (
-    cs.tradelines.primary >= 2 &&
-    ((hasRevolving && !hasInstallment) || (!hasRevolving && hasInstallment))
-  ) {
-    findings.push(
-      makeFinding("CREDIT_MIX_IMBALANCED", "tradeline_depth", "low", true, {
-        problem: `All your accounts are ${hasRevolving ? "credit cards" : "installment loans"}. Lenders like to see different types of credit.`,
-        matters: "A balanced credit mix shows lenders you can handle different kinds of debt.",
-        next: "Do not rush to open new accounts if you are going for funding. New accounts will lower your average age and add hard inquiries. Go for funding first, then diversify afterward.",
-        target: "Mix of revolving + installment",
-        docs: ["tradeline_guidance"],
-        tags: ["needs_file_buildout"]
-      })
-    );
-  }
-
   // OLDEST_ACCOUNT_SHORT — Oldest account under 24 months
   const primaryTradelines = tradelines.filter(tl => !tl.isAU && tl.openedDate);
   const oldestMonths = primaryTradelines.reduce((max, tl) => {
@@ -515,45 +500,33 @@ function buildOptimizationFindings(
   // 2.4 AUTHORIZED USER MANAGEMENT
   // =========================================================================
 
-  // AU_DOMINANT — Over 40% of tradelines are AU
-  if (cs.tradelines.auDominance > 0.4) {
-    findings.push(
-      makeFinding("AU_DOMINANT", "tradeline_quality", "medium", true, {
-        problem: `${Math.round(cs.tradelines.auDominance * 100)}% of your credit accounts are authorized user accounts where someone else is the main cardholder.`,
-        matters: "Lenders discount these heavily. You need more accounts in your own name.",
-        next: "If you are planning to get funding, go for funding first before opening new cards. After funding is secured, open 1-2 primary cards to bring your AU percentage down.",
-        target: "AU accounts under 40% of total",
-        docs: ["tradeline_guidance"],
-        tags: ["needs_file_buildout"]
-      })
-    );
-  }
-
-  // AU_REMOVE_BAD — AU account hurting the file
+  // AU_NEGATIVE_MARKS — AU account with lates or derogs
   for (const tl of auCards) {
     const util =
       tl.effectiveLimit > 0 ? Math.round((tl.currentBalance / tl.effectiveLimit) * 100) : 0;
     const hasLates =
       tl.latePayments &&
       (tl.latePayments._30 > 0 || tl.latePayments._60 > 0 || tl.latePayments._90 > 0);
-    if (util > 50 || hasLates || tl.isDerogatory) {
-      // Don't duplicate with UTIL_AU_DRAGGING — only emit if it has lates/derogs
-      if (hasLates || tl.isDerogatory) {
-        findings.push(
-          makeFinding("AU_REMOVE_BAD", "tradeline_quality", "medium", true, {
-            problem: `You are on a ${tl.creditorName} card as an authorized user, and it has ${hasLates ? "late payments" : "derogatory marks"} hurting your credit.`,
-            matters:
-              "Even though this is not your debt, the negative history still counts against you.",
-            next: `Call ${tl.creditorName} and ask to be removed. It should come off your report in 30-60 days.`,
-            target: "Remove bad AU account",
-            tags: ["needs_au_review"]
-          })
-        );
-      }
+    if (hasLates || tl.isDerogatory) {
+      findings.push(
+        makeFinding("AU_NEGATIVE_MARKS", "tradeline_quality", "high", true, {
+          problem: `You are on a ${tl.creditorName} card as an authorized user, and it has ${hasLates ? "late payments" : "derogatory marks"} hurting your credit. You are not responsible for this debt — it is someone else's account.`,
+          matters:
+            "Even though this is not your debt, the negative history still counts against you.",
+          next: `Call ${tl.creditorName} and ask to be removed as an authorized user. It should come off your report in 30-60 days.`,
+          target: "Remove bad AU account",
+          tags: ["needs_au_review"],
+          accountData: {
+            creditorName: tl.creditorName,
+            util,
+            isAU: true
+          }
+        })
+      );
     }
   }
 
-  // AU_KEEP_GOOD — Good AU account (info)
+  // AU_GOOD_KEEP — Good AU account (info) — util under 10%
   for (const tl of auCards) {
     const util =
       tl.effectiveLimit > 0 ? Math.round((tl.currentBalance / tl.effectiveLimit) * 100) : 0;
@@ -561,10 +534,10 @@ function buildOptimizationFindings(
     const hasLates =
       tl.latePayments &&
       (tl.latePayments._30 > 0 || tl.latePayments._60 > 0 || tl.latePayments._90 > 0);
-    if (util <= 30 && !hasLates && !tl.isDerogatory && age != null && age >= 36) {
+    if (util < 10 && !hasLates && !tl.isDerogatory && age != null && age >= 36) {
       findings.push(
-        makeFinding("AU_KEEP_GOOD", "tradeline_quality", "info", true, {
-          problem: `Your ${tl.creditorName} authorized user account is helping your credit. It has been open ${age} months with ${util}% utilization.`,
+        makeFinding("AU_GOOD_KEEP", "tradeline_quality", "info", true, {
+          problem: `Your ${tl.creditorName} authorized user account is helping your credit. It has been open ${age} months with ${util}% utilization. You are not responsible for this debt — it is adding positive history to your file.`,
           matters: "This account adds age and positive history to your file.",
           next: "Keep this one.",
           target: "Maintain good AU accounts",
@@ -574,46 +547,19 @@ function buildOptimizationFindings(
     }
   }
 
-  // CONSIDER_ADDING_AU — Thin file could use an AU boost
-  if (cs.tradelines.thinFile && cs.tradelines.au < 2) {
-    findings.push(
-      makeFinding("CONSIDER_ADDING_AU", "tradeline_quality", "low", true, {
-        problem: "Your file is thin and could benefit from an authorized user account.",
-        matters:
-          "Being added as an AU on a seasoned card with low utilization can raise your score fast without opening a new account or adding an inquiry.",
-        next: "If you have a family member with a card open 3+ years and low utilization, ask them to add you as an authorized user. Make sure the card has low utilization and no late payments.",
-        target: "AU account with 36+ months, low utilization",
-        tags: ["needs_file_buildout"]
-      })
-    );
-  }
-
   // =========================================================================
   // 2.5 INQUIRIES
   // =========================================================================
 
-  // INQUIRY_STORM — 10+ inquiries in 6 months
-  if (cs.inquiries.last6Mo >= 10) {
+  // INQUIRY_REMOVAL — Any inquiries present (even 1)
+  if (cs.inquiries.total > 0) {
     findings.push(
-      makeFinding("INQUIRY_STORM", "inquiries", "high", true, {
-        problem: `You have ${cs.inquiries.last6Mo} hard inquiries in the last 6 months.`,
-        matters: "Too many inquiries makes you look desperate to lenders.",
-        next: "Stop applying for anything new. Your inquiry removal letters target the ones that did not result in an account. Inquiries fall off after 2 years.",
-        target: "Under 5 inquiries in 6 months",
-        docs: ["inquiry_removal_letter"],
-        tags: ["needs_inquiry_cleanup"]
-      })
-    );
-  }
-
-  // INQUIRY_HIGH — 6-9 inquiries in 6 months
-  if (cs.inquiries.last6Mo >= 6 && cs.inquiries.last6Mo < 10) {
-    findings.push(
-      makeFinding("INQUIRY_HIGH", "inquiries", "medium", true, {
-        problem: `You have ${cs.inquiries.last6Mo} inquiries in 6 months. That is above what lenders want to see.`,
-        matters: "Each inquiry signals a credit application and too many raises red flags.",
-        next: `Your inquiry removal letters target ${cs.inquiries.last6Mo - 2} of them. Send those out and do not apply for new credit for 6 months.`,
-        target: "Under 5 inquiries in 6 months",
+      makeFinding("INQUIRY_REMOVAL", "inquiries", "medium", true, {
+        problem: `You have ${cs.inquiries.total} hard inquiry(ies) on your credit report.`,
+        matters:
+          "Inquiries are cleanup only — this does not affect funding. However, removing them keeps your report clean and tidy for lenders.",
+        next: `We prioritize Experian first for inquiry removal. Your inquiry removal letters target any that did not result in an account. Send them out and do not apply for new credit until funding is secured.`,
+        target: "Inquiries removed where possible",
         docs: ["inquiry_removal_letter"],
         tags: ["needs_inquiry_cleanup"]
       })
@@ -641,7 +587,7 @@ function buildOptimizationFindings(
           makeFinding("INQUIRY_DUPLICATE", "inquiries", "medium", true, {
             problem: `On ${formattedDate}, you have inquiries from ${names}. Duplicate same-day inquiries can often be disputed.`,
             matters:
-              "Same-day inquiries from different lenders suggest rate shopping, but some can be consolidated or removed.",
+              "These do not affect funding, but same-day duplicates from different lenders are good candidates for removal.",
             next: "Your inquiry removal letters cover this. The ones that did not result in an account are the best candidates for removal.",
             target: "Remove duplicate inquiries",
             docs: ["inquiry_removal_letter"],
@@ -649,22 +595,6 @@ function buildOptimizationFindings(
           })
         );
       }
-    }
-  }
-
-  // INQUIRY_AGING — Inquiry about to age off (info)
-  for (const inq of inquiries) {
-    const age = monthsAgo(inq.date);
-    if (age != null && age >= 18 && age <= 24) {
-      findings.push(
-        makeFinding("INQUIRY_AGING", "inquiries", "info", true, {
-          problem: `Your ${inq.creditorName} inquiry from ${new Date(inq.date).toLocaleDateString("en-US", { month: "long", year: "numeric" })} is ${age} months old.`,
-          matters: "It has basically stopped affecting your score.",
-          next: "No action needed. It will fall off completely at 24 months.",
-          target: "Inquiry aging off naturally",
-          tags: []
-        })
-      );
     }
   }
 
@@ -728,14 +658,63 @@ function buildOptimizationFindings(
   }
 
   // =========================================================================
-  // 2.7 BUSINESS CREDIT (skip if no LLC data)
+  // 2.7 BUREAU STATUS FINDINGS
+  // =========================================================================
+
+  // MIXED_BUREAU_STATUS — Some clean, some dirty bureaus (FUNDING_PLUS_REPAIR)
+  if (outcome === "FUNDING_PLUS_REPAIR" && cs.bureauNegatives) {
+    const pulled = Object.keys(cs.bureauNegatives).filter(b => cs.bureauNegatives[b].pulled);
+    const cleanBureaus = pulled.filter(b => cs.bureauNegatives[b].clean);
+    const dirtyBureaus = pulled.filter(b => !cs.bureauNegatives[b].clean);
+    if (cleanBureaus.length > 0 && dirtyBureaus.length > 0) {
+      findings.push(
+        makeFinding("MIXED_BUREAU_STATUS", "derogatory", "high", true, {
+          problem: `Your credit bureaus are split: ${cleanBureaus.join(", ")} ${cleanBureaus.length === 1 ? "is" : "are"} clean and ready for funding, but ${dirtyBureaus.join(", ")} ${dirtyBureaus.length === 1 ? "has" : "have"} negative items that need repair.`,
+          matters:
+            "You can start funding on the clean bureaus now while we repair the others in parallel.",
+          next: "Your dispute letters target the dirty bureaus. Once repaired, you will qualify for funding on all three.",
+          target: "All bureaus clean",
+          docs: ["dispute_letter"],
+          tags: ["needs_negative_cleanup", "mixed_bureau"]
+        })
+      );
+    }
+  }
+
+  // ALL_BUREAUS_DIRTY — All bureaus have negatives (REPAIR_ONLY)
+  if (outcome === "REPAIR_ONLY") {
+    findings.push(
+      makeFinding("ALL_BUREAUS_DIRTY", "derogatory", "critical", true, {
+        problem: "All three of your credit bureaus show negative items that are blocking funding.",
+        matters:
+          "No funding programs are available until the negatives are resolved. Repair comes first.",
+        next: "Your dispute letters challenge each negative item at each bureau. Work through the rounds. Most clients see results within 30-90 days.",
+        target: "All bureaus clean",
+        docs: ["dispute_letter"],
+        tags: ["needs_negative_cleanup", "repair_only"]
+      })
+    );
+  }
+
+  // =========================================================================
+  // 2.8 BUSINESS CREDIT
   // =========================================================================
 
   const hasLLC = bs?.available || formData?.hasLLC;
 
+  // NO_BUSINESS_ENTITY — No LLC and no business report
   if (!hasLLC) {
-    // NO_BUSINESS_ENTITY — skip per Chris's direction
-    // Do not emit business findings when no LLC data exists
+    findings.push(
+      makeFinding("NO_BUSINESS_ENTITY", "business", "low", true, {
+        problem: "You do not have a registered business entity on file.",
+        matters:
+          "Business credit programs require an LLC or corporation. Without one, you are limited to personal credit funding only.",
+        next: "Forming an LLC is straightforward — most states allow you to do it online for under $100. Once formed, we can help you build your business credit profile.",
+        target: "LLC or corporation registered",
+        docs: ["business_buildout_guide"],
+        tags: ["business_prep"]
+      })
+    );
   } else if (!bs?.available && formData?.hasLLC) {
     // Has LLC per form but no business report
 
@@ -782,38 +761,40 @@ function buildOptimizationFindings(
       );
     }
 
-    // WEAK_INTELLISCORE — Business credit score below 40
-    if (!bs.hardBlock?.blocked && bs.scores.intelliscore != null && bs.scores.intelliscore < 40) {
+    // BIZ_NEGATIVE_ITEMS — Business has negative items
+    if (bs.publicRecords && Object.keys(bs.publicRecords).length > 0) {
       findings.push(
-        makeFinding("WEAK_INTELLISCORE", "business", "medium", true, {
-          problem: `Your business credit score (Intelliscore) is only ${bs.scores.intelliscore} out of 100.`,
-          matters: "A low business credit score reduces your business funding amounts.",
-          next: "Pay all business bills on time or early. Every on-time payment builds your score. Check if any creditors reported late and dispute anything inaccurate.",
-          target: "Intelliscore 60+",
+        makeFinding("BIZ_NEGATIVE_ITEMS", "business", "medium", true, {
+          problem: "Your business credit report shows negative items.",
+          matters:
+            "Business negative items reduce your business funding amounts and can block certain programs.",
+          next: "Dispute any inaccurate items with Dun & Bradstreet and Experian Business. For verified items, contact the creditor to resolve them.",
+          target: "Clean business credit report",
           docs: ["business_buildout_guide"],
           tags: ["business_prep"]
         })
       );
     }
 
-    // BIZ_DBT_HIGH — Days beyond terms elevated
-    if (bs.dbt?.value != null && bs.dbt.value > 15) {
+    // BIZ_UTIL_HIGH — Business utilization over 10%
+    if (bs.bizUtilization?.pct != null && bs.bizUtilization.pct > 10) {
       findings.push(
-        makeFinding("BIZ_DBT_HIGH", "business", "medium", true, {
-          problem: `Your business is averaging ${bs.dbt.value} days late on payments.`,
-          matters: "Paying late makes lenders nervous about extending credit to your business.",
-          next: "Set up autopay for all business accounts. Getting your DBT to 0-5 days will make a big difference in your business score.",
-          target: "DBT under 5 days",
+        makeFinding("BIZ_UTIL_HIGH", "business", "medium", true, {
+          problem: `Your business credit utilization is at ${bs.bizUtilization.pct}%.`,
+          matters:
+            "Business lenders want to see low utilization on your business lines. High utilization signals cash flow pressure.",
+          next: "Pay down business credit card balances. Target under 10% on each business card.",
+          target: "Business utilization under 10%",
           docs: ["business_buildout_guide"],
           tags: ["business_prep"]
         })
       );
     }
 
-    // BIZ_UCC_FILINGS — UCC filings
+    // BIZ_UCC_LIEN — UCC filings
     if (bs.ucc?.caution) {
       findings.push(
-        makeFinding("BIZ_UCC_FILINGS", "business", "medium", false, {
+        makeFinding("BIZ_UCC_LIEN", "business", "medium", true, {
           problem: "Your business has UCC filings that indicate potential liens.",
           matters: "UCC filings reduce business funding amounts as a risk precaution.",
           next: "If any are from paid-off loans, contact the lender and ask them to file a UCC termination.",
@@ -823,31 +804,15 @@ function buildOptimizationFindings(
         })
       );
     }
-
-    // ADD_BIZ_TRADELINES — Business needs more trade accounts
-    if (bs.profile.ageMonths >= 6 && bs.tradelines != null && bs.tradelines < 3) {
-      findings.push(
-        makeFinding("ADD_BIZ_TRADELINES", "business", "low", true, {
-          problem: `Your LLC is established but you only have ${bs.tradelines} business tradeline(s).`,
-          matters: "More business tradelines build your business credit profile faster.",
-          next: "Open 2-3 net-30 accounts. Uline, Grainger, Quill, Crown Office Supplies all report to business bureaus. Buy something small each month, pay when the invoice comes.",
-          target: "3+ business tradelines",
-          docs: ["business_buildout_guide"],
-          tags: ["business_prep"]
-        })
-      );
-    }
   }
 
   // =========================================================================
-  // 2.8 STRATEGIC OPPORTUNITIES
+  // 2.9 STRATEGIC OPPORTUNITIES
   // =========================================================================
 
   // FUNDING_FIRST — Go for funding before opening new accounts
   const isFundable =
-    outcome === "CONDITIONAL_APPROVAL" ||
-    outcome === "FULL_STACK_APPROVAL" ||
-    outcome === "PREMIUM_STACK";
+    outcome === "FUNDING_PLUS_REPAIR" || outcome === "FULL_FUNDING" || outcome === "PREMIUM_STACK";
   if (isFundable) {
     findings.push(
       makeFinding("FUNDING_FIRST", "strategic", "high", true, {
@@ -857,53 +822,6 @@ function buildOptimizationFindings(
         next: "Get your funding locked in first while your file looks its best. After your funding is secured, then you can open new accounts to build depth for future rounds.",
         target: "Secure funding before new accounts",
         tags: ["funding_ready"]
-      })
-    );
-  }
-
-  // SCORE_NEAR_THRESHOLD — Score close to 700 or 760
-  if (cs.scores.median != null) {
-    const distTo700 = 700 - cs.scores.median;
-    const distTo760 = 760 - cs.scores.median;
-    if (distTo700 > 0 && distTo700 <= 20) {
-      findings.push(
-        makeFinding("SCORE_NEAR_THRESHOLD", "strategic", "medium", true, {
-          problem: `Your score is ${cs.scores.median}, only ${distTo700} points from the 700 threshold where full funding unlocks.`,
-          matters:
-            "The difference between sub-700 and 700+ in funding can be tens of thousands of dollars.",
-          next: "Focus on paying down utilization first — that is the fastest way to move your score. Getting under 10% utilization alone could push you over.",
-          target: "Score 700+",
-          tags: ["near_threshold"]
-        })
-      );
-    } else if (distTo760 > 0 && distTo760 <= 20 && cs.scores.median >= 700) {
-      findings.push(
-        makeFinding("SCORE_NEAR_THRESHOLD", "strategic", "medium", true, {
-          problem: `Your score is ${cs.scores.median}, only ${distTo760} points from 760 where premium funding unlocks.`,
-          matters: "760+ puts you in the top funding tier with the highest limits.",
-          next: "Keep utilization under 10% and let your accounts age. You are very close.",
-          target: "Score 760+",
-          tags: ["near_threshold"]
-        })
-      );
-    }
-  }
-
-  // CONDITIONAL_UPGRADE_ELIGIBLE — Could upgrade from conditional to full
-  if (
-    outcome === "CONDITIONAL_APPROVAL" &&
-    cs.scores.median >= 680 &&
-    cs.scores.median < 700 &&
-    bs?.available &&
-    bs.scores.intelliscore >= 70
-  ) {
-    findings.push(
-      makeFinding("CONDITIONAL_UPGRADE_ELIGIBLE", "strategic", "medium", true, {
-        problem: `You are at Conditional Approval, but your business credit is strong. Your score of ${cs.scores.median} plus Intelliscore of ${bs.scores.intelliscore} means you are right on the edge.`,
-        matters: "Getting to Full Stack nearly doubles your pre-approval amount.",
-        next: "Get your score to 700 OR utilization under 30% and you jump to Full Stack.",
-        target: "Full Stack Approval",
-        tags: ["near_threshold"]
       })
     );
   }
@@ -961,38 +879,6 @@ function buildOptimizationFindings(
         next: "Keep it there: do not close old accounts, keep balances under 10% of limits, and do not open any new accounts before applying for funding. When ready, application order matters — our team can sequence your applications to maximize approvals.",
         target: "Maintain Premium Stack",
         tags: ["premium_profile"]
-      })
-    );
-  }
-
-  // =========================================================================
-  // SYSTEM FINDINGS (identity, data quality)
-  // =========================================================================
-
-  // STALE_REPORT
-  if (identityGate?.reasons?.includes("ALL_REPORTS_STALE")) {
-    findings.push(
-      makeFinding("STALE_REPORT", "data_quality", "high", true, {
-        problem: "Your credit report data is more than 30 days old.",
-        matters:
-          "Stale data may not reflect recent changes and cannot support accurate funding decisions.",
-        next: "Pull a fresh credit report to get current data.",
-        target: "Report less than 30 days old",
-        docs: ["request_updated_report"],
-        tags: ["stale_data"]
-      })
-    );
-  }
-
-  // IDENTITY_FRAUD
-  if (outcome === "FRAUD_HOLD") {
-    findings.push(
-      makeFinding("IDENTITY_FRAUD", "identity", "critical", false, {
-        problem: "Identity or fraud concerns were detected during analysis.",
-        matters: "All funding programs are suspended until identity is verified.",
-        next: "Contact our team to verify your identity and resolve any discrepancies.",
-        target: "Identity verified",
-        tags: ["fraud_hold"]
       })
     );
   }

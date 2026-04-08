@@ -258,7 +258,7 @@ test("deriveBusinessSignals: severe DBT stress", () => {
 // UCC filings
 // ============================================================================
 
-test("deriveBusinessSignals: UCC caution threshold", () => {
+test("deriveBusinessSignals: any UCC filing triggers caution (v2: > 0)", () => {
   const report = makeBusinessReport({
     uccFilingsDetail: [{}, {}, {}, {}, {}]
   });
@@ -266,16 +266,29 @@ test("deriveBusinessSignals: UCC caution threshold", () => {
 
   assert.equal(result.ucc.count, 5);
   assert.equal(result.ucc.caution, true);
+  assert.ok(result.hardBlock.reasons.includes("BUSINESS_UCC_LIEN"));
 });
 
-test("deriveBusinessSignals: UCC below threshold", () => {
+test("deriveBusinessSignals: single UCC filing triggers caution (v2)", () => {
   const report = makeBusinessReport({
-    uccFilingsDetail: [{}, {}]
+    uccFilingsDetail: [{}]
   });
   const result = deriveBusinessSignals(report);
 
-  assert.equal(result.ucc.count, 2);
+  assert.equal(result.ucc.count, 1);
+  assert.equal(result.ucc.caution, true);
+  assert.ok(result.hardBlock.reasons.includes("BUSINESS_UCC_LIEN"));
+});
+
+test("deriveBusinessSignals: zero UCC filings → no caution", () => {
+  const report = makeBusinessReport({
+    uccFilingsDetail: []
+  });
+  const result = deriveBusinessSignals(report);
+
+  assert.equal(result.ucc.count, 0);
   assert.equal(result.ucc.caution, false);
+  assert.ok(!result.hardBlock.reasons.includes("BUSINESS_UCC_LIEN"));
 });
 
 // ============================================================================

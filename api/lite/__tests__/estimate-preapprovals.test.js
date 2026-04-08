@@ -62,8 +62,7 @@ function makeBusinessSignals(overrides = {}) {
       intelliscore: 80,
       intelliscoreRisk: "LOW RISK",
       fsr: 40,
-      fsrRisk: "MEDIUM RISK",
-      recommendedLimit: 100000
+      fsrRisk: "MEDIUM RISK"
     },
     profile: {
       name: "TEST CO",
@@ -74,6 +73,9 @@ function makeBusinessSignals(overrides = {}) {
       isActive: true
     },
     hardBlock: { blocked: false, reasons: [] },
+    bizNegativeItems: { hasNegatives: false },
+    ucc: { caution: false },
+    bizUtilization: { band: "good" },
     ...overrides
   };
 }
@@ -125,15 +127,15 @@ test("getBusinessOverlayModifier: all brackets", () => {
 
 test("estimatePreapprovals: full stack, clean modifiers", () => {
   const cs = makeConsumerSignals();
-  const result = estimatePreapprovals(cs, null, "FULL_STACK_APPROVAL");
+  // v2: outcomeMod=1.0, utilMod=0.95 (good), thinMod=1.0
+  // Card: 15000 * 5.5 = 82500, 82500 * 1.0 * 0.95 * 1.0 = 78375
+  const result = estimatePreapprovals(cs, null, "FULL_FUNDING");
 
-  // Card: 15000 * 5.5 = 82500, all mods 1.0 except util=0.95
-  // 82500 * 1.0 * 1.0 * 0.95 * 1.0 * 1.0 * 1.0 = 78375
   assert.equal(result.personalCard.base, 82500);
   assert.equal(result.personalCard.final, 78375);
   assert.equal(result.personalCard.eligible, true);
 
-  // Loan: 25000 * 3.0 = 75000, same mods
+  // Loan: 25000 * 3.0 = 75000, 75000 * 0.95 = 71250
   assert.equal(result.personalLoan.base, 75000);
   assert.equal(result.personalLoan.final, 71250);
   assert.equal(result.personalLoan.eligible, true);
@@ -146,9 +148,9 @@ test("estimatePreapprovals: full stack, clean modifiers", () => {
 // estimatePreapprovals: suppressed by outcome
 // ============================================================================
 
-test("estimatePreapprovals: REPAIR → all suppressed", () => {
+test("estimatePreapprovals: REPAIR_ONLY → all suppressed", () => {
   const cs = makeConsumerSignals();
-  const result = estimatePreapprovals(cs, null, "REPAIR");
+  const result = estimatePreapprovals(cs, null, "REPAIR_ONLY");
 
   assert.equal(result.personalCard.final, 0);
   assert.equal(result.personalLoan.final, 0);
@@ -175,7 +177,7 @@ test("estimatePreapprovals: no revolving anchor → card = 0", () => {
       installment: { creditor: "AUTO", amount: 20000, openedDate: "2020-01-01", months: 72 }
     }
   });
-  const result = estimatePreapprovals(cs, null, "FULL_STACK_APPROVAL");
+  const result = estimatePreapprovals(cs, null, "FULL_FUNDING");
 
   assert.equal(result.personalCard.base, 0);
   assert.equal(result.personalCard.final, 0);
@@ -190,7 +192,7 @@ test("estimatePreapprovals: no installment anchor → loan = 0", () => {
       installment: null
     }
   });
-  const result = estimatePreapprovals(cs, null, "FULL_STACK_APPROVAL");
+  const result = estimatePreapprovals(cs, null, "FULL_FUNDING");
 
   assert.equal(result.personalLoan.base, 0);
   assert.equal(result.personalLoan.final, 0);
@@ -209,7 +211,7 @@ test("estimatePreapprovals: small anchor uses floor", () => {
       installment: { creditor: "TINY", amount: 2000, openedDate: "2020-01-01", months: 72 }
     }
   });
-  const result = estimatePreapprovals(cs, null, "FULL_STACK_APPROVAL");
+  const result = estimatePreapprovals(cs, null, "FULL_FUNDING");
 
   // Card: 500 * 5.5 = 2750, floor 5000 → base = 5000
   assert.equal(result.personalCard.base, PERSONAL_CARD_FLOOR);
@@ -218,37 +220,57 @@ test("estimatePreapprovals: small anchor uses floor", () => {
 });
 
 // ============================================================================
-// estimatePreapprovals: business calculations
+// estimatePreapprovals: business calculations (v2)
 // ============================================================================
 
 test("estimatePreapprovals: business with mature company", () => {
   const cs = makeConsumerSignals();
   const bs = makeBusinessSignals();
-  const result = estimatePreapprovals(cs, bs, "FULL_STACK_APPROVAL");
+  // v2: cardBase=82500, ageMult=2.0, businessBase=165000
+  // bizUtilMod=0.95 (good), outcomeMod=1.0 → final = floor(165000 * 0.95 * 1.0) = 156750
+  const result = estimatePreapprovals(cs, bs, "FULL_FUNDING");
 
-  // Business base = cardBase * ageMult = 82500 * 2.0 = 165000
-  // Raw = floor(165000 * overlay(1.15) * outcome(1.0)) = 189750
-  // But recommendedLimit=100000 caps it: floor(100000 * 1.0) = 100000
   assert.equal(result.business.base, 165000);
   assert.equal(result.business.multiplier, 2.0);
-  assert.equal(result.business.final, 100000);
-  assert.equal(result.business.capReason, "recommended_limit_from_report");
+  assert.equal(result.business.final, Math.floor(165000 * 0.95 * 1.0));
+  assert.equal(result.business.capReason, "utilization_based");
   assert.equal(result.business.eligible, true);
   assert.ok(result.totalBusiness > 0);
 });
 
-test("estimatePreapprovals: business blocked → 0", () => {
+test("estimatePreapprovals: business blocked by hardBlock → 0", () => {
   const cs = makeConsumerSignals();
   const bs = makeBusinessSignals({ hardBlock: { blocked: true, reasons: ["BUSINESS_INACTIVE"] } });
-  const result = estimatePreapprovals(cs, bs, "FULL_STACK_APPROVAL");
+  const result = estimatePreapprovals(cs, bs, "FULL_FUNDING");
 
   assert.equal(result.business.final, 0);
   assert.equal(result.business.eligible, false);
+  assert.equal(result.business.capReason, "hard_block");
+});
+
+test("estimatePreapprovals: business blocked by negatives → 0", () => {
+  const cs = makeConsumerSignals();
+  const bs = makeBusinessSignals({ bizNegativeItems: { hasNegatives: true } });
+  const result = estimatePreapprovals(cs, bs, "FULL_FUNDING");
+
+  assert.equal(result.business.final, 0);
+  assert.equal(result.business.eligible, false);
+  assert.equal(result.business.capReason, "negative_items_hard_block");
+});
+
+test("estimatePreapprovals: business blocked by UCC caution → 0", () => {
+  const cs = makeConsumerSignals();
+  const bs = makeBusinessSignals({ ucc: { caution: true } });
+  const result = estimatePreapprovals(cs, bs, "FULL_FUNDING");
+
+  assert.equal(result.business.final, 0);
+  assert.equal(result.business.eligible, false);
+  assert.equal(result.business.capReason, "ucc_hard_block");
 });
 
 test("estimatePreapprovals: no business → 0", () => {
   const cs = makeConsumerSignals();
-  const result = estimatePreapprovals(cs, null, "FULL_STACK_APPROVAL");
+  const result = estimatePreapprovals(cs, null, "FULL_FUNDING");
 
   assert.equal(result.business.final, 0);
   assert.equal(result.business.eligible, false);
@@ -266,11 +288,11 @@ test("estimatePreapprovals: young business (6mo) → 0.5x multiplier", () => {
       isActive: true
     }
   });
-  const result = estimatePreapprovals(cs, bs, "FULL_STACK_APPROVAL");
+  const result = estimatePreapprovals(cs, bs, "FULL_FUNDING");
 
   assert.equal(result.business.multiplier, 0.5);
-  // Base = cardBase * 0.5, final = base * overlay(1.15) * outcome(1.0)
-  // With intelliscore=80, overlay boosts final above base
+  // Base = cardBase * 0.5 = 82500 * 0.5 = 41250
+  // final = floor(41250 * bizUtilMod * outcomeMod)
   assert.ok(result.business.final > 0);
   assert.ok(
     result.business.base <
@@ -278,27 +300,35 @@ test("estimatePreapprovals: young business (6mo) → 0.5x multiplier", () => {
   );
 });
 
-// ============================================================================
-// estimatePreapprovals: CONDITIONAL modifier
-// ============================================================================
-
-test("estimatePreapprovals: CONDITIONAL → 0.6x outcome modifier", () => {
+test("estimatePreapprovals: business unavailable → capReason not_applicable", () => {
   const cs = makeConsumerSignals();
-  const resultFull = estimatePreapprovals(cs, null, "FULL_STACK_APPROVAL");
-  const resultCond = estimatePreapprovals(cs, null, "CONDITIONAL_APPROVAL");
+  const bs = makeBusinessSignals({ available: false });
+  const result = estimatePreapprovals(cs, bs, "FULL_FUNDING");
 
-  // CONDITIONAL card should be ~60% of FULL_STACK card
-  const ratio = resultCond.personalCard.final / resultFull.personalCard.final;
+  assert.equal(result.business.final, 0);
+  assert.equal(result.business.capReason, "not_applicable");
+});
+
+// ============================================================================
+// estimatePreapprovals: FUNDING_PLUS_REPAIR modifier (v2 replacement for CONDITIONAL)
+// ============================================================================
+
+test("estimatePreapprovals: FUNDING_PLUS_REPAIR → 0.6x outcome modifier", () => {
+  const cs = makeConsumerSignals();
+  const resultFull = estimatePreapprovals(cs, null, "FULL_FUNDING");
+  const resultPartial = estimatePreapprovals(cs, null, "FUNDING_PLUS_REPAIR");
+
+  // FUNDING_PLUS_REPAIR card should be ~60% of FULL_FUNDING card
+  const ratio = resultPartial.personalCard.final / resultFull.personalCard.final;
   assert.ok(ratio > 0.59 && ratio < 0.61, `Expected ~0.6 ratio, got ${ratio}`);
 });
 
 // ============================================================================
-// estimatePreapprovals: modifier stacking
+// estimatePreapprovals: modifier stacking (v2: outcome + utilization + thinFile only)
 // ============================================================================
 
 test("estimatePreapprovals: multiple modifiers stack", () => {
   const cs = makeConsumerSignals({
-    scores: { median: 720, bureauConfidence: "medium", spread: 20, perBureau: {} },
     tradelines: {
       total: 10,
       primary: 8,
@@ -310,18 +340,20 @@ test("estimatePreapprovals: multiple modifiers stack", () => {
       depth: 8,
       thinFile: true
     },
-    utilization: { totalBalance: 6000, totalLimit: 10000, pct: 60, band: "high" },
-    inquiries: { total: 12, last6Mo: 8, last12Mo: 12, pressure: "high" }
+    utilization: { totalBalance: 6000, totalLimit: 10000, pct: 60, band: "high" }
   });
-  const result = estimatePreapprovals(cs, null, "CONDITIONAL_APPROVAL");
+  const result = estimatePreapprovals(cs, null, "FUNDING_PLUS_REPAIR");
 
-  // Multiple modifiers all < 1.0 → final should be significantly reduced
+  // outcome=0.6, util=0.6 (high), thinFile=0.6 → product = 0.216
+  // final should be well below base
   assert.ok(result.personalCard.final < result.personalCard.base * 0.3);
   assert.ok(result.modifiersApplied.includes("outcome"));
-  assert.ok(result.modifiersApplied.includes("bureauConfidence"));
   assert.ok(result.modifiersApplied.includes("utilization"));
-  assert.ok(result.modifiersApplied.includes("inquiryPressure"));
   assert.ok(result.modifiersApplied.includes("thinFile"));
+  // v2: these modifiers no longer exist
+  assert.ok(!result.modifiersApplied.includes("bureauConfidence"));
+  assert.ok(!result.modifiersApplied.includes("inquiryPressure"));
+  assert.ok(!result.modifiersApplied.includes("auDominance"));
 });
 
 // ============================================================================
@@ -331,14 +363,14 @@ test("estimatePreapprovals: multiple modifiers stack", () => {
 test("estimatePreapprovals: totalCombined includes all", () => {
   const cs = makeConsumerSignals();
   const bs = makeBusinessSignals();
-  const result = estimatePreapprovals(cs, bs, "FULL_STACK_APPROVAL");
+  const result = estimatePreapprovals(cs, bs, "FULL_FUNDING");
 
   assert.equal(result.totalCombined, result.totalPersonal + result.totalBusiness);
   assert.equal(result.totalPersonal, result.personalCard.final + result.personalLoan.final);
 });
 
 // ============================================================================
-// getOverlayStrength — all bands
+// getOverlayStrength — all bands (still exported for tests)
 // ============================================================================
 
 test("getOverlayStrength: all bands", () => {
@@ -396,24 +428,24 @@ test("getConfidenceBand: low modProduct → low", () => {
 });
 
 // ============================================================================
-// customerSafe — outcome-based
+// customerSafe — outcome-based (v2 key names)
 // ============================================================================
 
-test("customerSafe: FULL_STACK_APPROVAL → true", () => {
+test("customerSafe: FULL_FUNDING → true", () => {
   const cs = makeConsumerSignals();
-  const result = estimatePreapprovals(cs, null, "FULL_STACK_APPROVAL");
+  const result = estimatePreapprovals(cs, null, "FULL_FUNDING");
   assert.equal(result.customerSafe, true);
 });
 
-test("customerSafe: CONDITIONAL_APPROVAL → true", () => {
+test("customerSafe: FUNDING_PLUS_REPAIR → true", () => {
   const cs = makeConsumerSignals();
-  const result = estimatePreapprovals(cs, null, "CONDITIONAL_APPROVAL");
+  const result = estimatePreapprovals(cs, null, "FUNDING_PLUS_REPAIR");
   assert.equal(result.customerSafe, true);
 });
 
-test("customerSafe: REPAIR → false", () => {
+test("customerSafe: REPAIR_ONLY → false", () => {
   const cs = makeConsumerSignals();
-  const result = estimatePreapprovals(cs, null, "REPAIR");
+  const result = estimatePreapprovals(cs, null, "REPAIR_ONLY");
   assert.equal(result.customerSafe, false);
 });
 
@@ -424,31 +456,29 @@ test("customerSafe: FRAUD_HOLD → false", () => {
 });
 
 // ============================================================================
-// Business output fields: offerBand, overlayStrength, capReason
+// Business output fields: offerBand, capReason (v2 — overlayStrength removed)
 // ============================================================================
 
-test("estimatePreapprovals: business output has offerBand, overlayStrength, capReason", () => {
+test("estimatePreapprovals: business output has offerBand, capReason", () => {
   const cs = makeConsumerSignals();
   const bs = makeBusinessSignals();
-  const result = estimatePreapprovals(cs, bs, "FULL_STACK_APPROVAL");
+  const result = estimatePreapprovals(cs, bs, "FULL_FUNDING");
 
   assert.ok("offerBand" in result.business);
-  assert.ok("overlayStrength" in result.business);
   assert.ok("capReason" in result.business);
+  // v2: overlayStrength removed from business output
+  assert.ok(!("overlayStrength" in result.business));
 
-  // intelliscore=80 → strong overlay, and business final should be large
-  assert.equal(result.business.overlayStrength, "strong");
   assert.notEqual(result.business.offerBand, "none");
-  assert.notEqual(result.business.capReason, "not_applicable");
+  assert.equal(result.business.capReason, "utilization_based");
 });
 
 test("estimatePreapprovals: suppressed business → none offerBand", () => {
   const cs = makeConsumerSignals();
   const bs = makeBusinessSignals({ hardBlock: { blocked: true, reasons: ["BUSINESS_INACTIVE"] } });
-  const result = estimatePreapprovals(cs, bs, "FULL_STACK_APPROVAL");
+  const result = estimatePreapprovals(cs, bs, "FULL_FUNDING");
 
   assert.equal(result.business.offerBand, "none");
-  assert.equal(result.business.overlayStrength, "none");
 });
 
 // ============================================================================
@@ -457,10 +487,10 @@ test("estimatePreapprovals: suppressed business → none offerBand", () => {
 
 test("estimatePreapprovals: confidenceBand present in output", () => {
   const cs = makeConsumerSignals();
-  const result = estimatePreapprovals(cs, null, "FULL_STACK_APPROVAL");
+  // v2: personalModProduct = 1.0 * 0.95 * 1.0 = 0.95 → "high"
+  const result = estimatePreapprovals(cs, null, "FULL_FUNDING");
 
   assert.ok("confidenceBand" in result);
-  // high bureauConfidence + good modifiers → high confidence band
   assert.equal(result.confidenceBand, "high");
 });
 
@@ -468,61 +498,25 @@ test("estimatePreapprovals: low bureauConfidence → low confidenceBand", () => 
   const cs = makeConsumerSignals({
     scores: { median: 720, bureauConfidence: "low", spread: 20, perBureau: {} }
   });
-  const result = estimatePreapprovals(cs, null, "FULL_STACK_APPROVAL");
+  const result = estimatePreapprovals(cs, null, "FULL_FUNDING");
 
   assert.equal(result.confidenceBand, "low");
 });
 
 // ============================================================================
-// Business cap anchors (spec Section 12.2)
+// Business biz utilization modifier
 // ============================================================================
 
-test("estimatePreapprovals: UCC caution applies 0.7x to business", () => {
+test("estimatePreapprovals: business with critical utilization → lower final", () => {
   const cs = makeConsumerSignals();
-  const bs = makeBusinessSignals({ ucc: { caution: true } });
-  const result = estimatePreapprovals(cs, bs, "FULL_STACK_APPROVAL");
+  const bsGood = makeBusinessSignals({ bizUtilization: { band: "excellent" } });
+  const bsBad = makeBusinessSignals({ bizUtilization: { band: "critical" } });
 
-  // recommendedLimit=100000, capped first, then UCC 0.7x → 70000
-  assert.equal(result.business.final, 70000);
-  assert.equal(result.business.capReason, "ucc_caution_applied");
-});
+  const resultGood = estimatePreapprovals(cs, bsGood, "FULL_FUNDING");
+  const resultBad = estimatePreapprovals(cs, bsBad, "FULL_FUNDING");
 
-test("estimatePreapprovals: DBT stress moderate → 0.8x", () => {
-  const cs = makeConsumerSignals();
-  const bs = makeBusinessSignals({ dbt: { stress: "moderate" } });
-  const result = estimatePreapprovals(cs, bs, "FULL_STACK_APPROVAL");
-
-  // recommendedLimit=100000, then DBT moderate 0.8x → 80000
-  assert.equal(result.business.final, 80000);
-});
-
-test("estimatePreapprovals: DBT stress high → 0.6x", () => {
-  const cs = makeConsumerSignals();
-  const bs = makeBusinessSignals({ dbt: { stress: "high" } });
-  const result = estimatePreapprovals(cs, bs, "FULL_STACK_APPROVAL");
-
-  // recommendedLimit=100000, then DBT high 0.6x → 60000
-  assert.equal(result.business.final, 60000);
-});
-
-test("estimatePreapprovals: DBT stress severe → 0.3x", () => {
-  const cs = makeConsumerSignals();
-  const bs = makeBusinessSignals({ dbt: { stress: "severe" } });
-  const result = estimatePreapprovals(cs, bs, "FULL_STACK_APPROVAL");
-
-  // recommendedLimit=100000, then DBT severe 0.3x → 30000
-  assert.equal(result.business.final, 30000);
-});
-
-test("estimatePreapprovals: no recommendedLimit → policy_estimate_from_quality", () => {
-  const cs = makeConsumerSignals();
-  const bs = makeBusinessSignals({
-    scores: { intelliscore: 80, intelliscoreRisk: "LOW RISK", fsr: 40, fsrRisk: "MEDIUM RISK" }
-  });
-  const result = estimatePreapprovals(cs, bs, "FULL_STACK_APPROVAL");
-
-  // No recommendedLimit, but intelliscore present → policy estimate
-  assert.equal(result.business.capReason, "policy_estimate_from_quality");
-  // Raw = floor(165000 * 1.15 * 1.0) = 189749 (floating point: 165000*1.15=189749.999...)
-  assert.equal(result.business.final, Math.floor(165000 * 1.15 * 1.0));
+  assert.ok(resultBad.business.final < resultGood.business.final);
+  // critical = 0.4x vs excellent = 1.0x
+  const ratio = resultBad.business.final / resultGood.business.final;
+  assert.ok(ratio > 0.39 && ratio < 0.41, `Expected ~0.4 ratio, got ${ratio}`);
 });
