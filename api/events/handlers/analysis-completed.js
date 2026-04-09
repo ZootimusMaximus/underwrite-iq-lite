@@ -34,24 +34,27 @@ const { emitEvent } = require("../utils/emit");
 // Booking lane resolution
 //
 // Maps analyzer recommendation to a booking lane.
-// Outcomes from the 6-tier ladder: FRAUD_HOLD, MANUAL_REVIEW, REPAIR,
-//   CONDITIONAL_APPROVAL, FULL_STACK_APPROVAL, PREMIUM_STACK
+// Outcomes from the 6-tier ladder: FRAUD_HOLD, MANUAL_REVIEW, REPAIR_ONLY,
+//   FUNDING_PLUS_REPAIR, FULL_FUNDING, PREMIUM_STACK
 // ---------------------------------------------------------------------------
 
 const FUNDING_OUTCOMES = new Set([
+  "FUNDING_PLUS_REPAIR",
+  "FULL_FUNDING",
+  "PREMIUM_STACK",
+  // Legacy names (backward compat)
   "CONDITIONAL_APPROVAL",
   "FULL_STACK_APPROVAL",
-  "PREMIUM_STACK",
-  // Legacy fundable path
   "fundable",
   "FUNDABLE"
 ]);
 
 const REPAIR_OUTCOMES = new Set([
-  "REPAIR",
+  "REPAIR_ONLY",
   "MANUAL_REVIEW",
   "FRAUD_HOLD",
-  // Legacy repair path
+  // Legacy names
+  "REPAIR",
   "repair",
   "not_fundable",
   "NOT_FUNDABLE"

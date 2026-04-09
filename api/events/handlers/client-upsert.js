@@ -805,6 +805,7 @@ async function upsertClient(contact, adapter) {
 }
 
 module.exports = {
+  handle: handleClientUpsert,
   handleClientUpsert,
   upsertClient,
   // Exposed for unit testing

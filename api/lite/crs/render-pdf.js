@@ -654,7 +654,11 @@ function renderHR(ctx) {
 // ============================================================================
 
 function drawCTAPage(ctx, title, cta) {
-  addNewPage(ctx);
+  // Add new page for CTA
+  const np = ctx.doc.addPage([PAGE_W, PAGE_H]);
+  ctx.pages.push(np);
+  ctx.currentPage = np;
+  ctx.y = PAGE_H - MARGIN;
   drawPageHeader(ctx, "NEXT STEPS", "");
   ctx.y -= 30;
 

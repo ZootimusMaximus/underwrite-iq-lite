@@ -14,7 +14,7 @@
 //     event_name: "fundhub.analysis.completed",
 //     source_system: "underwrite_iq_lite",
 //     contact: { email: "john@example.com", phone: "+15555550123" },
-//     payload: { recommendation: "FULL_STACK_APPROVAL", letters_ready: true },
+//     payload: { recommendation: "FULL_FUNDING", letters_ready: true },
 //     correlation_id: "journey_01JXYZ789",
 //     adapter: { entry_mode: "slo_deposit", funnel_family: "slo" }
 //   });

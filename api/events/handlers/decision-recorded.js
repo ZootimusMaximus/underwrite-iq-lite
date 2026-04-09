@@ -26,22 +26,29 @@ try {
  * Valid decision statuses and their downstream effects
  */
 const DECISION_EFFECTS = {
-  funded: { cf_decision_status: "funded", cf_lifecycle_status: "Funded Client", tag: "decision:funded" },
-  repair_purchased: { cf_decision_status: "repair_purchased", cf_lifecycle_status: "Repair Client", tag: "decision:repair" },
+  funded: {
+    cf_decision_status: "funded",
+    cf_lifecycle_status: "Funded Client",
+    tag: "decision:funded"
+  },
+  repair_purchased: {
+    cf_decision_status: "repair_purchased",
+    cf_lifecycle_status: "Repair Client",
+    tag: "decision:repair"
+  },
   reschedule: { cf_decision_status: "reschedule", tag: "decision:reschedule" },
   no_show: { cf_decision_status: "no_show", tag: "decision:no_show" },
   declined: { cf_decision_status: "declined", tag: "decision:declined" },
-  close_file: { cf_decision_status: "close_file", cf_lifecycle_status: "Closed", tag: "decision:closed" },
+  close_file: {
+    cf_decision_status: "close_file",
+    cf_lifecycle_status: "Closed",
+    tag: "decision:closed"
+  }
 };
 
 async function handle(event) {
   const { contact, payload, adapter } = event;
-  const {
-    decision_status,
-    decision_source,
-    decision_notes,
-    reschedule_date,
-  } = payload || {};
+  const { decision_status, decision_source, decision_notes, reschedule_date } = payload || {};
 
   // Ensure client exists
   let identity = null;
@@ -71,7 +78,7 @@ async function handle(event) {
     cf_last_canonical_event: "fundhub.decision.recorded",
     cf_last_canonical_event_ts: new Date().toISOString(),
     cf_last_progress_action: `decision_${decision_status}`,
-    cf_last_progress_timestamp: new Date().toISOString(),
+    cf_last_progress_timestamp: new Date().toISOString()
   };
 
   if (effect.cf_lifecycle_status) {
@@ -95,14 +102,14 @@ async function handle(event) {
   logInfo("decision-recorded: processed", {
     ghlContactId,
     decision_status,
-    decision_source: decision_source || "sales_call",
+    decision_source: decision_source || "sales_call"
   });
 
   return {
     ok: true,
     action: `decision_${decision_status}`,
     ghl_contact_id: ghlContactId,
-    effect: effect.cf_decision_status,
+    effect: effect.cf_decision_status
   };
 }
 
