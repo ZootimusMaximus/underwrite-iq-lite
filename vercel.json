@@ -66,6 +66,10 @@
       "dest": "/api/lite/crs-sandbox-data.js"
     },
     {
+      "src": "^/api/events$",
+      "dest": "/api/events/index.js"
+    },
+    {
       "src": "^/api/(.*)$",
       "dest": "/api/$1.js"
     },

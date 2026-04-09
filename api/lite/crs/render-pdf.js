@@ -674,7 +674,10 @@ function drawCTAPage(ctx, title, cta) {
   if (cta) {
     const ctaWidth = CONTENT_W - 60;
     const ctaX = MARGIN + 30;
-    const ctaText = typeof cta === "string" ? cta : "Review the suggestions above and contact our team to discuss next steps.";
+    const ctaText =
+      typeof cta === "string"
+        ? cta
+        : "Review the suggestions above and contact our team to discuss next steps.";
     drawTextLine(ctx, ctaText, { size: 11, x: ctaX });
     ctx.y -= 20;
   }

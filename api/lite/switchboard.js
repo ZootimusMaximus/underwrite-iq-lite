@@ -595,6 +595,35 @@ module.exports = async function handler(req, res) {
       }).catch(() => {});
     }
 
+    // ----- Emit fundhub.analysis.completed event (modular event system) -----
+    try {
+      const { emitEvent } = require("../events/utils/emit");
+      await emitEvent({
+        event_name: "fundhub.analysis.completed",
+        source_system: "underwrite_iq_lite",
+        contact: {
+          ghl_contact_id: contactId || "",
+          email: sanitized.email || "",
+          phone: sanitized.phone || ""
+        },
+        payload: {
+          recommendation: uw.fundable ? "FULL_FUNDING" : "REPAIR_ONLY",
+          letters_ready: true,
+          score: m.score || null,
+          utilization_pct: m.utilization || null,
+          outcome_tier: uw.fundable ? "funding" : "repair",
+          total_funding: t.total_combined_funding || 0
+        },
+        adapter: {
+          entry_mode: "pdf_upload",
+          funnel_family: "analyzer",
+          offer_family: uw.fundable ? "funding_engagement" : "repair_engagement"
+        }
+      }).catch(err => logWarn("Event emission failed (non-blocking)", { error: err.message }));
+    } catch (_evtErr) {
+      // Non-blocking — event system is optional during transition
+    }
+
     // ----- Clean up temp files -----
     await cleanupTempFiles(validatedFiles);
 
