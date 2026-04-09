@@ -12,7 +12,22 @@
  */
 
 const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
+const fs = require("fs");
+const path = require("path");
 const { logInfo, logWarn } = require("../logger");
+
+// Logo image — loaded once, cached
+let _logoPngBytes = null;
+function getLogoBytes() {
+  if (_logoPngBytes) return _logoPngBytes;
+  try {
+    const logoPath = path.join(__dirname, "..", "..", "..", "public", "fundhub-logo.png");
+    _logoPngBytes = fs.readFileSync(logoPath);
+  } catch (_err) {
+    _logoPngBytes = null;
+  }
+  return _logoPngBytes;
+}
 
 // ============================================================================
 // BRAND CONSTANTS
@@ -326,13 +341,25 @@ function drawPageHeader(ctx, title, subtitle) {
     color: BRAND.navy
   });
 
-  activePage(ctx).drawText("FUNDHUB", {
-    x: MARGIN,
-    y: PAGE_H - 24,
-    size: 11,
-    font: ctx.bold,
-    color: rgb(0.4, 0.65, 1.0)
-  });
+  // Embed logo image or fall back to text
+  if (ctx._logoImage) {
+    const logoH = 18;
+    const logoW = logoH * (ctx._logoImage.width / ctx._logoImage.height);
+    activePage(ctx).drawImage(ctx._logoImage, {
+      x: MARGIN,
+      y: PAGE_H - 6 - logoH,
+      width: logoW,
+      height: logoH
+    });
+  } else {
+    activePage(ctx).drawText("fundhub.", {
+      x: MARGIN,
+      y: PAGE_H - 24,
+      size: 14,
+      font: ctx.bold,
+      color: rgb(0.4, 0.65, 1.0)
+    });
+  }
   activePage(ctx).drawText(title.toUpperCase(), {
     x: MARGIN,
     y: PAGE_H - 40,
@@ -849,7 +876,17 @@ async function initPdfDoc() {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  return { pdfDoc, font, bold };
+  // Embed logo if available
+  let logoImage = null;
+  const logoBytes = getLogoBytes();
+  if (logoBytes) {
+    try {
+      logoImage = await pdfDoc.embedPng(logoBytes);
+    } catch (_e) {
+      logoImage = null;
+    }
+  }
+  return { pdfDoc, font, bold, logoImage };
 }
 
 // ============================================================================
@@ -866,9 +903,10 @@ async function initPdfDoc() {
  * @returns {Promise<Buffer>}
  */
 async function renderDocumentPDF(markdownContent, type, personal, engineData) {
-  const { pdfDoc, font, bold } = await initPdfDoc();
+  const { pdfDoc, font, bold, logoImage } = await initPdfDoc();
   const firstPage = pdfDoc.addPage([PAGE_W, PAGE_H]);
   const ctx = makeCtx(pdfDoc, firstPage, font, bold);
+  ctx._logoImage = logoImage;
 
   const titles = {
     credit_analysis: "Credit Analysis Report",
@@ -936,7 +974,7 @@ const LETTER_SUBJECTS = {
  * @returns {Promise<Buffer>}
  */
 async function renderLetterPDF(text, type, bureau, round, personal) {
-  const { pdfDoc, font, bold } = await initPdfDoc();
+  const { pdfDoc, font, bold, logoImage } = await initPdfDoc();
   const firstPage = pdfDoc.addPage([PAGE_W, PAGE_H]);
   const ctx = makeCtx(pdfDoc, firstPage, font, bold);
 
