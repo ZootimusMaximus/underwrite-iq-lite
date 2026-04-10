@@ -36,7 +36,7 @@ const OUTCOME_MODIFIER = {
   FRAUD_HOLD: 0
 };
 
-const BUREAU_CONFIDENCE_MODIFIER = {
+const _BUREAU_CONFIDENCE_MODIFIER = {
   high: 1.0,
   medium: 0.85,
   low: 0.65
@@ -51,7 +51,7 @@ const UTILIZATION_MODIFIER = {
   unknown: 0.8
 };
 
-const INQUIRY_PRESSURE_MODIFIER = {
+const _INQUIRY_PRESSURE_MODIFIER = {
   low: 1.0,
   moderate: 0.95,
   high: 0.85,

@@ -1,4 +1,5 @@
 "use strict";
+/* global AbortSignal */
 
 // ============================================================================
 // Handler: fundhub.analysis.requested
@@ -89,7 +90,7 @@ async function handle(event) {
     method,
     analysis_components_requested,
     consent_confirmed,
-    requested_at
+    requested_at: _requested_at
   } = payload;
 
   logInfo("analysis-requested: processing", {

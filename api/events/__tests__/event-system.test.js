@@ -1,6 +1,6 @@
 "use strict";
 
-const { describe, it, before, beforeEach, afterEach, mock } = require("node:test");
+const { describe, it, before, beforeEach, afterEach: _afterEach, mock } = require("node:test");
 const assert = require("node:assert/strict");
 
 // ============================================================================
@@ -18,7 +18,7 @@ const mockLogger = {
 let mockRedisData = {}; // key → value
 let mockRedisError = null; // if set, throws on get/set
 
-const mockRedis = {
+const _mockRedis = {
   get: mock.fn(async key => {
     if (mockRedisError) throw mockRedisError;
     return mockRedisData[key] !== undefined ? mockRedisData[key] : null;
@@ -1021,7 +1021,7 @@ describe("router.js", () => {
       // We verify this indirectly by confirming loadHandler returns null for a module that
       // doesn't exist on disk. We do this by temporarily patching EVENT_HANDLERS in a fresh router
       // instance to point to a non-existent path.
-      const path = require("path");
+      const _path = require("path");
       const routerPath = require.resolve("../router");
       delete require.cache[routerPath];
       const freshRouter = require("../router");

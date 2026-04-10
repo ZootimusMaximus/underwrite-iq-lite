@@ -96,7 +96,13 @@ function buildOptimizationFindings(
 ) {
   const cs = consumerSignals;
   const bs = businessSignals;
-  const { tradelines = [], inquiries = [], identity, identityGate, formData } = options || {};
+  const {
+    tradelines = [],
+    inquiries = [],
+    identity,
+    identityGate: _identityGate,
+    formData
+  } = options || {};
   const findings = [];
 
   // =========================================================================

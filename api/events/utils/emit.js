@@ -1,4 +1,5 @@
 "use strict";
+/* global AbortSignal */
 
 // ============================================================================
 // Emit — Event emitter utility for internal use

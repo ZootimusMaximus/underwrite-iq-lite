@@ -20,7 +20,7 @@ const {
   PERSONAL_INFO_PROMPT,
   INQUIRY_REMOVAL_PROMPT
 } = require("./doc-prompts");
-const { logInfo, logWarn, logError } = require("../logger");
+const { logInfo, logWarn: _logWarn, logError } = require("../logger");
 
 // CTA config
 function getCTAConfig(outcome) {

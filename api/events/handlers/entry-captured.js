@@ -1,4 +1,5 @@
 "use strict";
+/* global AbortSignal */
 
 // ============================================================================
 // Handler: fundhub.entry.captured

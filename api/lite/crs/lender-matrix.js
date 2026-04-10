@@ -164,7 +164,7 @@ function matchLenders(consumerSignals, businessSignals, outcome) {
   const score = cs.scores.median || 0;
   const bizAge = bs?.profile?.ageMonths || 0;
   const hasBiz = bs?.available && !bs.hardBlock?.blocked;
-  const allClean = cs.allBureausClean;
+  const _allClean = cs.allBureausClean;
   const isFundable =
     outcome === "FULL_FUNDING" || outcome === "PREMIUM_STACK" || outcome === "FUNDING_PLUS_REPAIR";
 

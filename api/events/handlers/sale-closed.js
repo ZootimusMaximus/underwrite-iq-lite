@@ -1,4 +1,5 @@
 "use strict";
+/* global AbortSignal */
 
 // ============================================================================
 // Handler: fundhub.sale.closed
@@ -188,7 +189,8 @@ async function handle(event) {
   const now = new Date().toISOString();
 
   // ---- 2. Read current GHL state ----
-  const { bookingLane, precallDepositCreditAmount } = await readContactFields(ghlContactId);
+  const { bookingLane, precallDepositCreditAmount: _precallDepositCreditAmount } =
+    await readContactFields(ghlContactId);
 
   // ---- 3. Determine face value and service family ----
   const serviceFamily = resolveServiceFamily(service_selected);

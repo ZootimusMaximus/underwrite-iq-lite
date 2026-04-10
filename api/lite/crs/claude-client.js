@@ -7,7 +7,7 @@
  * Handles auth, timeouts, retries, and circuit breaking.
  */
 
-const { logInfo, logWarn, logError } = require("../logger");
+const { logInfo, logWarn, logError: _logError } = require("../logger");
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const DEFAULT_MODEL = "claude-sonnet-4-6";

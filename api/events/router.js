@@ -1,4 +1,5 @@
 "use strict";
+/* global AbortSignal */
 
 // ============================================================================
 // Event Router — Validates, deduplicates, logs, and dispatches events

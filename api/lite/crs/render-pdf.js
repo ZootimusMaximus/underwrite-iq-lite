@@ -676,7 +676,7 @@ function drawCTAPage(ctx, title, cta) {
 
   // CTA body text
   if (cta) {
-    const ctaWidth = CONTENT_W - 60;
+    const _ctaWidth = CONTENT_W - 60;
     const ctaX = MARGIN + 30;
     const ctaText =
       typeof cta === "string"
@@ -981,7 +981,7 @@ const LETTER_SUBJECTS = {
  * @returns {Promise<Buffer>}
  */
 async function renderLetterPDF(text, type, bureau, round, personal) {
-  const { pdfDoc, font, bold, logoImage } = await initPdfDoc();
+  const { pdfDoc, font, bold, logoImage: _logoImage } = await initPdfDoc();
   const firstPage = pdfDoc.addPage([PAGE_W, PAGE_H]);
   const ctx = makeCtx(pdfDoc, firstPage, font, bold);
 
