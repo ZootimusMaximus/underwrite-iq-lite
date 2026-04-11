@@ -1,646 +1,573 @@
-# UnderwriteIQ Lite - API Backend
+# UnderwriteIQ Lite — API Backend
 
-Credit report analyzer backend for FundHub. Parses credit reports, determines funding eligibility, generates dispute letters, and syncs with GoHighLevel CRM.
+Credit report analyzer backend for FundHub. Parses credit reports, determines funding eligibility, generates dispute letters and summary documents, and syncs with GoHighLevel CRM.
+
+**Current version:** v2  
+**Tests:** 864 pass, 3 skip  
+**Deployed to:** `underwrite-iq-lite.vercel.app`
 
 ---
 
 ## How It Works (Simple Overview)
 
-```
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                        🏦 CREDIT ANALYZER JOURNEY                              ║
-╠═══════════════════════════════════════════════════════════════════════════════╣
-║                                                                                ║
-║   📤 STEP 1: UPLOAD                                                            ║
-║   ─────────────────                                                            ║
-║   User uploads their credit report PDF on fundhub.ai                          ║
-║   (Experian, Equifax, or TransUnion - up to 3 files)                          ║
-║                                                                                ║
-║                              ⬇️                                                ║
-║                                                                                ║
-║   🔍 STEP 2: AI READS THE REPORT                                               ║
-║   ──────────────────────────────                                               ║
-║   Text extraction → GPT-4o-mini (fast & cheap)                                ║
-║   Falls back to GPT-4.1 Vision for scanned PDFs                               ║
-║                                                                                ║
-║   Extracts:                                                                    ║
-║   • Credit score                                                               ║
-║   • Credit card balances & limits                                             ║
-║   • Negative items (collections, late payments)                               ║
-║   • Hard inquiries                                                             ║
-║   • Personal info (name, addresses)                                           ║
-║                                                                                ║
-║                              ⬇️                                                ║
-║                                                                                ║
-║   ✅ STEP 3: VERIFY IDENTITY                                                   ║
-║   ──────────────────────────                                                   ║
-║   System checks:                                                               ║
-║   • Does the name match the report? ✓                                         ║
-║   • Is the report less than 30 days old? ✓                                    ║
-║                                                                                ║
-║                              ⬇️                                                ║
-║                                                                                ║
-║   📊 STEP 4: ANALYZE & DECIDE                                                  ║
-║   ───────────────────────────                                                  ║
-║                                                                                ║
-║   ┌─────────────────────────────────────────────────────────────────────┐     ║
-║   │                    FUNDABLE CRITERIA                                 │     ║
-║   │                                                                      │     ║
-║   │   ✅ Credit Score 700+                                               │     ║
-║   │   ✅ Credit Utilization 30% or less                                  │     ║
-║   │   ✅ Zero negative accounts                                          │     ║
-║   │                                                                      │     ║
-║   │   ALL THREE = APPROVED FOR FUNDING 🎉                                │     ║
-║   │   MISSING ANY = CREDIT REPAIR PATH 🔧                                │     ║
-║   └─────────────────────────────────────────────────────────────────────┘     ║
-║                                                                                ║
-║                      ⬇️                    ⬇️                                  ║
-║                                                                                ║
-║   ┌──────────────────────┐         ┌──────────────────────┐                   ║
-║   │  🎉 FUNDING PATH     │         │  🔧 REPAIR PATH      │                   ║
-║   ├──────────────────────┤         ├──────────────────────┤                   ║
-║   │                      │         │                      │                   ║
-║   │ You qualify for      │         │ Let's fix your       │                   ║
-║   │ business funding!    │         │ credit first!        │                   ║
-║   │                      │         │                      │                   ║
-║   │ 📧 6 Letters:        │         │ 📧 12 Letters:       │                   ║
-║   │ • 3 inquiry removal  │         │ • 9 dispute letters  │                   ║
-║   │ • 3 personal info    │         │   (3 rounds × 3      │                   ║
-║   │                      │         │    bureaus)          │                   ║
-║   │                      │         │ • 3 personal info    │                   ║
-║   │                      │         │                      │                   ║
-║   │ Shows total funding  │         │ Shows what to fix    │                   ║
-║   │ amount available     │         │ and how              │                   ║
-║   └──────────────────────┘         └──────────────────────┘                   ║
-║                                                                                ║
-║                              ⬇️                                                ║
-║                                                                                ║
-║   📬 STEP 5: DELIVER RESULTS                                                   ║
-║   ──────────────────────────                                                   ║
-║   • PDF letters uploaded (available for 72 hours)                             ║
-║   • Contact created/updated in GoHighLevel CRM                                ║
-║   • Email sent with results and letter links                                  ║
-║   • User redirected to results page                                           ║
-║                                                                                ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
-```
+Two separate pipelines feed the same underwriting engine:
 
-### Processing Time
-
-| Mode | File Size | Typical Time | Cost |
-|------|-----------|--------------|------|
-| **Text** (default) | Any | 5-15 seconds | ~$0.001-0.005 |
-| **Vision** (fallback) | Small (< 3MB) | 30-45 seconds | ~$0.02-0.05 |
-| **Vision** (fallback) | Large (> 6MB) | 60-90 seconds | ~$0.02-0.05 |
-
-Text mode is **10-20x cheaper** and **3-4x faster** than Vision mode.
-
-### PDF Processing Flow
-
-The system uses a **smart 3-tier extraction strategy** optimized for speed and accuracy:
+**Pipeline A — PDF Upload (public-facing)**
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     PDF PROCESSING DECISION FLOW                            │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-                              PDF Uploaded
-                                   │
-                                   ▼
-                    ┌──────────────────────────────┐
-                    │  STEP 1: pdf-parse           │
-                    │  (instant text extraction)   │
-                    │  • Extracts text layer       │
-                    │  • ~50ms for 30 pages        │
-                    └──────────────────────────────┘
-                                   │
-                                   ▼
-                    ┌──────────────────────────────┐
-                    │  STEP 2: Validate Text       │
-                    │  Is this a credit report?    │
-                    │  • Has bureau names?         │
-                    │  • Has score patterns?       │
-                    │  • Has account terms?        │
-                    │  • Has dates & amounts?      │
-                    └──────────────────────────────┘
-                                   │
-                    ┌──────────────┴──────────────┐
-                    │                             │
-                    ▼                             ▼
-            ┌───────────────┐            ┌───────────────┐
-            │  VALID TEXT   │            │ INVALID/EMPTY │
-            │  (High conf)  │            │ (Scanned PDF) │
-            └───────────────┘            └───────────────┘
-                    │                             │
-                    ▼                             ▼
-         ┌──────────────────┐         ┌──────────────────┐
-         │  Send to LLM     │         │  STEP 3: Google  │
-         │  (GPT-4o-mini)   │         │  OCR (parallel)  │
-         │  ~5-10 seconds   │         │  ~5-10 seconds   │
-         └──────────────────┘         └──────────────────┘
-                    │                             │
-                    ▼                             ▼
-         ┌──────────────────┐         ┌──────────────────┐
-         │  ✅ DONE         │         │  Send to LLM     │
-         │  Total: 5-10s    │         │  (GPT-4o-mini)   │
-         └──────────────────┘         └──────────────────┘
-                                              │
-                                              ▼
-                                   ┌──────────────────┐
-                                   │  ✅ DONE         │
-                                   │  Total: 15-20s   │
-                                   └──────────────────┘
-                                              │
-                                   (If OCR fails)
-                                              ▼
-                                   ┌──────────────────┐
-                                   │  STEP 4: Vision  │
-                                   │  (GPT-4.1)       │
-                                   │  Last resort     │
-                                   │  ~30-60 seconds  │
-                                   └──────────────────┘
+User uploads PDF → AI parses → Identity gate → Underwrite → Letters → GHL sync
 ```
 
-**Why pdf-parse first?**
-- **Faster**: Instant text extraction vs image conversion
-- **More accurate**: No OCR errors on digitally-generated PDFs (0 vs O, 1 vs l)
-- **Cheaper**: Skip expensive Vision API calls when not needed
+**Pipeline B — CRS Soft-Pull (internal / Airtable-triggered)**
 
-**When does OCR get used?**
-| PDF Type | pdf-parse | OCR Used? |
-|----------|-----------|-----------|
-| Digitally-generated (TransUnion, IdentityIQ, SmartCredit) | ✅ Works | ❌ No |
-| Scanned paper report | ❌ No text layer | ✅ Yes |
-| Screenshot/photo PDF | ❌ No text layer | ✅ Yes |
-| Protected/encrypted PDF | ❌ Fails | ✅ Yes |
+```
+Airtable trigger → Pull Stitch Credit bureaus → 12-module CRS engine → Claude doc gen → Airtable + GHL sync
+```
 
-### What Users See
-
-1. **Upload Page** → Form to enter name, email, phone, and upload PDF
-2. **Loading Screen** → Progress bar with estimated time remaining
-3. **Results Page** → Either funding approval or repair roadmap
+Both pipelines converge on the same 6-tier outcome ladder and letter generation logic.
 
 ---
 
-## Tech Stack Overview
+## 6-Tier Outcome Ladder
 
-```
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                           🛠️ TECHNOLOGY STACK                                  ║
-╠═══════════════════════════════════════════════════════════════════════════════╣
-║                                                                                ║
-║   🌐 FRONTEND (What Users See)                                                 ║
-║   ────────────────────────────                                                 ║
-║   • FundHub Website (fundhub.ai)                                              ║
-║   • Hosted on GoHighLevel (GHL)                                               ║
-║   • Custom JavaScript for upload & progress                                   ║
-║                                                                                ║
-║   ☁️ BACKEND (The Brain)                                                       ║
-║   ──────────────────────                                                       ║
-║   • Vercel Serverless Functions                                               ║
-║   • Node.js 22                                                                ║
-║   • Handles all processing logic                                              ║
-║                                                                                ║
-║   🤖 AI PARSING (Dual-Mode)                                                    ║
-║   ─────────────────────────                                                    ║
-║   • Primary: Text extraction + GPT-4o-mini (fast & cheap)                     ║
-║   • Fallback: GPT-4.1 Vision (for scanned PDFs)                               ║
-║   • Mode selection via PARSE_MODE env var (text/vision/auto)                  ║
-║   • Understands any credit report format                                      ║
-║                                                                                ║
-║   📦 FILE STORAGE                                                              ║
-║   ───────────────                                                              ║
-║   ┌─────────────────────────────────────────────────────────────────────┐     ║
-║   │  VERCEL BLOB STORAGE                                                 │     ║
-║   │                                                                      │     ║
-║   │  • PDFs uploaded directly from browser (fast!)                      │     ║
-║   │  • Generated letters stored here                                    │     ║
-║   │  • Links expire after 72 hours (security)                           │     ║
-║   │  • No files stored permanently                                      │     ║
-║   └─────────────────────────────────────────────────────────────────────┘     ║
-║                                                                                ║
-║   🗄️ DATABASE / CACHE                                                         ║
-║   ───────────────────                                                          ║
-║   ┌─────────────────────────────────────────────────────────────────────┐     ║
-║   │  UPSTASH REDIS                                                       │     ║
-║   │                                                                      │     ║
-║   │  • Job tracking (upload progress)                                   │     ║
-║   │  • 30-day result caching (same user = instant results)              │     ║
-║   │  • Rate limiting (prevents abuse)                                   │     ║
-║   │  • No personal data stored (only hashed IDs)                        │     ║
-║   └─────────────────────────────────────────────────────────────────────┘     ║
-║                                                                                ║
-║   📧 CRM & EMAIL                                                               ║
-║   ──────────────                                                               ║
-║   ┌─────────────────────────────────────────────────────────────────────┐     ║
-║   │  GOHIGHLEVEL (GHL)                                                   │     ║
-║   │                                                                      │     ║
-║   │  • Contact management                                               │     ║
-║   │  • Automated email sequences                                        │     ║
-║   │  • Workflow triggers (repair vs funding)                            │     ║
-║   │  • Letter delivery via email                                        │     ║
-║   └─────────────────────────────────────────────────────────────────────┘     ║
-║                                                                                ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
-```
+The CRS engine routes every applicant to one of six tiers using a waterfall decision (most restrictive first):
 
-### Data Flow Diagram
+| Tier | When | What Happens |
+|------|------|--------------|
+| `FRAUD_HOLD` | Identity gate failed, OFAC match, or high fraud score | No documents. Internal review required. |
+| `MANUAL_REVIEW` | No median score, low bureau confidence, or identity soft-fail | No documents. Operator reviews manually. |
+| `REPAIR_ONLY` | Active negatives present AND all bureaus are dirty | Repair path only — 3 rounds of dispute letters. |
+| `FUNDING_PLUS_REPAIR` | Active negatives present BUT at least one bureau is clean | Fund on clean bureaus, repair dirty ones simultaneously. |
+| `FULL_FUNDING` | All bureaus clean, utilization good/excellent, no thin file | Full funding path. All documents generated. |
+| `PREMIUM_STACK` | Score >= 760, utilization <= 10%, revolving anchor >= $10K, 3+ revolving accounts | Same as FULL_FUNDING with premium lender tier unlocked. |
 
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│    USER      │     │   VERCEL     │     │   OPENAI     │     │     GHL      │
-│   BROWSER    │     │   BACKEND    │     │              │     │     CRM      │
-└──────┬───────┘     └──────┬───────┘     └──────┬───────┘     └──────┬───────┘
-       │                    │                    │                    │
-       │  1. Upload PDF     │                    │                    │
-       │ ─────────────────► │                    │                    │
-       │    (to Blob)       │                    │                    │
-       │                    │                    │                    │
-       │  2. Start job      │                    │                    │
-       │ ─────────────────► │                    │                    │
-       │                    │                    │                    │
-       │                    │  3a. Extract text  │                    │
-       │                    │     (pdf-parse)    │                    │
-       │                    │                    │                    │
-       │                    │  3b. Parse text    │                    │
-       │                    │ ─────────────────► │ GPT-4o-mini        │
-       │                    │                    │ (fast/cheap)       │
-       │                    │                    │                    │
-       │                    │  OR if scanned:    │                    │
-       │                    │ ─────────────────► │ GPT-4.1 Vision     │
-       │                    │                    │ (fallback)         │
-       │                    │                    │                    │
-       │                    │  4. Credit data    │                    │
-       │                    │ ◄───────────────── │                    │
-       │                    │                    │                    │
-       │                    │  5. Create contact + send letters       │
-       │                    │ ──────────────────────────────────────► │
-       │                    │                    │                    │
-       │  6. Results ready  │                    │                    │
-       │ ◄───────────────── │                    │                    │
-       │                    │                    │                    │
-       │  7. Redirect to    │                    │                    │
-       │     results page   │                    │                    │
-       ▼                    ▼                    ▼                    ▼
-```
-
-### Security & Privacy
-
-| Aspect | How We Handle It |
-|--------|------------------|
-| **PDF Storage** | Uploaded to Vercel Blob, deleted after processing |
-| **Letter Storage** | 72-hour expiry links, then auto-deleted |
-| **Personal Data** | Only stored in GHL (your CRM) |
-| **Caching** | Uses hashed IDs only, no PII in Redis |
-| **Rate Limiting** | Prevents abuse, 10 requests per minute |
+**Previous names (v1 → v2):**
+- `REPAIR` → `REPAIR_ONLY`
+- `CONDITIONAL_APPROVAL` → `FUNDING_PLUS_REPAIR`
+- `FULL_STACK_APPROVAL` → `FULL_FUNDING`
 
 ---
 
-## Concurrent Users & Queue System
+## Pipeline A: PDF Upload
 
-### Current State (No Queue)
-
-```
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                    ⚠️ CURRENT: SYNCHRONOUS PROCESSING                          ║
-╠═══════════════════════════════════════════════════════════════════════════════╣
-║                                                                                ║
-║   When 5 users upload at the same time:                                       ║
-║                                                                                ║
-║   User 1 ──┐                                                                   ║
-║   User 2 ──┼──► ALL hit OpenAI API simultaneously ──► ⚠️ RATE LIMITS!         ║
-║   User 3 ──┤                                                                   ║
-║   User 4 ──┤    Result: Some users get TIMEOUTS                               ║
-║   User 5 ──┘                                                                   ║
-║                                                                                ║
-║   Performance under load:                                                      ║
-║   ┌─────────────────────┬──────────────────┐                                  ║
-║   │ Concurrent Users    │ Success Rate     │                                  ║
-║   ├─────────────────────┼──────────────────┤                                  ║
-║   │ 1-3 users           │ ✅ ~100%          │                                  ║
-║   │ 5 users             │ ⚠️ ~60-80%        │                                  ║
-║   │ 10 users            │ ❌ ~20-40%        │                                  ║
-║   └─────────────────────┴──────────────────┘                                  ║
-║                                                                                ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
-```
-
-### Planned: Queue-Based Processing
+### Processing Flow
 
 ```
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                    🚀 PLANNED: QUEUE-BASED PROCESSING                          ║
-╠═══════════════════════════════════════════════════════════════════════════════╣
-║                                                                                ║
-║   When 5 users upload at the same time:                                       ║
-║                                                                                ║
-║   User 1 ──┐      ┌─────────────┐      ┌─────────────┐                        ║
-║   User 2 ──┼──►   │   REDIS     │ ──►  │   WORKER    │ ──► OpenAI            ║
-║   User 3 ──┤      │   QUEUE     │      │ (processes  │     (one at           ║
-║   User 4 ──┤      │             │      │  2-3 jobs   │      a time)           ║
-║   User 5 ──┘      │ [1,2,3,4,5] │      │  per tick)  │                        ║
-║                   └─────────────┘      └─────────────┘                        ║
-║                                                                                ║
-║   Benefits:                                                                    ║
-║   ✅ No more timeouts - jobs queue up instead of competing                    ║
-║   ✅ Fair ordering - first come, first served                                 ║
-║   ✅ 100% success rate under any load                                         ║
-║   ⏱️ Trade-off: Higher load = longer wait times                               ║
-║                                                                                ║
-║   Expected wait times:                                                         ║
-║   ┌─────────────────────┬──────────────────┐                                  ║
-║   │ Queue Position      │ Wait Time        │                                  ║
-║   ├─────────────────────┼──────────────────┤                                  ║
-║   │ Position 1          │ ~60 seconds      │                                  ║
-║   │ Position 5          │ ~3 minutes       │                                  ║
-║   │ Position 10         │ ~6 minutes       │                                  ║
-║   └─────────────────────┴──────────────────┘                                  ║
-║                                                                                ║
-║   Status: 📋 PLANNED (requires Vercel Pro for faster cron intervals)          ║
-║                                                                                ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
+1.  Pre-Validation (validate-reports.js)
+    - File size/type (PDF only, 40KB min, 3 files max)
+    - Duplicate detection by SHA-256
+    - Reject tri-merge when multiple files uploaded
+
+2.  Deduplication Check (dedupe-store.js)
+    - Check Upstash Redis for 30-day cached results
+    - Keys: user (email/phone hash), device (deviceId), ref (contactId)
+    - Return cached redirect if found
+
+3.  AI Gatekeeper (ai-gatekeeper.js)
+    - gpt-4o-mini classifies PDF content
+    - Rejects non-credit-report PDFs before expensive Vision call
+
+4.  Credit Report Parsing (parse-report.js)
+    - 3-tier strategy: text extract → Google OCR → GPT-4.1 Vision
+    - Handles single-bureau, tri-merge, and AnnualCreditReport.com formats
+    - Returns strict JSON: bureaus.{experian,equifax,transunion}
+
+5.  Bureau Merge (credit-ingestion.js)
+    - Dedupe bureaus by name (one per bureau allowed)
+    - Keep newer reports by reportDate
+
+6.  Identity Validation (validate-identity.js)
+    - Fuzzy name match against report name (90% threshold)
+    - Reject reports older than 30 days
+
+7.  Underwriting (underwriter.js)
+    - Score normalization across bureaus
+    - Fundable: zero negatives AND utilization <= 30%
+    - Produces path assignment: "funding" or "repair"
+
+8.  Suggestions (suggestions.js)
+    - Optimization cards based on underwriting results
+
+9.  Letter Generation (letter-generator.js + letter-delivery.js)
+    - Repair path:  12 letters (9 dispute rounds + 3 personal info)
+    - Funding path:  6 letters (3 inquiry removal + 3 personal info)
+    - Upload to Vercel Blob (72hr expiry URLs)
+
+10. GHL Sync (ghl-contact-service.js)
+    - Create/update contact by email/phone
+    - Map custom fields (analyzer_path, credit_score, letter URLs)
+    - Trigger repair or funding workflow
+
+11. Cache Results (dedupe-store.js)
+    - Store redirect payload in Redis (30-day TTL)
 ```
 
-### Queue Architecture (When Implemented)
+### PDF Processing — 3-Tier Strategy
+
+| Step | Method | When Used | Time | Cost |
+|------|--------|-----------|------|------|
+| 1 | `pdf-parse` text extraction | Always (first attempt) | ~50ms | $0 |
+| 2 | Google Cloud Vision OCR | Text layer empty or < 1000 chars | 10-20s | ~$0.003-0.005 |
+| 3 | GPT-4.1 Vision | OCR unavailable or fails | 30-60s | ~$0.02-0.05 |
+
+Most digitally-generated credit reports (TransUnion, IdentityIQ, SmartCredit) are handled entirely by the text path — no AI image call needed.
+
+### Fundable vs Repair Logic (PDF pipeline)
+
+The PDF pipeline uses a simpler binary check than the CRS engine:
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   BROWSER   │     │  VERCEL     │     │   REDIS     │     │   WORKER    │
-│             │     │  API        │     │   QUEUE     │     │   (CRON)    │
-└──────┬──────┘     └──────┬──────┘     └──────┬──────┘     └──────┬──────┘
-       │                   │                   │                   │
-       │ 1. Upload PDF     │                   │                   │
-       │ ─────────────────►│                   │                   │
-       │                   │                   │                   │
-       │                   │ 2. Add to queue   │                   │
-       │                   │ ─────────────────►│                   │
-       │                   │                   │                   │
-       │ 3. "Queued #5"    │                   │                   │
-       │ ◄─────────────────│                   │                   │
-       │                   │                   │                   │
-       │                   │                   │ 4. Every 10-60s   │
-       │                   │                   │ ◄─────────────────│
-       │                   │                   │    "Next job?"    │
-       │                   │                   │                   │
-       │                   │                   │ 5. Pop job        │
-       │                   │                   │ ─────────────────►│
-       │                   │                   │                   │
-       │                   │                   │    6. Process     │
-       │                   │                   │    (OpenAI call)  │
-       │                   │                   │                   │
-       │ 7. Poll status    │                   │                   │
-       │ ─────────────────►│                   │                   │
-       │                   │                   │                   │
-       │ 8. "Complete!"    │                   │                   │
-       │ ◄─────────────────│                   │                   │
-       ▼                   ▼                   ▼                   ▼
+IF negatives = 0 AND utilization <= 30%:
+    FUNDING PATH  — 6 letters (3 inquiry removal + 3 personal info)
+ELSE:
+    REPAIR PATH   — 12 letters (9 dispute rounds + 3 personal info)
 ```
 
-### Implementation Options
+### 30-Day Deduplication
 
-| Option | Pros | Cons |
-|--------|------|------|
-| **Vercel Cron (Pro)** | Simple, built-in | Requires Pro plan ($20/mo), min 10s interval |
-| **Upstash QStash** | Sub-second delivery, retries | Additional service, extra cost |
-| **Self-triggered** | Works on Hobby plan | Complex, less reliable |
+| Key Type | Format | Purpose |
+|----------|--------|---------|
+| User | `uwiq:u:<sha256(email|phone)>` | Prevent same person resubmitting |
+| Device | `uwiq:d:<deviceId>` | Browser localStorage cross-session |
+| Ref | `uwiq:r:<contactId>` | Cross-device attribution via GHL contact |
+
+On a cache hit the system returns the stored redirect immediately — no reprocessing.
 
 ---
 
-## Architecture Overview (Technical)
+## Pipeline B: CRS Soft-Pull Engine
+
+### Entry Points
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT FLOW                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   [User Upload]                                                              │
-│        │                                                                     │
-│        ▼                                                                     │
-│   ┌─────────────────┐                                                        │
-│   │  FundHub Website │  (fundhub-website-GHL repo)                          │
-│   │  credit-analyzer │                                                       │
-│   └────────┬────────┘                                                        │
-│            │ POST /api/lite/switchboard                                      │
-│            │ (PDF + name + email + phone)                                    │
-│            ▼                                                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                           VERCEL BACKEND                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                        SWITCHBOARD                                   │   │
-│   │                    (api/lite/switchboard.js)                         │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│            │                                                                 │
-│            ▼                                                                 │
-│   ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐       │
-│   │  Stage 1        │     │  Stage 2        │     │  Stage 3        │       │
-│   │  Pre-Validate   │────▶│  AI Parse       │────▶│  Bureau Merge   │       │
-│   │  (size, type,   │     │  (text+4o-mini  │     │  (dedupe check) │       │
-│   │   duplicates)   │     │  or Vision)     │     │                 │       │
-│   └─────────────────┘     └─────────────────┘     └─────────────────┘       │
-│                                                          │                   │
-│                                                          ▼                   │
-│   ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐       │
-│   │  Stage 3b       │     │  Stage 4        │     │  Stage 5        │       │
-│   │  Identity Gate  │────▶│  Underwrite     │────▶│  Suggestions    │       │
-│   │  (name match,   │     │  (score, util,  │     │  (optimization  │       │
-│   │   30-day check) │     │   fundable?)    │     │   cards)        │       │
-│   └─────────────────┘     └─────────────────┘     └─────────────────┘       │
-│                                                          │                   │
-│                                                          ▼                   │
-│                                              ┌───────────┴───────────┐       │
-│                                              │                       │       │
-│                                        ┌─────┴─────┐           ┌─────┴─────┐ │
-│                                        │ FUNDABLE  │           │  REPAIR   │ │
-│                                        │ Score≥700 │           │ Otherwise │ │
-│                                        │ Util≤30%  │           │           │ │
-│                                        │ Neg=0     │           │           │ │
-│                                        └─────┬─────┘           └─────┬─────┘ │
-│                                              │                       │       │
-│                                              ▼                       ▼       │
-│                                        ┌───────────┐           ┌───────────┐ │
-│                                        │ 6 Letters │           │12 Letters │ │
-│                                        │ 3 inquiry │           │ 9 dispute │ │
-│                                        │ 3 personal│           │ 3 personal│ │
-│                                        └─────┬─────┘           └─────┬─────┘ │
-│                                              │                       │       │
-│                                              └───────────┬───────────┘       │
-│                                                          │                   │
-│                                                          ▼                   │
-│                                              ┌─────────────────────┐         │
-│                                              │   Vercel Blob       │         │
-│                                              │   (PDF Storage)     │         │
-│                                              │   72hr expiry URLs  │         │
-│                                              └──────────┬──────────┘         │
-│                                                         │                    │
-└─────────────────────────────────────────────────────────┼────────────────────┘
-                                                          │
-                                                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           GOHIGHLEVEL (GHL)                                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                     Inbound Webhook                                  │   │
-│   │          (underwriteiq_analyzer_complete)                            │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│            │                                                                 │
-│            ▼                                                                 │
-│   ┌─────────────────┐                                                        │
-│   │ Contact Upsert  │  (Create or update by email/phone)                    │
-│   └────────┬────────┘                                                        │
-│            │                                                                 │
-│            ▼                                                                 │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                     Custom Fields Mapped                             │   │
-│   ├─────────────────────────────────────────────────────────────────────┤   │
-│   │  analyzer_path          = "repair" | "funding"                       │   │
-│   │  analyzer_status        = "complete"                                 │   │
-│   │  letters_ready          = "true"                                     │   │
-│   │  credit_score           = 580                                        │   │
-│   │  credit_suggestions     = "Remove negatives..."                      │   │
-│   │                                                                      │   │
-│   │  REPAIR LETTERS:                                                     │   │
-│   │  repair_letter_url__round_1__ex/eq/tu                                │   │
-│   │  repair_letter_url__round_2__ex/eq/tu                                │   │
-│   │  repair_letter_url__round_3__ex/eq/tu                                │   │
-│   │  repair_letter_url__personal_info_dispute__ex/eq/tu                  │   │
-│   │                                                                      │   │
-│   │  FUNDING LETTERS:                                                    │   │
-│   │  funding_letter_url__inquiry_cleanup__ex/eq/tu                       │   │
-│   │  funding_letter_url__personal_info_cleanup__ex/eq/tu                               │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│            │                                                                 │
-│            ▼                                                                 │
-│   ┌─────────────────┐     ┌─────────────────┐                               │
-│   │ Repair Workflow │ OR  │Funding Workflow │                               │
-│   │ (email + tags)  │     │ (email + tags)  │                               │
-│   └─────────────────┘     └─────────────────┘                               │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+POST /api/lite/crs-analyze          — accepts raw Stitch Credit responses
+POST /api/lite/crs-pull-and-analyze — accepts applicant identity, pulls bureaus, runs engine
+POST /api/lite/trigger-crs-pull     — Airtable BRIDGE automation trigger
+```
+
+### 12-Module Engine (`api/lite/crs/`)
+
+| # | Module | Role |
+|---|--------|------|
+| 1 | `normalize-soft-pull.js` | Ingest and normalize raw Stitch Credit CRS data |
+| 2 | `derive-consumer-signals.js` | Score, utilization band, derogatory analysis, bureau cleanliness |
+| 3 | `derive-business-signals.js` | Business credit signals from Experian commercial data |
+| 4 | `identity-fraud-gate.js` | Name match, report freshness, fraud risk score |
+| 5 | `route-outcome.js` | 6-tier outcome waterfall |
+| 6 | `estimate-preapprovals.js` | Funding estimates (2 modifiers: utilization + thin file) |
+| 7 | `optimization-findings.js` | 37 finding categories with exact account names and amounts |
+| 8 | `build-suggestions.js` | 4-tier suggestion layers with AI-generated text |
+| 9 | `build-cards.js` | CRM tag array |
+| 10 | `build-documents.js` | Letter and summary doc specs per outcome |
+| 11 | `build-crm-payload.js` | GHL field mapping |
+| 12 | `build-audit-trail.js` | Processing audit log |
+
+**Supporting modules:**
+
+| Module | Role |
+|--------|------|
+| `stitch-credit-client.js` | JWT auth, parallel bureau pulls |
+| `airtable-sync.js` | Bidirectional CRS ↔ FUNDHUB MATRIX sync |
+| `engine.js` | Orchestrates all 12 modules |
+| `generate-deliverables.js` | Claude API document generation orchestrator |
+| `lender-matrix.js` | Rule-based lender matching (15 lenders) |
+| `claude-client.js` | Claude API client with circuit breaker |
+| `render-pdf.js` | PDF rendering for generated deliverables |
+| `suggestion-text-generator.js` | GPT-4o-mini text for suggestion cards |
+
+### Pre-Approval Estimator (Module 6)
+
+**v2 — 2 modifiers only** (removed bureau confidence, inquiry pressure, AU dominance, business overlay):
+
+```
+personal_card_base  = revolving_anchor × 5.5  (floor: $5,000)
+personal_loan_base  = installment_anchor × 3.0 (floor: $10,000)
+
+modifier_product    = outcome_mod × utilization_mod × thin_file_mod
+
+final_amount        = base × modifier_product
+```
+
+| Modifier | Values |
+|----------|--------|
+| Outcome | PREMIUM_STACK/FULL_FUNDING: 1.0, FUNDING_PLUS_REPAIR: 0.6, all others: 0 |
+| Utilization | excellent: 1.0, good: 0.95, moderate: 0.8, high: 0.6, critical: 0.4 |
+| Thin file | normal: 1.0, thin: 0.6 |
+
+**Business credit** — any negative item OR any UCC filing = $0. No exceptions.
+
+### Suggestion Engine v4 (Module 7-8)
+
+- 37 finding categories covering: active negatives, utilization per account, thin file, AU impact, inquiry windows, business formation, and more
+- One finding per account (no grouping)
+- Names every creditor, gives exact dollar targets (utilization target always < 10%)
+- AI text generation via GPT-4o-mini (5th-grade reading level)
+- Findings include `projectedPreapproval` showing what the number would be after the fix
+
+### Document Generation (Claude API)
+
+`generate-deliverables.js` calls Claude (`claude-sonnet-4-6` by default) to produce:
+
+**4 main documents (generated in parallel):**
+
+| Document | Description |
+|----------|-------------|
+| `creditAnalysis` | Full credit profile analysis |
+| `roadmap` | Step-by-step action roadmap |
+| `fundingSnapshot` | Pre-approval summary with lender tier |
+| `lenderMatchList` | Matched lenders with estimates and fit notes |
+
+**Letters (generated sequentially to respect rate limits):**
+
+| Letter | When Generated |
+|--------|---------------|
+| Dispute round 1, 2, 3 | Per dirty bureau — REPAIR_ONLY or FUNDING_PLUS_REPAIR |
+| Personal info update | All outcomes, all bureaus |
+| Inquiry removal | All outcomes, all bureaus |
+
+The Claude client includes a circuit breaker: 3 consecutive failures open the circuit for 60 seconds. Document generation failures are soft — the pipeline continues and marks the failed doc as `null`.
+
+### Lender Matching (15 lenders, rule-based)
+
+No AI involved. Each lender has `minScore`, `minTIB`, optional `minRevenue`, and `requiresBiz` flags. Matching is pure boolean filtering.
+
+Lenders include: Chase Ink Preferred, Amex Blue Business Plus, Capital One Spark Cash, OnDeck, Bluevine, Fundbox, Kabbage (Amex), SBA 7(a), Credibly, Chase Sapphire Preferred, Amex Gold, Lending Club, SoFi, Navy Federal, Marcus by Goldman Sachs.
+
+---
+
+## Event System
+
+### Entry Point
+
+```
+POST /api/events
+Authorization: Bearer <API_SECRET or EVENT_ROUTER_TOKEN>
+```
+
+### Event Envelope Shape
+
+```json
+{
+  "event_name": "fundhub.analysis.completed",
+  "event_version": 1,
+  "event_id": "uuid-v4",
+  "idempotency_key": "unique-key",
+  "occurred_at": "2026-04-04T00:00:00Z",
+  "source_system": "underwrite-iq",
+  "correlation_id": "optional-trace-id",
+  "contact": {
+    "email": "client@example.com",
+    "phone": "5551234567",
+    "ghl_contact_id": "abc123",
+    "airtable_client_record_id": "recXXX"
+  },
+  "adapter": {
+    "entry_mode": "analyzer",
+    "funnel_family": "credit_repair"
+  },
+  "payload": { }
+}
+```
+
+### 8 Canonical Events
+
+| Event Name | Trigger |
+|-----------|---------|
+| `fundhub.entry.captured` | New lead enters funnel (any source) |
+| `fundhub.deposit.paid` | SLO deposit received |
+| `fundhub.analysis.requested` | CRS pull triggered |
+| `fundhub.analysis.completed` | CRS engine finishes |
+| `fundhub.booking.lane.decided` | Outcome tier assigned, call lane routed |
+| `fundhub.call.booked` | Booking confirmed |
+| `fundhub.decision.recorded` | Underwriter decision saved |
+| `fundhub.sale.closed` | Deal closed |
+
+### 9 Handlers
+
+`api/events/handlers/`: `entry-captured`, `deposit-paid`, `analysis-requested`, `analysis-completed`, `booking-lane-decided`, `call-booked`, `decision-recorded`, `sale-closed`, `client-upsert` (shared utility)
+
+### Router Behavior
+
+1. Validate envelope structure (6 required fields)
+2. Normalize contact (email/phone)
+3. Validate event-specific payload fields
+4. Idempotency check via Upstash Redis (skip if already processed)
+5. Log to Airtable `EVENT_LOG` (fire-and-forget)
+6. Dispatch to handler
+7. Mark processed in Redis
+
+Redis down = warning logged, processing continues. Airtable log failure = silently ignored. Auth is skipped if neither `API_SECRET` nor `EVENT_ROUTER_TOKEN` is set (dev mode).
+
+---
+
+## Other Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/lite/switchboard` | POST | Main PDF analyzer — upload + results |
+| `/api/lite/parse-report` | POST | Parse single PDF (internal use) |
+| `/api/lite/upload-token` | GET | Get Vercel Blob upload token |
+| `/api/lite/blob-upload` | POST | Client-side blob upload handler |
+| `/api/lite/start-processing` | POST | Kick off async queue processing |
+| `/api/lite/job-status` | GET | Poll job status |
+| `/api/lite/process-worker` | POST | Worker — processes one queued job |
+| `/api/lite/process-queue` | GET | Cron handler — drains queue (1-min schedule) |
+| `/api/lite/crs-analyze` | POST | CRS engine — raw CRS data in |
+| `/api/lite/crs-pull-and-analyze` | POST | CRS engine — pull bureaus + analyze |
+| `/api/lite/trigger-crs-pull` | POST | Airtable BRIDGE trigger |
+| `/api/lite/crs-sandbox-data` | GET | Return sandbox CRS fixture data |
+| `/api/lite/airtable-reprocess` | POST | Re-run engine on existing Airtable record |
+| `/api/lite/disputefox-relay` | POST | DisputeFox events → GHL (replaces 6 Zapier zaps) |
+| `/api/lite/disputefox-intake` | POST | DisputeFox event router — writes df_* fields + pipeline stage |
+| `/api/events` | POST | Modular event system entry point |
+
+---
+
+## API Validation Rules
+
+| Rule | Stage | Error |
+|------|-------|-------|
+| Max 3 files | Pre-parse | `"Upload up to 3 PDFs only"` |
+| PDF format | Pre-parse | `"Only PDF credit reports accepted"` |
+| Min 40KB | Pre-parse | `"PDF too small to be complete"` |
+| Duplicate file | Pre-parse | `"Duplicate file detected"` |
+| Duplicate bureau | Post-parse | `"Duplicate Experian detected"` |
+| Name mismatch | Post-parse | `"Name does not match report"` |
+| Report > 30 days | Post-parse | `"Report is X days old"` |
+
+---
+
+## GHL Field Mapping
+
+**Common Fields:**
+
+| Field | Value |
+|-------|-------|
+| `analyzer_path` | `"repair"` or `"funding"` |
+| `analyzer_status` | `"complete"` |
+| `letters_ready` | `"true"` |
+| `credit_score` | numeric |
+| `credit_utilization` | numeric |
+| `negative_accounts` | numeric |
+| `credit_suggestions` | text |
+
+**Repair Letters:**
+
+```
+repair_letter_url__round_1__ex / eq / tu
+repair_letter_url__round_2__ex / eq / tu
+repair_letter_url__round_3__ex / eq / tu
+repair_letter_url__personal_info_dispute__ex / eq / tu
+```
+
+**Funding Letters:**
+
+```
+funding_letter_url__inquiry_cleanup__ex / eq / tu
+funding_letter_url__personal_info_cleanup__ex / eq / tu
 ```
 
 ---
 
 ## Tech Stack
 
-| Component      | Technology                     |
-| -------------- | ------------------------------ |
-| Backend        | Node.js 22 + Vercel Serverless |
-| PDF Text Extraction | pdf-parse                 |
-| AI Parsing (Primary) | OpenAI GPT-4o-mini (text mode) |
-| AI Parsing (Fallback) | OpenAI GPT-4.1 Vision (scanned PDFs) |
-| PDF Generation | pdf-lib                        |
-| PDF Storage    | Vercel Blob (72hr URLs)        |
-| CRM            | GoHighLevel (GHL)              |
-| Cache/Dedupe   | Upstash Redis                  |
-| Rate Limiting  | Upstash Ratelimit              |
-
----
-
-## API Endpoints
-
-| Endpoint                      | Description                              |
-| ----------------------------- | ---------------------------------------- |
-| `POST /api/lite/switchboard`  | Main analyzer - upload PDFs, get results |
-| `POST /api/lite/parse-report` | Parse single PDF (internal)              |
-| `GET /api/lite/health`        | Health check                             |
-
----
-
-## Validation Rules
-
-| Rule             | Stage      | Error Message                      |
-| ---------------- | ---------- | ---------------------------------- |
-| Max 3 files      | Pre-parse  | "Upload up to 3 PDFs only"         |
-| PDF format       | Pre-parse  | "Only PDF credit reports accepted" |
-| Min 40KB         | Pre-parse  | "PDF too small to be complete"     |
-| Duplicate file   | Pre-parse  | "Duplicate file detected"          |
-| Duplicate bureau | Post-parse | "Duplicate Experian detected"      |
-| Name mismatch    | Post-parse | "Name does not match report"       |
-| Report >30 days  | Post-parse | "Report is X days old"             |
-
----
-
-## Fundable vs Repair Logic
-
-```
-IF score >= 700 AND utilization <= 30% AND negatives = 0:
-    → FUNDABLE PATH (6 letters)
-ELSE:
-    → REPAIR PATH (12 letters)
-```
-
----
-
-## Letter Generation
-
-### Repair Path (12 letters)
-
-- 9 dispute letters (3 rounds × 3 bureaus)
-- 3 personal info letters (1 per bureau)
-
-### Fundable Path (6 letters)
-
-- 3 inquiry removal letters (1 per bureau)
-- 3 personal info letters (1 per bureau)
+| Component | Technology |
+|-----------|------------|
+| Backend | Node.js 22 + Vercel Serverless |
+| PDF Text Extraction | pdf-parse |
+| OCR | Google Cloud Vision |
+| AI Parsing (fallback) | GPT-4.1 Vision |
+| Suggestion Text | GPT-4o-mini |
+| Document Generation | Claude API (claude-sonnet-4-6) |
+| PDF Generation | pdf-lib |
+| PDF Storage | Vercel Blob (72hr URLs) |
+| CRM | GoHighLevel |
+| Soft-Pull Provider | Stitch Credit |
+| OpsDB | Airtable (FUNDHUB MATRIX) |
+| Cache / Dedupe / Idempotency | Upstash Redis |
+| Rate Limiting | Upstash Ratelimit |
+| Logging | pino |
 
 ---
 
 ## Environment Variables
 
+### Required
+
 ```bash
-# OpenAI
-UNDERWRITE_IQ_VISION_KEY=sk-...
+# OpenAI (credit report parsing + suggestion text)
+UNDERWRITE_IQ_VISION_KEY=sk-proj-...
 
-# Parse Mode: text (cheap/fast), vision (accurate), auto (text with fallback)
-PARSE_MODE=auto
-
-# Model for text-based parsing (default: gpt-4o-mini)
-PARSE_MODEL=gpt-4o-mini
-
-# Vercel Blob
+# Vercel Blob (PDF storage, 72hr URLs)
 BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
 
 # GoHighLevel
-GHL_API_BASE=https://services.leadconnectorhq.com
 GHL_PRIVATE_API_KEY=pit-...
-GHL_LOCATION_ID=...
+GHL_API_BASE=https://services.leadconnectorhq.com
+GHL_LOCATION_ID=your-location-id
 
-# Upstash Redis (dedupe/rate limit)
-UPSTASH_REDIS_REST_URL=https://...
-UPSTASH_REDIS_REST_TOKEN=...
+# Upstash Redis (caching, deduplication, idempotency)
+UPSTASH_REDIS_REST_URL=https://your-endpoint.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-token
 
-# Redirects
-REDIRECT_URL_FUNDABLE=https://fundhub.ai/funding-approved
-REDIRECT_URL_NOT_FUNDABLE=https://fundhub.ai/fix-my-credit
+# Redirect URLs
+REDIRECT_URL_FUNDABLE=https://fundhub.ai/funding-approved-analyzer-462533
+REDIRECT_URL_NOT_FUNDABLE=https://fundhub.ai/fix-my-credit-analyzer
+REDIRECT_BASE_URL=https://fundhub.ai
+```
+
+### CRS Engine
+
+```bash
+# Stitch Credit (soft-pull bureau pulls)
+STITCH_CREDIT_API_BASE=https://api-sandbox.stitchcredit.com
+STITCH_CREDIT_USERNAME=your-admin-username
+STITCH_CREDIT_PASSWORD=your-admin-password
+
+# Airtable (FUNDHUB MATRIX sync)
+AIRTABLE_API_KEY=your-pat
+AIRTABLE_BASE_ID=your-base-id
+AIRTABLE_TABLE_CLIENTS=Clients
+AIRTABLE_TABLE_SNAPSHOTS=Credit Snapshots
+
+# Claude API (document generation)
+ANTHROPIC_API_KEY=sk-ant-...
+CLAUDE_MODEL=claude-sonnet-4-6        # optional, default: claude-sonnet-4-6
+CLAUDE_TIMEOUT=90000                  # optional, default: 90000ms
+BOOKING_URL=https://fundhub.ai/book  # CTA link in generated docs
+```
+
+### Event System
+
+```bash
+# Auth — at least one required; both missing = auth skipped (dev mode)
+API_SECRET=your-global-secret
+EVENT_ROUTER_TOKEN=your-event-token
+
+# Airtable EVENT_LOG table name (default: "Event Log")
+AIRTABLE_TABLE_EVENT_LOG=Event Log
+```
+
+### Optional
+
+```bash
+# Parse Mode
+PARSE_MODE=auto         # auto (text→OCR→Vision), vision, ocr
+PARSE_MODEL=gpt-4.1     # gpt-4.1 or gpt-4o-mini
+
+# Google Cloud Vision OCR (for scanned PDFs)
+GOOGLE_PROJECT_ID=your-project-id
+GOOGLE_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
+GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+
+# Speed
+SKIP_AI_GATEKEEPER=true  # skip gatekeeper check, saves ~3-5s
+
+# Rate Limiting
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_MAX_REQUESTS=10
+RATE_LIMIT_WINDOW=1 m
+
+# Feature Flags
+AFFILIATE_DASHBOARD_ENABLED=true
+IDENTITY_VERIFICATION_ENABLED=true
+
+# Logging
+LOG_LEVEL=info  # trace, debug, info, warn, error, fatal
+
+# Verification Services
+CF_EMAIL_VALIDATION_TOKEN=...
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=+1...
+
+# DisputeFox
+DISPUTEFOX_RELAY_MODE=direct   # or "zapier"
+DISPUTEFOX_INTAKE_SECRET=...
+ZAPIER_WEBHOOK_URL=...         # only needed when RELAY_MODE=zapier
 ```
 
 ---
 
-## Project Structure
+## File Structure
 
 ```
 underwrite-iq-lite/
-├── api/lite/
-│   ├── switchboard.js        # Main orchestrator
-│   ├── parse-report.js       # AI parser (text + vision modes)
-│   ├── pdf-text-extractor.js # Text extraction from PDFs
-│   ├── validate-reports.js   # Pre-parse validation
-│   ├── validate-identity.js  # Name match + 30-day check
-│   ├── underwriter.js        # Fundable/repair logic
-│   ├── letter-generator.js   # PDF letter creation
-│   ├── letter-delivery.js    # Letter orchestration
-│   ├── storage.js            # Vercel Blob uploads
-│   ├── ghl-contact-service.js # GHL API integration
-│   ├── suggestions.js        # Optimization suggestions
-│   ├── dedupe-store.js       # Redis cache
-│   ├── rate-limiter.js       # Rate limiting
-│   ├── ai-gatekeeper.js      # Pre-parse AI check
-│   └── __tests__/            # 354 tests
+├── api/
+│   ├── events/
+│   │   ├── index.js                    # POST /api/events entry point
+│   │   ├── router.js                   # Envelope validation + dispatch
+│   │   ├── handlers/
+│   │   │   ├── entry-captured.js
+│   │   │   ├── deposit-paid.js
+│   │   │   ├── analysis-requested.js
+│   │   │   ├── analysis-completed.js
+│   │   │   ├── booking-lane-decided.js
+│   │   │   ├── call-booked.js
+│   │   │   ├── decision-recorded.js
+│   │   │   ├── sale-closed.js
+│   │   │   └── client-upsert.js        # Shared contact upsert utility
+│   │   └── utils/
+│   │       ├── idempotency.js          # Redis idempotency store
+│   │       └── normalize.js            # Contact normalization + payload validation
+│   └── lite/
+│       ├── switchboard.js              # PDF pipeline orchestrator
+│       ├── parse-report.js             # 3-tier AI parser
+│       ├── pdf-text-extractor.js       # Text + OCR extraction
+│       ├── ai-gatekeeper.js            # gpt-4o-mini PDF classifier
+│       ├── credit-ingestion.js         # Tri-merge detector + bureau merge
+│       ├── validate-reports.js         # Pre-parse file validation
+│       ├── validate-identity.js        # Name match + 30-day recency
+│       ├── underwriter.js              # Fundable/repair binary logic
+│       ├── letter-generator.js         # pdf-lib letter creation
+│       ├── letter-delivery.js          # Letter orchestration
+│       ├── suggestions.js              # Suggestion cards (PDF pipeline)
+│       ├── ghl-contact-service.js      # GHL API integration
+│       ├── ghl-webhook.js              # Inbound GHL webhook handler
+│       ├── dedupe-store.js             # Redis 30-day cache
+│       ├── rate-limiter.js             # Upstash Ratelimit
+│       ├── input-sanitizer.js          # XSS/injection protection
+│       ├── crs-analyze.js              # CRS analyze endpoint
+│       ├── crs-pull-and-analyze.js     # CRS pull + analyze endpoint
+│       ├── trigger-crs-pull.js         # Airtable BRIDGE trigger
+│       ├── airtable-reprocess.js       # Re-run CRS on existing record
+│       ├── disputefox-relay.js         # DisputeFox → GHL relay
+│       ├── disputefox-intake.js        # DisputeFox event router
+│       ├── process-queue.js            # Cron queue drain (1-min)
+│       ├── process-worker.js           # Async job worker
+│       ├── job-store.js                # Job status Redis store
+│       ├── storage.js                  # Vercel Blob helpers
+│       ├── logger.js                   # pino-based logger
+│       ├── crs/
+│       │   ├── engine.js               # 12-module CRS orchestrator
+│       │   ├── normalize-soft-pull.js  # Stage 1
+│       │   ├── derive-consumer-signals.js # Stage 2
+│       │   ├── derive-business-signals.js # Stage 3
+│       │   ├── identity-fraud-gate.js  # Stage 4
+│       │   ├── route-outcome.js        # Stage 5 — 6-tier ladder
+│       │   ├── estimate-preapprovals.js # Stage 6
+│       │   ├── optimization-findings.js # Stage 7 — 37 finding types
+│       │   ├── build-suggestions.js    # Stage 8
+│       │   ├── build-cards.js          # Stage 9
+│       │   ├── build-documents.js      # Stage 10
+│       │   ├── build-crm-payload.js    # Stage 11
+│       │   ├── build-audit-trail.js    # Stage 12
+│       │   ├── generate-deliverables.js # Claude API orchestrator
+│       │   ├── lender-matrix.js        # 15-lender rule-based matcher
+│       │   ├── claude-client.js        # Claude API client + circuit breaker
+│       │   ├── suggestion-text-generator.js # GPT-4o-mini text gen
+│       │   ├── doc-prompts.js          # Claude system prompts
+│       │   ├── render-pdf.js           # PDF renderer for generated docs
+│       │   ├── stitch-credit-client.js # Stitch Credit API client
+│       │   ├── airtable-sync.js        # Airtable FUNDHUB MATRIX sync
+│       │   └── summary-doc-generator.js # pdf-lib summary PDFs
+│       └── __tests__/                  # 864 tests (40 test files)
+├── public/
+│   ├── prod-upload.html               # Single-file parser UI
+│   └── tester.html                    # Switchboard test UI
 ├── package.json
-└── vercel.json
+├── vercel.json                        # Routes + 1-minute cron
+└── .env.example
 ```
 
 ---
@@ -651,63 +578,168 @@ underwrite-iq-lite/
 # Install
 npm install
 
-# Run locally
-npm run dev
+# Local dev server
+npm run dev          # Vercel dev (localhost:3000)
+npm run dev:test     # Test server (test-server.js)
 
-# Run tests
-npm test
-
-# Lint
+# Lint & format
 npm run lint
+npm run lint:fix
+npm run format
+npm run format:check
 ```
 
----
-
-## Deployment
+### Deployment
 
 - **Staging:** Push to `staging` branch → auto-deploys to `underwrite-iq-lite-staging.vercel.app`
 - **Production:** Merge to `main` → auto-deploys to `underwrite-iq-lite.vercel.app`
 
 ---
 
-## GHL Webhook Payload
+## Testing
 
-```json
-{
-  "first_name": "John",
-  "last_name": "Doe",
-  "email": "john@example.com",
-  "phone": "5551234567",
-  "business_name": "Acme LLC",
-  "business_age_months": 24,
+864 pass, 3 skip (40 test files).
 
-  "analyzer_path": "repair",
-  "analyzer_status": "complete",
-  "letters_ready": "true",
+```bash
+# All tests
+npm test
 
-  "credit_score": 580,
-  "credit_utilization": 45,
-  "negative_accounts": 3,
-  "credit_suggestions": "Remove collections...",
+# Single file
+npm test -- api/lite/__tests__/validate-identity.test.js
 
-  "repair_letter_url__round_1__ex": "https://...",
-  "repair_letter_url__round_1__eq": "https://...",
-  "repair_letter_url__round_1__tu": "https://...",
-  "repair_letter_url__personal_info_dispute__ex": "https://...",
-  ...
-}
+# With test server (E2E)
+# Terminal 1:
+npm run dev:test
+# Terminal 2:
+PARSE_ENDPOINT=http://localhost:3000/api/lite/parse-report \
+  TEST_SERVER_URL=http://localhost:3000 \
+  node --test api/lite/__tests__/switchboard.e2e.test.js
+
+# Coverage
+npm run test:coverage
+npm run coverage
+npm run coverage:check
+```
+
+### Test File Coverage
+
+```
+api/lite/__tests__/
+├── switchboard.e2e.test.js
+├── validate-identity.test.js
+├── underwriter.test.js
+├── letter-generator.test.js
+├── letter-delivery.test.js
+├── ghl-contact-service.test.js
+├── dedupe-store.test.js
+├── credit-ingestion.test.js
+├── crs-engine.test.js
+├── crs-analyze.test.js
+├── crs-pull-and-analyze.test.js
+├── normalize-soft-pull.test.js
+├── derive-consumer-signals.test.js
+├── derive-business-signals.test.js
+├── identity-fraud-gate.test.js
+├── route-outcome.test.js
+├── estimate-preapprovals.test.js
+├── optimization-findings.test.js
+├── build-suggestions.test.js
+├── summary-doc-generator.test.js
+├── stitch-credit-client.test.js
+├── airtable-sync.test.js
+└── ... (40 files total)
 ```
 
 ---
 
-## Testing
+## Error Handling Conventions
 
-```bash
-# Run all tests
-npm test
+**All modules return a consistent shape:**
 
-# Run specific test file
-npm test -- api/lite/__tests__/validate-identity.test.js
+```javascript
+// Error
+{ ok: false, error: "ERROR_CODE", message: "User-friendly message", details: {} }
+
+// Success
+{ ok: true, data: { /* payload */ } }
 ```
 
-Current: **354 tests passing**
+**Logging** (pino-based via `logger.js`):
+
+```javascript
+const { logInfo, logWarn, logError } = require("./logger");
+logInfo("Processing started", { userId: "123" });
+logWarn("Rate limit approaching", { ip });
+logError("Parse failed", { error: err.message });
+```
+
+---
+
+## Security
+
+| Concern | Mitigation |
+|---------|-----------|
+| XSS / injection | All user inputs pass through `input-sanitizer.js` |
+| Rate abuse | Upstash Ratelimit (configurable, default 10 req/min) |
+| PII in cache | Email/phone hashed SHA-256 before Redis storage |
+| File abuse | Size, type, and content validated before any AI call |
+| Non-credit PDFs | gpt-4o-mini gatekeeper rejects before Vision call |
+| Temp files | Cleaned from `/tmp` after every request |
+| Event auth | Bearer token required (API_SECRET or EVENT_ROUTER_TOKEN) |
+| Claude failure | Circuit breaker opens after 3 consecutive failures |
+
+---
+
+## Troubleshooting
+
+**Tests failing:**
+
+```bash
+cat .env.example
+NODE_ENV=test node --test --test-reporter=spec api/lite/__tests__/*.test.js
+lsof -i :3000
+```
+
+**Rate limit issues:**
+
+```bash
+curl "https://your-endpoint.upstash.io/get/test" \
+  -H "Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN"
+export RATE_LIMIT_ENABLED=false
+```
+
+**Parse errors:**
+
+```bash
+curl https://api.openai.com/v1/models \
+  -H "Authorization: Bearer $UNDERWRITE_IQ_VISION_KEY"
+export PARSE_MODEL=gpt-4o-mini
+export SKIP_AI_GATEKEEPER=true
+```
+
+**GHL sync failures:**
+
+```bash
+curl "https://services.leadconnectorhq.com/contacts/" \
+  -H "Authorization: Bearer $GHL_PRIVATE_API_KEY" \
+  -H "Version: 2021-07-28"
+echo $GHL_LOCATION_ID
+```
+
+**Claude document generation failures:**
+
+Document generation is soft-fail by default — check Vercel logs for `generate-deliverables` errors. Circuit breaker resets after 60 seconds. If the circuit is open, all 4 main docs will be `null` but the pipeline continues.
+
+---
+
+## Known Gotchas
+
+1. **Tri-merge + multi-file**: If multiple PDFs uploaded and one is tri-merge, pre-validation rejects the whole request.
+2. **Bureau name normalization**: Case-insensitive (`"experian"` = `"Experian"` = `"EXPERIAN"`).
+3. **Report date parsing**: Supports ISO, MM/DD/YYYY, and other common formats.
+4. **Redis unavailable**: System continues without caching — logs warning, does not block.
+5. **GHL API errors**: Soft failures — logged but do not block the pipeline. User still gets redirect.
+6. **`forceReprocess` flag**: Defaults to `true` in the PDF pipeline (bypasses dedup). Set to `false` to use cache.
+7. **Business cap**: Any negative item or UCC filing in business signals = $0 business pre-approval, hard.
+8. **FUNDING_PLUS_REPAIR default**: Applicants who have no active negatives but don't meet full funding criteria default to `FUNDING_PLUS_REPAIR` (medium confidence).
+9. **Event auth bypass**: If neither `API_SECRET` nor `EVENT_ROUTER_TOKEN` is set, the event router logs a warning and accepts all requests — intended for local dev only.
