@@ -23,6 +23,10 @@ const efxResponse = loadResponse("efx-sandbox-response.json");
 // Skip all tests if sandbox responses aren't available
 const hasResponses = tuResponse && expResponse && efxResponse;
 
+// Fixtures were pulled on 2026-03-11. Use a reference date within the 30-day freshness window
+// so these tests remain stable regardless of wall-clock date.
+const FIXTURE_REFERENCE_DATE = new Date("2026-03-25T00:00:00.000Z");
+
 // ---------------------------------------------------------------------------
 // Helper: run engine with defaults
 // ---------------------------------------------------------------------------
@@ -32,7 +36,8 @@ function runEngine(rawResponses, opts = {}) {
     businessReport: opts.businessReport || null,
     submittedName: opts.name || "TEST USER",
     submittedAddress: opts.address || "123 Main St, Somewhere, TX 77001",
-    formData: opts.formData || {}
+    formData: opts.formData || {},
+    referenceDate: opts.referenceDate !== undefined ? opts.referenceDate : FIXTURE_REFERENCE_DATE
   });
 }
 

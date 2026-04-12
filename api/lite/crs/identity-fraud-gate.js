@@ -193,9 +193,10 @@ function checkFileIntegrity(bureaus) {
  * @param {Object} normalized - Output of normalizeSoftPullPayload (Module 1)
  * @param {string} submittedName - Name from the application form
  * @param {string} [submittedAddress] - Address from the form (optional)
+ * @param {Date} [referenceDate] - Override "now" for freshness checks (useful in tests)
  * @returns {{ passed, outcome, reasons[], confidence }}
  */
-function runIdentityAndFraudGate(normalized, submittedName, _submittedAddress) {
+function runIdentityAndFraudGate(normalized, submittedName, _submittedAddress, referenceDate) {
   const { identity, bureaus, fraudFinders, securityFreezes, fraudAlertsOnFile } = normalized;
   const reasons = [];
   let fraudSignalCount = 0;
@@ -207,7 +208,7 @@ function runIdentityAndFraudGate(normalized, submittedName, _submittedAddress) {
   if (nameResult.warning) warningCount++;
 
   // 2. Report freshness
-  const freshnessResult = checkReportFreshness(bureaus);
+  const freshnessResult = checkReportFreshness(bureaus, referenceDate);
   if (!freshnessResult.ok) reasons.push(freshnessResult.reason);
   if (freshnessResult.warning) warningCount++;
 

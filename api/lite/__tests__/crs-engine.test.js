@@ -18,6 +18,10 @@ try {
   // Tests will be skipped if fixture files are not available
 }
 
+// Fixtures were pulled on 2026-03-11. Use a reference date within the 30-day freshness window
+// so these tests remain stable regardless of wall-clock date.
+const FIXTURE_REFERENCE_DATE = new Date("2026-03-25T00:00:00.000Z");
+
 // ============================================================================
 // Integration tests — full pipeline
 // ============================================================================
@@ -27,7 +31,8 @@ test("runCRSEngine: single bureau (TU) — full pipeline", { skip: !tuRaw }, () 
     rawResponses: [tuRaw],
     businessReport: null,
     submittedName: "Barbara Doty",
-    formData: { email: "barbara@test.com", phone: "5551234567", name: "Barbara Doty" }
+    formData: { email: "barbara@test.com", phone: "5551234567", name: "Barbara Doty" },
+    referenceDate: FIXTURE_REFERENCE_DATE
   });
 
   assert.equal(result.ok, true);
@@ -60,7 +65,8 @@ test("runCRSEngine: all 3 bureaus — full pipeline", { skip: !tuRaw || !expRaw 
     rawResponses: [tuRaw, expRaw, efxRaw],
     businessReport: null,
     submittedName: "Barbara Doty",
-    formData: { email: "test@test.com", phone: "5551234567", name: "Barbara Doty" }
+    formData: { email: "test@test.com", phone: "5551234567", name: "Barbara Doty" },
+    referenceDate: FIXTURE_REFERENCE_DATE
   });
 
   assert.equal(result.ok, true);
@@ -89,7 +95,8 @@ test("runCRSEngine: wrong name → MANUAL_REVIEW", { skip: !tuRaw }, () => {
     rawResponses: [tuRaw],
     businessReport: null,
     submittedName: "John Smith",
-    formData: { email: "test@test.com", name: "John Smith" }
+    formData: { email: "test@test.com", name: "John Smith" },
+    referenceDate: FIXTURE_REFERENCE_DATE
   });
 
   assert.equal(result.ok, true);
@@ -134,7 +141,8 @@ test("runCRSEngine: with business report", { skip: !tuRaw }, () => {
     rawResponses: [tuRaw],
     businessReport: mockBusinessReport,
     submittedName: "Barbara Doty",
-    formData: { email: "test@test.com", name: "Barbara Doty", companyName: "Doty Enterprises LLC" }
+    formData: { email: "test@test.com", name: "Barbara Doty", companyName: "Doty Enterprises LLC" },
+    referenceDate: FIXTURE_REFERENCE_DATE
   });
 
   assert.equal(result.ok, true);
@@ -147,7 +155,8 @@ test("runCRSEngine: output structure complete", { skip: !tuRaw }, () => {
   const result = runCRSEngine({
     rawResponses: [tuRaw],
     businessReport: null,
-    submittedName: "Barbara Doty"
+    submittedName: "Barbara Doty",
+    referenceDate: FIXTURE_REFERENCE_DATE
   });
 
   // Verify all expected keys present
@@ -186,7 +195,8 @@ test("runCRSEngine: timing captured in audit", { skip: !tuRaw }, () => {
   const result = runCRSEngine({
     rawResponses: [tuRaw],
     businessReport: null,
-    submittedName: "Barbara Doty"
+    submittedName: "Barbara Doty",
+    referenceDate: FIXTURE_REFERENCE_DATE
   });
 
   // All pipeline stages should have timing
@@ -206,7 +216,8 @@ test(
     const result = runCRSEngine({
       rawResponses: [tuRaw],
       businessReport: null,
-      submittedName: "Barbara Doty"
+      submittedName: "Barbara Doty",
+      referenceDate: FIXTURE_REFERENCE_DATE
     });
 
     assert.ok("reason_codes" in result, "Missing reason_codes");
@@ -224,7 +235,8 @@ test("runCRSEngine: consumer_summary is a non-empty string", { skip: !tuRaw }, (
   const result = runCRSEngine({
     rawResponses: [tuRaw],
     businessReport: null,
-    submittedName: "Barbara Doty"
+    submittedName: "Barbara Doty",
+    referenceDate: FIXTURE_REFERENCE_DATE
   });
 
   assert.equal(typeof result.consumer_summary, "string");
@@ -240,7 +252,8 @@ test("runCRSEngine: business_summary is a non-empty string", { skip: !tuRaw }, (
   const result = runCRSEngine({
     rawResponses: [tuRaw],
     businessReport: null,
-    submittedName: "Barbara Doty"
+    submittedName: "Barbara Doty",
+    referenceDate: FIXTURE_REFERENCE_DATE
   });
 
   assert.equal(typeof result.business_summary, "string");
@@ -282,7 +295,8 @@ test("runCRSEngine: business_summary with business report is descriptive", { ski
     rawResponses: [tuRaw],
     businessReport: mockBusinessReport,
     submittedName: "Barbara Doty",
-    formData: { email: "test@test.com", name: "Barbara Doty", companyName: "Doty Enterprises LLC" }
+    formData: { email: "test@test.com", name: "Barbara Doty", companyName: "Doty Enterprises LLC" },
+    referenceDate: FIXTURE_REFERENCE_DATE
   });
 
   assert.equal(typeof result.business_summary, "string");
@@ -302,7 +316,8 @@ test("runCRSEngine: redirect.path is set for funding outcomes", { skip: !tuRaw }
   const result = runCRSEngine({
     rawResponses: [tuRaw],
     businessReport: null,
-    submittedName: "Barbara Doty"
+    submittedName: "Barbara Doty",
+    referenceDate: FIXTURE_REFERENCE_DATE
   });
 
   assert.ok(result.redirect !== null && typeof result.redirect === "object");
@@ -333,7 +348,8 @@ test(
     const result = runCRSEngine({
       rawResponses: [tuRaw],
       businessReport: null,
-      submittedName: "Barbara Doty"
+      submittedName: "Barbara Doty",
+      referenceDate: FIXTURE_REFERENCE_DATE
     });
 
     assert.ok("decision_label" in result, "decision_label should be present in output");
@@ -350,7 +366,8 @@ test("runCRSEngine: decision_label matches known outcome labels", { skip: !tuRaw
   const result = runCRSEngine({
     rawResponses: [tuRaw],
     businessReport: null,
-    submittedName: "Barbara Doty"
+    submittedName: "Barbara Doty",
+    referenceDate: FIXTURE_REFERENCE_DATE
   });
 
   const knownLabels = [

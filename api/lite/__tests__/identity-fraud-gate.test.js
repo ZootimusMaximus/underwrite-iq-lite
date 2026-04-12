@@ -29,6 +29,10 @@ try {
   // Tests will be skipped if fixture files are not available
 }
 
+// Fixtures were pulled on 2026-03-11. Use a reference date within the 30-day freshness window
+// so these tests remain stable regardless of wall-clock date.
+const FIXTURE_REFERENCE_DATE = new Date("2026-03-25T00:00:00.000Z");
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -454,27 +458,27 @@ test("runIdentityAndFraudGate: stale reports → MANUAL_REVIEW", () => {
 
 test("runIdentityAndFraudGate: TU — BARBARA DOTY matches", { skip: !tuRaw }, () => {
   const normalized = normalizeSoftPullPayload([tuRaw]);
-  const result = runIdentityAndFraudGate(normalized, "Barbara Doty");
+  const result = runIdentityAndFraudGate(normalized, "Barbara Doty", undefined, FIXTURE_REFERENCE_DATE);
   assert.equal(result.passed, true);
   assert.equal(result.outcome, null);
 });
 
 test('runIdentityAndFraudGate: TU — initial match "B Doty"', { skip: !tuRaw }, () => {
   const normalized = normalizeSoftPullPayload([tuRaw]);
-  const result = runIdentityAndFraudGate(normalized, "B Doty");
+  const result = runIdentityAndFraudGate(normalized, "B Doty", undefined, FIXTURE_REFERENCE_DATE);
   assert.equal(result.passed, true);
 });
 
 test("runIdentityAndFraudGate: TU — wrong name", { skip: !tuRaw }, () => {
   const normalized = normalizeSoftPullPayload([tuRaw]);
-  const result = runIdentityAndFraudGate(normalized, "John Smith");
+  const result = runIdentityAndFraudGate(normalized, "John Smith", undefined, FIXTURE_REFERENCE_DATE);
   assert.equal(result.passed, false);
   assert.equal(result.outcome, "MANUAL_REVIEW");
 });
 
 test("runIdentityAndFraudGate: EXP — WILLIE BOOZE matches", { skip: !expRaw }, () => {
   const normalized = normalizeSoftPullPayload([expRaw]);
-  const result = runIdentityAndFraudGate(normalized, "Willie Booze");
+  const result = runIdentityAndFraudGate(normalized, "Willie Booze", undefined, FIXTURE_REFERENCE_DATE);
   assert.equal(result.passed, true);
 });
 
@@ -484,7 +488,7 @@ test(
   () => {
     const normalized = normalizeSoftPullPayload([tuRaw, expRaw, efxRaw]);
     // Use a name that exists in TU data
-    const result = runIdentityAndFraudGate(normalized, "Barbara Doty");
+    const result = runIdentityAndFraudGate(normalized, "Barbara Doty", undefined, FIXTURE_REFERENCE_DATE);
     // Should pass or review, but fraud data should be processed
     assert.ok(typeof result.passed === "boolean");
     assert.ok(Array.isArray(result.reasons));

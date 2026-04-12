@@ -188,10 +188,12 @@ function buildProjectedSignals(cs, findings) {
  * @param {string} options.submittedName - Name from the application form
  * @param {string} [options.submittedAddress] - Address from the form (optional)
  * @param {Object} [options.formData] - { email, phone, name, companyName, hasLLC, llcAgeMonths, businessAgeMonths, ref }
+ * @param {Date} [options.referenceDate] - Override "now" for freshness checks (useful in tests)
  * @returns {Object} Full CRS engine output (spec Section 6)
  */
 function runCRSEngine(options) {
-  const { rawResponses, businessReport, submittedName, submittedAddress, formData } = options;
+  const { rawResponses, businessReport, submittedName, submittedAddress, formData, referenceDate } =
+    options;
   const timings = {};
 
   // 1. Normalize
@@ -201,7 +203,12 @@ function runCRSEngine(options) {
 
   // 2. Identity & Fraud Gate
   const t1 = Date.now();
-  const identityGate = runIdentityAndFraudGate(normalized, submittedName, submittedAddress);
+  const identityGate = runIdentityAndFraudGate(
+    normalized,
+    submittedName,
+    submittedAddress,
+    referenceDate
+  );
   timings.identityGate = Date.now() - t1;
 
   // 3. Consumer Signals
