@@ -978,9 +978,12 @@ const LETTER_SUBJECTS = {
  * @param {string}      bureau   - 'experian' | 'transunion' | 'equifax'
  * @param {number|null} round    - Round number (1-3) for dispute letters
  * @param {Object}      [personal] - { name, address }
+ * @param {Object}      [options]  - Optional rendering overrides
+ * @param {string}      [options.furnisher]  - Creditor/furnisher name for dispute letters
+ * @param {string}      [options.accountId] - Last 4 of account number (defaults to 'XXXX')
  * @returns {Promise<Buffer>}
  */
-async function renderLetterPDF(text, type, bureau, round, personal) {
+async function renderLetterPDF(text, type, bureau, round, personal, options = {}) {
   const { pdfDoc, font, bold, logoImage: _logoImage } = await initPdfDoc();
   const firstPage = pdfDoc.addPage([PAGE_W, PAGE_H]);
   const ctx = makeCtx(pdfDoc, firstPage, font, bold);
@@ -988,9 +991,25 @@ async function renderLetterPDF(text, type, bureau, round, personal) {
   ctx.y = PAGE_H - MARGIN;
 
   const bureauInfo = BUREAU_ADDRESSES[bureau] || { name: bureau || "Credit Bureau", address: "" };
-  const subject = LETTER_SUBJECTS[type] || "Credit Report Dispute";
+
+  // Furnisher-aware subject for dispute letters
+  const baseSubject = LETTER_SUBJECTS[type] || "Credit Report Dispute";
+  const subject =
+    type === "dispute" && options.furnisher
+      ? baseSubject + " \u2014 " + options.furnisher
+      : baseSubject;
 
   drawLetterHeader(ctx, { personal, bureau: bureauInfo, subject, round });
+
+  // Re: account line for furnisher disputes (inserted after header separator)
+  if (type === "dispute" && options.furnisher) {
+    const accountId = options.accountId || "XXXX";
+    drawTextLine(ctx, "Re: Account ending in " + accountId + " with " + options.furnisher, {
+      size: 11,
+      font: ctx.bold
+    });
+    ctx.y -= 6;
+  }
 
   // Render letter body as flowing paragraphs (no markdown parsing for letters)
   const paragraphs = String(text || "").split(/\n\n+/);
@@ -1016,6 +1035,111 @@ async function renderLetterPDF(text, type, bureau, round, personal) {
 
   const bytes = await pdfDoc.save();
   logInfo("render-pdf: letter rendered", { type, bureau, round, pages: ctx.pages.length });
+  return Buffer.from(bytes);
+}
+
+/**
+ * Render multiple per-furnisher dispute letters into a single PDF bundle.
+ *
+ * @param {Array<{text: string, furnisher: string, violations: string[], accountId?: string}>} letters
+ *   - Each entry is one furnisher's letter content
+ * @param {string}      bureau   - 'experian' | 'transunion' | 'equifax'
+ * @param {number|null} round    - Round number (1-3)
+ * @param {Object}      [personal] - { name, address }
+ * @returns {Promise<Buffer>}
+ */
+async function renderLetterBundlePDF(letters, bureau, round, personal) {
+  if (!letters || letters.length === 0) {
+    throw new Error("renderLetterBundlePDF: letters array is empty");
+  }
+
+  const bureauInfo = BUREAU_ADDRESSES[bureau] || { name: bureau || "Credit Bureau", address: "" };
+  const { pdfDoc, font, bold } = await initPdfDoc();
+
+  // ── Cover page ─────────────────────────────────────────────────────────────
+  const coverPage = pdfDoc.addPage([PAGE_W, PAGE_H]);
+  const coverCtx = makeCtx(pdfDoc, coverPage, font, bold);
+  coverCtx.y = PAGE_H - MARGIN;
+
+  const roundLabel = round ? " \u2014 Round " + round : "";
+  drawTextLine(coverCtx, "Dispute Letters for " + bureauInfo.name + roundLabel, {
+    size: 16,
+    font: bold
+  });
+  coverCtx.y -= 10;
+  drawTextLine(coverCtx, letters.length + " letter" + (letters.length !== 1 ? "s" : "") + " enclosed", {
+    size: 11
+  });
+  coverCtx.y -= 20;
+
+  for (let i = 0; i < letters.length; i++) {
+    const furnisher = letters[i].furnisher || "Unknown Furnisher";
+    drawTextLine(coverCtx, (i + 1) + ". " + furnisher, { size: 11 });
+  }
+
+  // ── One section per furnisher ───────────────────────────────────────────────
+  for (let idx = 0; idx < letters.length; idx++) {
+    const entry = letters[idx];
+    const furnisher = entry.furnisher || "Unknown Furnisher";
+    const accountId = entry.accountId || "XXXX";
+    const text = entry.text || "";
+
+    // New page for each letter
+    const letterPage = pdfDoc.addPage([PAGE_W, PAGE_H]);
+    const ctx = makeCtx(pdfDoc, letterPage, font, bold);
+    // Attach subsequent pages to the same ctx so ensureSpace can add more pages
+    // (pdfDoc is shared — new pages automatically append to the document)
+    ctx.y = PAGE_H - MARGIN;
+
+    // Section banner
+    const banner =
+      "--- Dispute Letter " + (idx + 1) + " of " + letters.length + ": " + furnisher + " ---";
+    drawTextLine(ctx, banner, { size: 10, color: BRAND.gray });
+    ctx.y -= 10;
+
+    // Letter header (same layout as single-letter path)
+    const subject =
+      LETTER_SUBJECTS.dispute + " \u2014 " + furnisher;
+    drawLetterHeader(ctx, { personal, bureau: bureauInfo, subject, round });
+
+    // Re: account line
+    drawTextLine(ctx, "Re: Account ending in " + accountId + " with " + furnisher, {
+      size: 11,
+      font: bold
+    });
+    ctx.y -= 6;
+
+    // Letter body
+    const paragraphs = String(text).split(/\n\n+/);
+    for (const para of paragraphs) {
+      const trimmed = para.trim();
+      if (!trimmed) {
+        ctx.y -= 8;
+        continue;
+      }
+      const bodyLines = trimmed.split("\n");
+      for (const bl of bodyLines) {
+        if (!bl.trim()) {
+          ctx.y -= 6;
+        } else {
+          drawTextLine(ctx, bl.trim(), { size: 11 });
+        }
+      }
+      ctx.y -= 8;
+    }
+
+    const titleStr =
+      bureauInfo.name + " " + LETTER_SUBJECTS.dispute + " \u2014 " + furnisher + (round ? " R" + round : "");
+    drawFooters(ctx, titleStr);
+  }
+
+  const bytes = await pdfDoc.save();
+  logInfo("render-pdf: letter bundle rendered", {
+    bureau,
+    round,
+    count: letters.length,
+    furnishers: letters.map(l => l.furnisher)
+  });
   return Buffer.from(bytes);
 }
 
@@ -1052,7 +1176,68 @@ async function renderAllPDFs(params) {
     }
   }
 
-  for (const letter of letters) {
+  // Separate dispute letters from other letter types
+  const disputeLetters = letters.filter(l => l.type === "dispute");
+  const otherLetters = letters.filter(l => l.type !== "dispute");
+
+  // Group dispute letters by (bureau, round) for bundle rendering
+  const disputeGroups = new Map();
+  for (const letter of disputeLetters) {
+    const key = (letter.bureau || "") + "|" + (letter.round || "");
+    if (!disputeGroups.has(key)) disputeGroups.set(key, []);
+    disputeGroups.get(key).push(letter);
+  }
+
+  // Render dispute bundles (multi-furnisher groups → single PDF each)
+  for (const [key, group] of disputeGroups) {
+    const { bureau, round } = group[0];
+    try {
+      const hasFurnishers = group.some(l => l.furnisher);
+      if (hasFurnishers && group.length > 1) {
+        // Bundle: multiple furnishers → one PDF
+        const bundleEntries = group.map(l => ({
+          text: l.content || "",
+          furnisher: l.furnisher || "",
+          accountId: l.accountId,
+          violations: l.violations
+        }));
+        const buffer = await renderLetterBundlePDF(bundleEntries, bureau, round, personal);
+        const prefix = (bureau || "").substring(0, 2);
+        const suffix = round ? "_r" + round : "";
+        const filename = "dispute_bundle_" + prefix + suffix + ".pdf";
+        results.push({ filename, buffer, docType: "dispute_bundle" });
+      } else {
+        // Single dispute letter (with or without furnisher)
+        const letter = group[0];
+        const opts = letter.furnisher
+          ? { furnisher: letter.furnisher, accountId: letter.accountId }
+          : {};
+        const buffer = await renderLetterPDF(
+          letter.content,
+          letter.type,
+          letter.bureau,
+          letter.round,
+          personal,
+          opts
+        );
+        const prefix = (letter.bureau || "").substring(0, 2);
+        const suffix = letter.round ? "_r" + letter.round : "";
+        const filename = letter.type + "_" + prefix + suffix + ".pdf";
+        results.push({ filename, buffer, docType: letter.type });
+      }
+    } catch (err) {
+      logWarn("render-pdf: dispute letter render failed", {
+        key,
+        bureau,
+        round,
+        error: err.message
+      });
+      errors.push({ type: "dispute", bureau, round, error: err.message });
+    }
+  }
+
+  // Render non-dispute letters unchanged
+  for (const letter of otherLetters) {
     try {
       const buffer = await renderLetterPDF(
         letter.content,
@@ -1091,6 +1276,7 @@ module.exports = {
   renderAllPDFs,
   renderDocumentPDF,
   renderLetterPDF,
+  renderLetterBundlePDF,
   parseMarkdown,
   parseInlineRuns,
   wrapText,

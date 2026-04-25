@@ -28,27 +28,29 @@ test("buildDocuments: MANUAL_REVIEW → hold package", () => {
   assert.equal(result.letters.length, 0);
 });
 
-test("buildDocuments: REPAIR → repair package with 3 rounds", () => {
+test("buildDocuments: REPAIR → repair package round 1 only, bundled per bureau", () => {
   const result = buildDocuments("REPAIR_ONLY", [], makeNormalized(), {});
   assert.equal(result.package, "repair");
 
   const disputes = result.letters.filter(l => l.type === "dispute");
   const personal = result.letters.filter(l => l.type === "personal_info");
 
-  // 3 rounds × 3 bureaus = 9 dispute letters
-  assert.equal(disputes.length, 9);
+  // Round 1 only × 3 bureaus = 3 dispute specs (Rounds 2/3 on-demand)
+  assert.equal(disputes.length, 3);
   // 3 personal info letters
   assert.equal(personal.length, 3);
 
+  // All dispute specs are bundled round 1
+  assert.ok(disputes.every(d => d.round === 1 && d.bundled === true));
   // Check field key format
-  assert.ok(disputes[0].fieldKey.startsWith("repair_letter_url__round_"));
+  assert.ok(disputes[0].fieldKey.startsWith("repair_letter_url__round_1__"));
   assert.ok(personal[0].fieldKey.startsWith("repair_letter_url__personal_info_dispute__"));
 });
 
 test("buildDocuments: REPAIR with 2 bureaus", () => {
   const result = buildDocuments("REPAIR_ONLY", [], makeNormalized(["transunion", "experian"]), {});
   const disputes = result.letters.filter(l => l.type === "dispute");
-  assert.equal(disputes.length, 6); // 3 rounds × 2 bureaus
+  assert.equal(disputes.length, 2); // round 1 only × 2 bureaus
 });
 
 test("buildDocuments: FULL_STACK → funding package", () => {
@@ -76,9 +78,50 @@ test("buildDocuments: CONDITIONAL → funding package", () => {
   assert.equal(result.package, "funding");
 });
 
+test("buildDocuments: FUNDING_PLUS_REPAIR adds dispute specs for dirty bureaus", () => {
+  // TU is dirty, EX is clean, EQ not pulled
+  const consumerSignals = {
+    bureauNegatives: {
+      transunion: { pulled: true, clean: false, count: 2, items: [] },
+      experian: { pulled: true, clean: true, count: 0, items: [] },
+      equifax: { pulled: false, clean: false, count: 0, items: [] }
+    }
+  };
+  const normalized = makeNormalized(["transunion", "experian"]);
+  const result = buildDocuments("FUNDING_PLUS_REPAIR", [], normalized, consumerSignals);
+
+  assert.equal(result.package, "funding");
+
+  const disputes = result.letters.filter(l => l.type === "dispute");
+  // Only TU is dirty and pulled → 1 dispute spec
+  assert.equal(disputes.length, 1);
+  assert.equal(disputes[0].bureau, "transunion");
+  assert.equal(disputes[0].round, 1);
+  assert.equal(disputes[0].bundled, true);
+  assert.equal(disputes[0].fieldKey, "repair_letter_url__round_1__tr");
+
+  // Summary mentions dirty bureaus
+  assert.ok(result.summary.includes("dirty bureaus"));
+});
+
+test("buildDocuments: FUNDING_PLUS_REPAIR no dispute specs when all pulled bureaus clean", () => {
+  const consumerSignals = {
+    bureauNegatives: {
+      transunion: { pulled: true, clean: true, count: 0, items: [] },
+      experian: { pulled: true, clean: true, count: 0, items: [] },
+      equifax: { pulled: false, clean: false, count: 0, items: [] }
+    }
+  };
+  const result = buildDocuments("FUNDING_PLUS_REPAIR", [], makeNormalized(["transunion", "experian"]), consumerSignals);
+  const disputes = result.letters.filter(l => l.type === "dispute");
+  assert.equal(disputes.length, 0);
+  // Summary should not mention dirty bureaus
+  assert.ok(!result.summary.includes("dirty bureaus"));
+});
+
 test("buildDocuments: summary describes letter counts", () => {
   const result = buildDocuments("REPAIR_ONLY", [], makeNormalized(), {});
-  assert.ok(result.summary.includes("9 dispute"));
+  assert.ok(result.summary.includes("3 dispute"));
   assert.ok(result.summary.includes("3 personal"));
 });
 

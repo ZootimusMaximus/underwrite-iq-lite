@@ -41,16 +41,16 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
   if (outcome === "REPAIR_ONLY") {
     const letters = [];
 
-    // 3 rounds × available bureaus = dispute letters
-    for (let round = 1; round <= 3; round++) {
-      for (const bureau of availableBureaus) {
-        letters.push({
-          type: "dispute",
-          bureau,
-          round,
-          fieldKey: `repair_letter_url__round_${round}__${bureau.substring(0, 2)}`
-        });
-      }
+    // Round 1 only (Rounds 2/3 generated on-demand later)
+    // bundled: true means generate one PDF per bureau containing per-furnisher dispute letters
+    for (const bureau of availableBureaus) {
+      letters.push({
+        type: "dispute",
+        bureau,
+        round: 1,
+        bundled: true,
+        fieldKey: `repair_letter_url__round_1__${bureau.substring(0, 2)}`
+      });
     }
 
     // Personal info update letters (1 per bureau)
@@ -114,6 +114,24 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
     });
   }
 
+  // FUNDING_PLUS_REPAIR: also generate dispute letter specs for dirty bureaus
+  // (bureaus with negatives get Round 1 bundled dispute letters alongside funding docs)
+  if (outcome === "FUNDING_PLUS_REPAIR") {
+    const bureauNegatives = consumerSignals?.bureauNegatives || {};
+    for (const bureau of availableBureaus) {
+      const bureauInfo = bureauNegatives[bureau];
+      if (bureauInfo && !bureauInfo.clean) {
+        letters.push({
+          type: "dispute",
+          bureau,
+          round: 1,
+          bundled: true,
+          fieldKey: `repair_letter_url__round_1__${bureau.substring(0, 2)}`
+        });
+      }
+    }
+  }
+
   const summaryDocs = [];
   summaryDocs.push({
     type: "funding_summary",
@@ -133,11 +151,12 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
     });
   }
 
+  const disputeCount = letters.filter(l => l.type === "dispute").length;
   return {
     package: "funding",
     letters,
     summaryDocuments: summaryDocs,
-    summary: `Funding package: ${letters.filter(l => l.type === "inquiry_removal").length} inquiry removal + ${letters.filter(l => l.type === "personal_info").length} personal info letters.`
+    summary: `Funding package: ${letters.filter(l => l.type === "inquiry_removal").length} inquiry removal + ${letters.filter(l => l.type === "personal_info").length} personal info letters${disputeCount > 0 ? ` + ${disputeCount} dispute letter${disputeCount > 1 ? "s" : ""} (dirty bureaus)` : ""}.`
   };
 }
 

@@ -95,57 +95,39 @@ Reference dispute letters by round number.
 `;
 
 // ---------------------------------------------------------------------------
-// 3.4 Metro 2 Knowledge Base — included in all dispute letter prompts
+// 3.4 Metro 2 Knowledge Base — loaded dynamically at call time
 // ---------------------------------------------------------------------------
 
-const METRO2_KNOWLEDGE_BASE = `
-METRO 2 FORMAT REFERENCE:
-- Field 5: Account Status (13/61/64/71/78/80/82/83/84/93/95/97)
-- Field 8: Account Type (codes 00-18, 2A-2C)
-- Field 10: Date Opened (MMDDYYYY, must match original creditor)
-- Field 12: Scheduled Monthly Payment Amount
-- Field 14: Current Balance (must match actual balance)
-- Field 17A: Payment Rating (0-9, L, must reflect actual status)
-- Field 17B: Payment History Profile (24 month history)
-- Field 19: Special Comment Code (must be appropriate)
-- Field 24: Compliance Condition Code (XA-XH, must match status)
-- Field 25: Date of First Delinquency (critical for FCRA 605)
-- Field 29: Original Creditor Name (required for sold/transferred)
-- Field 33: Date of Account Information (must be within 30 days)
-
-COMMON VIOLATIONS TO CHECK PER TRADELINE:
-- Balance not matching actual owed amount
-- Date of first delinquency missing or inaccurate
-- Account status code not matching actual status
-- Payment history profile showing incorrect late patterns
-- Compliance condition code mismatch
-- Original creditor name missing on sold/transferred accounts
-- Date of account information stale (>30 days)
-- Special comment code inappropriate for account status
-`;
+// Metro 2 KB is now loaded dynamically via metro2-kb-loader.js
+// The KB content is injected into the system prompt at call time
+const METRO2_KB_PLACEHOLDER = '[KB_SECTION]';
 
 // ---------------------------------------------------------------------------
-// 3.4 Dispute Round 1 — Metro 2 compliance
+// 3.4 Dispute Round 1 — per-furnisher Metro 2 violations
 // ---------------------------------------------------------------------------
 
 const DISPUTE_ROUND1_PROMPT =
   SHARED_PREAMBLE +
-  METRO2_KNOWLEDGE_BASE +
   `
-Generate a Round 1 dispute letter targeting [BUREAU].
+You are writing a consumer dispute letter to [BUREAU] on behalf of yourself regarding an account with [FURNISHER].
 
-Strategy: Metro 2 compliance. Firm but professional.
+[KB_SECTION]
 
-For each negative tradeline on this bureau, identify the most
-likely Metro 2 field violations based on the account data.
+DETECTED VIOLATIONS:
+[VIOLATIONS]
 
-Challenge: data accuracy per Metro 2 format requirements.
-
-Request: investigation and correction within 30 days.
-
-Cite: Metro 2 data accuracy standards, FCRA Section 611.
-
-Include: personal info corrections and inquiry removal requests.
+RULES:
+- Write in FIRST PERSON as the consumer (I, my, me) — NOT third person
+- Reference the specific Metro 2 field violations detected above
+- Cite the relevant FCRA statute for each violation (from the violations data)
+- Do NOT use language like "on behalf of", "our client", "we request" — this must read as a consumer letter
+- Do NOT guarantee removal or promise specific outcomes
+- Reference the account by last 4 digits: [ACCOUNT_ID]
+- Demand investigation and correction within 30 days per FCRA §1681i(a)(1)(A)
+- Be specific about what is inaccurate and why — cite the Metro 2 field number and expected vs actual value
+- Keep tone firm but professional — not aggressive, not meek
+- Include a request for method of verification documentation
+- Vary sentence structure and word choice — do not use formulaic language
 
 Output a complete, mail-ready letter with:
 - Client name and address as sender
@@ -160,61 +142,85 @@ Output a complete, mail-ready letter with:
 `;
 
 // ---------------------------------------------------------------------------
-// 3.4 Dispute Round 2 — FCRA escalation
+// 3.4 Dispute Round 2 — FCRA escalation + MOV demand
 // ---------------------------------------------------------------------------
 
 const DISPUTE_ROUND2_PROMPT =
   SHARED_PREAMBLE +
-  METRO2_KNOWLEDGE_BASE +
   `
-Generate a Round 2 escalation dispute letter targeting [BUREAU].
+You are writing a Round 2 escalation dispute letter. This follows an initial dispute that received no adequate response or correction.
 
-Strategy: Metro 2 + FCRA + FDCPA. Aggressive legal notice.
+[KB_SECTION]
 
-This is a follow-up. Items from Round 1 were not removed.
+DETECTED VIOLATIONS:
+[VIOLATIONS]
 
-For each surviving item:
-- Reference the Round 1 dispute date
-- Cite FCRA Section 611(a)(6)(B)(iii) - demand furnisher info
-- Cite FCRA Section 611(a)(7) - demand method of verification
-- Cite FCRA Section 623(b) - furnisher investigation obligations
-- For collections: cite FDCPA Section 809 - demand debt validation
-- Reference specific Metro 2 fields that are non-compliant
-- Warn about CFPB complaint and state AG complaint
+PRIOR ROUND CONTEXT:
+This is a follow-up to a Round 1 dispute sent to [BUREAU] regarding account [ACCOUNT_ID] with [FURNISHER].
 
-Tone: aggressive but professional. Legal citations are key.
+RULES:
+- Write in FIRST PERSON as the consumer
+- Reference that a prior dispute was filed and no adequate correction was made
+- Demand Method of Verification (MOV) documentation under FCRA §1681i(a)(7)
+- Cite relevant case law: Saunders v. Branch Banking (verification duty), Gorman v. Wolpoff (reinvestigation standard), Sessa v. Trans Union (accuracy standard)
+- Reference specific Metro 2 field violations from the violations data
+- State that failure to verify within 15 days will result in escalation
+- Warn of potential FCRA §1681n liability for willful noncompliance ($100-$1,000 per violation + punitive damages)
+- Include new information not in Round 1 — specifically the MOV demand and case law citations
+- Vary language from Round 1 — do not copy structure or phrasing
+
+Output a complete, mail-ready letter with:
+- Client name and address as sender
+- Bureau name and address as recipient
+- Date
+- Subject line referencing prior dispute
+- Body with MOV demand and case law citations
+- Specific Metro 2 fields challenged per item
+- Requested actions with 15-day deadline
+- Signature block
+- Enclosures note
 `;
 
 // ---------------------------------------------------------------------------
-// 3.4 Dispute Round 3 — Final notice
+// 3.4 Dispute Round 3 — Final legal escalation
 // ---------------------------------------------------------------------------
 
 const DISPUTE_ROUND3_PROMPT =
   SHARED_PREAMBLE +
-  METRO2_KNOWLEDGE_BASE +
   `
-Generate a Round 3 FINAL NOTICE dispute letter targeting [BUREAU].
+You are writing a Round 3 final legal escalation letter. Two prior disputes have been filed with no adequate correction.
 
-Strategy: Failure to comply. Maximum legal pressure.
+[KB_SECTION]
 
-Two prior disputes were sent (provide dates). Items remain.
+DETECTED VIOLATIONS:
+[VIOLATIONS]
 
-Cite:
-- FCRA Section 611(a)(5)(A) - failure to verify within 30 days = delete
-- FCRA Section 616 - willful noncompliance ($100-$1,000 per violation)
-- FCRA Section 617 - negligent noncompliance (actual damages + fees)
-- FDCPA Section 809 - failure to validate = cease collection
-- UCC Article 9 - for any secured debt claims
+ESCALATION CONTEXT:
+Account [ACCOUNT_ID] with [FURNISHER], reported on [BUREAU]. Two prior disputes filed — Round 1 (initial) and Round 2 (MOV demand). Furnisher/CRA has failed to adequately investigate or correct.
 
-Demand: immediate permanent deletion within 15 days.
+RULES:
+- Write in FIRST PERSON as the consumer
+- This is the final notice before formal complaint filing
+- State clearly that FCRA §1681n provides for willful noncompliance damages: $100-$1,000 per violation statutory + punitive damages + attorney fees
+- Calculate potential damages based on the number of violations detected
+- Reference ALL applicable case law from the knowledge base
+- State intent to file complaints with: CFPB (Consumer Financial Protection Bureau), State Attorney General, and potentially FTC
+- Reference FCRA §1681i(a)(5)(A): failure to verify within the statutory period requires deletion
+- Include the full violation summary with Metro 2 field references
+- Maintain firm professional tone — not threatening, but clear about legal consequences
+- This letter must contain substantively new information vs Rounds 1 and 2
 
-State: intent to file CFPB complaint and state AG complaint.
-
-State: intent to pursue statutory damages.
-
-Tone: final notice. This is not a negotiation.
-
-CC: Consumer Financial Protection Bureau, State Attorney General
+Output a complete, mail-ready letter with:
+- Client name and address as sender
+- Bureau name and address as recipient
+- Date
+- Subject line referencing both prior disputes
+- Body with full violation summary, damages calculation, and complaint filing notice
+- Specific Metro 2 fields challenged per item
+- 15-day demand for deletion
+- Signature block
+- CC: Consumer Financial Protection Bureau, State Attorney General
+- Enclosures note
 `;
 
 // ---------------------------------------------------------------------------
@@ -307,5 +313,5 @@ module.exports = {
   DISPUTE_ROUND3_PROMPT,
   PERSONAL_INFO_PROMPT,
   INQUIRY_REMOVAL_PROMPT,
-  METRO2_KNOWLEDGE_BASE
+  METRO2_KB_PLACEHOLDER
 };

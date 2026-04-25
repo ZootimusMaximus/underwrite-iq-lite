@@ -73,6 +73,63 @@ const RATING_SEVERITY = {
 // Helpers
 // ---------------------------------------------------------------------------
 
+const COMPLIANCE_CONDITION_CODES = new Set(["XA", "XB", "XC", "XD", "XE", "XF", "XG", "XH"]);
+const COMPLIANCE_CODE_RE = /\b(X[A-H])\b/i;
+
+const SPECIAL_COMMENT_CODES = new Set(["AU", "B", "M", "S"]);
+const SPECIAL_COMMENT_RE = /\b(AU|B|M|S)\b/;
+
+function parseCommentFields(comments) {
+  let complianceConditionCode = null;
+  let specialCommentCode = null;
+
+  for (const c of comments || []) {
+    const code = (c.commentCode || "").trim().toUpperCase();
+    const text = (c.commentText || "").trim();
+
+    if (!complianceConditionCode) {
+      if (COMPLIANCE_CONDITION_CODES.has(code)) {
+        complianceConditionCode = code;
+      } else {
+        const cm = text.match(COMPLIANCE_CODE_RE) || code.match(COMPLIANCE_CODE_RE);
+        if (cm) complianceConditionCode = cm[1].toUpperCase();
+      }
+    }
+
+    if (!specialCommentCode) {
+      if (SPECIAL_COMMENT_CODES.has(code)) {
+        specialCommentCode = code;
+      } else {
+        const sm = text.match(SPECIAL_COMMENT_RE);
+        if (sm) specialCommentCode = sm[1].toUpperCase();
+      }
+    }
+
+    if (complianceConditionCode && specialCommentCode) break;
+  }
+
+  return { complianceConditionCode, specialCommentCode };
+}
+
+function inferDofd(adverseRatings) {
+  if (!adverseRatings) return null;
+
+  const candidates = [
+    adverseRatings.highest?.date,
+    adverseRatings.mostRecent?.date,
+    ...(adverseRatings.prior || []).map(p => p.date)
+  ].filter(Boolean);
+
+  if (!candidates.length) return null;
+
+  const sorted = candidates
+    .map(d => new Date(d))
+    .filter(d => !isNaN(d.getTime()))
+    .sort((a, b) => a - b);
+
+  return sorted.length ? sorted[0].toISOString().substring(0, 10) : null;
+}
+
 /**
  * Parse a string amount to a number. Returns null for missing/empty/invalid.
  */
@@ -213,7 +270,11 @@ function normalizeTradeline(raw) {
       source: c.commentSourceType || "unknown",
       type: c.commentType || "unknown",
       text: c.commentText || ""
-    }))
+    })),
+    borrowerSourceType: raw.borrowerSourceType || null,
+    businessType: raw.businessType || null,
+    ...parseCommentFields(raw.comments),
+    inferredDofd: inferDofd(adverseRatings)
   };
 }
 

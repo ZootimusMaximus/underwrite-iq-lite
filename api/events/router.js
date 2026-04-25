@@ -182,6 +182,26 @@ function validateEnvelope(envelope) {
 // Handler Loader
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Handler Preload
+// ---------------------------------------------------------------------------
+// Explicitly require all handlers at module load time so Vercel's bundler
+// (nft — Node File Trace) can statically include them in the Lambda bundle.
+// Dynamic require(modulePath) from a runtime object lookup is not traceable
+// by nft, so handlers were silently excluded from the deployed bundle.
+// ---------------------------------------------------------------------------
+
+const _HANDLER_MODULES = {
+  "fundhub.entry.captured": require("./handlers/entry-captured"),
+  "fundhub.deposit.paid": require("./handlers/deposit-paid"),
+  "fundhub.analysis.requested": require("./handlers/analysis-requested"),
+  "fundhub.analysis.completed": require("./handlers/analysis-completed"),
+  "fundhub.booking.lane.decided": require("./handlers/booking-lane-decided"),
+  "fundhub.call.booked": require("./handlers/call-booked"),
+  "fundhub.decision.recorded": require("./handlers/decision-recorded"),
+  "fundhub.sale.closed": require("./handlers/sale-closed")
+};
+
 /** Cache loaded handler modules to avoid repeated require() calls */
 const handlerCache = {};
 
@@ -195,11 +215,10 @@ const handlerCache = {};
 function loadHandler(eventName) {
   if (handlerCache[eventName]) return handlerCache[eventName];
 
-  const modulePath = EVENT_HANDLERS[eventName];
-  if (!modulePath) return null;
+  const handlerModule = _HANDLER_MODULES[eventName];
+  if (!handlerModule) return null;
 
   try {
-    const handlerModule = require(modulePath);
     // Handlers export either a function directly or { handle }
     const fn = typeof handlerModule === "function" ? handlerModule : handlerModule.handle;
     if (typeof fn !== "function") {
@@ -213,10 +232,6 @@ function loadHandler(eventName) {
     handlerCache[eventName] = fn;
     return fn;
   } catch (err) {
-    if (err.code === "MODULE_NOT_FOUND") {
-      logWarn(`Event handler not yet built: ${eventName}`, { path: modulePath });
-      return null;
-    }
     logError("Event handler load error", err, eventName);
     return null;
   }
