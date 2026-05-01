@@ -321,7 +321,7 @@ module.exports = async function handler(req, res) {
           personal: { total_personal_funding: result.preapprovals?.totalPersonal || 0 },
           business: { business_funding: result.preapprovals?.totalBusiness || 0 }
         },
-        personal: { name: submittedName, address: submittedAddress || null },
+        personal: { name: submittedName, address: submittedAddress || null, ssn: ssnClean },
         crsDocuments: result.documents,
         crsResult: result
       });

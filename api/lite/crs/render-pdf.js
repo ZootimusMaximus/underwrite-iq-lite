@@ -850,6 +850,12 @@ function drawLetterHeader(ctx, params) {
   String(address)
     .split("\n")
     .forEach(al => drawTextLine(ctx, al, { size: 11 }));
+
+  // SSN line — only for dispute letters, injected via params.ssn
+  if (params.ssn) {
+    drawTextLine(ctx, "SSN: " + params.ssn, { size: 11 });
+  }
+
   ctx.y -= 14;
 
   if (bureau) {
@@ -971,6 +977,16 @@ const LETTER_SUBJECTS = {
 };
 
 /**
+ * Format a 9-digit SSN string as XXX-XX-XXXX.
+ * Strips non-digits first so it handles both "123456789" and "123-45-6789".
+ */
+function formatSsn(ssn) {
+  const digits = String(ssn || "").replace(/\D/g, "");
+  if (digits.length !== 9) return digits; // Return as-is if not 9 digits
+  return digits.slice(0, 3) + "-" + digits.slice(3, 5) + "-" + digits.slice(5);
+}
+
+/**
  * Render a letter PDF (dispute, inquiry removal, personal info).
  *
  * @param {string}      text     - Claude's text output / letter body
@@ -999,7 +1015,13 @@ async function renderLetterPDF(text, type, bureau, round, personal, options = {}
       ? baseSubject + " \u2014 " + options.furnisher
       : baseSubject;
 
-  drawLetterHeader(ctx, { personal, bureau: bureauInfo, subject, round });
+  // Format SSN with dashes for dispute letters only (never send to Claude API)
+  const formattedSsn =
+    type === "dispute" && personal && personal.ssn
+      ? formatSsn(personal.ssn)
+      : null;
+
+  drawLetterHeader(ctx, { personal, bureau: bureauInfo, subject, round, ssn: formattedSsn });
 
   // Re: account line for furnisher disputes (inserted after header separator)
   if (type === "dispute" && options.furnisher) {
@@ -1100,7 +1122,9 @@ async function renderLetterBundlePDF(letters, bureau, round, personal) {
     // Letter header (same layout as single-letter path)
     const subject =
       LETTER_SUBJECTS.dispute + " \u2014 " + furnisher;
-    drawLetterHeader(ctx, { personal, bureau: bureauInfo, subject, round });
+    // Format SSN with dashes — dispute letters always include SSN
+    const bundleSsn = personal && personal.ssn ? formatSsn(personal.ssn) : null;
+    drawLetterHeader(ctx, { personal, bureau: bureauInfo, subject, round, ssn: bundleSsn });
 
     // Re: account line
     drawTextLine(ctx, "Re: Account ending in " + accountId + " with " + furnisher, {
@@ -1280,6 +1304,7 @@ module.exports = {
   parseMarkdown,
   parseInlineRuns,
   wrapText,
+  formatSsn,
   BRAND,
   BUREAU_ADDRESSES,
   LETTER_SUBJECTS
