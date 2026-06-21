@@ -248,3 +248,76 @@ test("syncTradelines: returns zero stats when not configured", async () => {
   assert.equal(result.business, 0);
   assert.equal(result.errors, 0);
 });
+
+// ============================================================================
+// mapSnapshotFields: optimization_findings_full
+// ============================================================================
+
+test("mapSnapshotFields: includes optimization_findings_full when findings present", () => {
+  const findings = [
+    {
+      code: "UTIL_CARD_OVER_10",
+      category: "utilization",
+      severity: "high",
+      customerSafe: true,
+      plainEnglishProblem: "Your card is at 80% utilization.",
+      whyItMatters: "High utilization drags your score.",
+      whatToDoNext: "Pay it down to under 10%.",
+      targetState: "Under 10%",
+      documentTriggers: [],
+      workflowTags: [],
+      accountData: null
+    }
+  ];
+  const crsResult = makeCRSResult({ optimization_findings: findings });
+  const fields = mapSnapshotFields(crsResult, "rec123");
+  assert.ok(fields.optimization_findings_full, "should include optimization_findings_full");
+  const parsed = JSON.parse(fields.optimization_findings_full);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].code, "UTIL_CARD_OVER_10");
+});
+
+test("mapSnapshotFields: omits optimization_findings_full when findings empty", () => {
+  const crsResult = makeCRSResult({ optimization_findings: [] });
+  const fields = mapSnapshotFields(crsResult, "rec123");
+  assert.equal(fields.optimization_findings_full, undefined);
+});
+
+test("mapSnapshotFields: omits optimization_findings_full when findings absent", () => {
+  const crsResult = makeCRSResult();
+  delete crsResult.optimization_findings;
+  const fields = mapSnapshotFields(crsResult, "rec123");
+  assert.equal(fields.optimization_findings_full, undefined);
+});
+
+// ============================================================================
+// mapClientFields: latest_optimization_findings_full mirror
+// ============================================================================
+
+test("mapClientFields: includes latest_optimization_findings_full when findings present", () => {
+  const findings = [
+    {
+      code: "NO_INSTALLMENT",
+      plainEnglishProblem: "No installment loans on file.",
+      whatToDoNext: "Add a credit builder loan after funding.",
+      category: "tradeline_depth",
+      severity: "low",
+      customerSafe: true,
+      targetState: "",
+      documentTriggers: [],
+      workflowTags: [],
+      accountData: null
+    }
+  ];
+  const crsResult = makeCRSResult({ optimization_findings: findings });
+  const fields = mapClientFields(crsResult);
+  assert.ok(fields.latest_optimization_findings_full);
+  const parsed = JSON.parse(fields.latest_optimization_findings_full);
+  assert.equal(parsed[0].code, "NO_INSTALLMENT");
+});
+
+test("mapClientFields: omits latest_optimization_findings_full when no findings", () => {
+  const crsResult = makeCRSResult({ optimization_findings: [] });
+  const fields = mapClientFields(crsResult);
+  assert.equal(fields.latest_optimization_findings_full, undefined);
+});

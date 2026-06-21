@@ -337,6 +337,40 @@ function parseFullName(fullName) {
 }
 
 // ----------------------------------------------------------------------------
+// Get Contact by ID (read-only)
+// ----------------------------------------------------------------------------
+async function getGHLContact(contactId) {
+  const key = getApiKey();
+  if (!key) {
+    return { ok: false, error: "GHL API key not configured" };
+  }
+
+  const base = getApiBase();
+  const url = `${base}/contacts/${contactId}`;
+
+  try {
+    const resp = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        Version: API_VERSION
+      }
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      return { ok: false, error: `GHL API error: ${resp.status} ${text.substring(0, 200)}` };
+    }
+
+    const result = await resp.json();
+    return { ok: true, contact: result.contact || result };
+  } catch (err) {
+    logError("GHL getContact exception", err, { contactId });
+    return { ok: false, error: err.message };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // Update Contact Custom Fields (for letter URLs)
 // ----------------------------------------------------------------------------
 async function updateContactCustomFields(contactId, customFields) {
@@ -456,6 +490,7 @@ async function updateLetterUrls(contactId, urls, path) {
 module.exports = {
   createOrUpdateContact,
   findContactByEmail,
+  getGHLContact,
   updateContact,
   createAffiliate,
   createContactAndAffiliate,

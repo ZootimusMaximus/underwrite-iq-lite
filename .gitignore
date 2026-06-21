@@ -55,3 +55,7 @@ SECURITY-FIXES-SUMMARY.md
 .env*.local
 *.md
 .env.development.local
+
+# leaked local env snapshots (contain secrets) — never commit
+.env.pulled
+.env.vercel-prod

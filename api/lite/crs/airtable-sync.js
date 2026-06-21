@@ -123,12 +123,13 @@ function derivePerBureauMetrics(normalized) {
  * Maps CRS engine result to FUNDHUB MATRIX client fields.
  * Only writes fields confirmed to exist in the Airtable schema.
  */
-function mapClientFields(_crsResult, opts) {
+function mapClientFields(crsResult, opts) {
   // Most CLIENTS fields are computed (formulas/rollups) and auto-update when
   // a linked SNAPSHOTS record is created. Writable fields:
   //   - refresh_in_progress: clear the "pulling" flag
   //   - primary_snapshot_date: drives snapshot_age_days formula + ready_for_next_round
   //   - latest_raw_personal_report_url / latest_raw_business_report_url: report links
+  //   - latest_optimization_findings_full: mirror of the full findings JSON
   //
   // Computed (NOT writable): employee_next_action_calc, open_inquiries_count,
   //   snapshot_age_days, ready_for_next_round, round_hold_reason_calc,
@@ -146,6 +147,14 @@ function mapClientFields(_crsResult, opts) {
   }
   if (opts?.reportUrls?.business) {
     fields.latest_raw_business_report_url = opts.reportUrls.business;
+  }
+
+  // Mirror full findings on CLIENTS for agent context (additive)
+  if (
+    Array.isArray(crsResult?.optimization_findings) &&
+    crsResult.optimization_findings.length > 0
+  ) {
+    fields.latest_optimization_findings_full = JSON.stringify(crsResult.optimization_findings);
   }
 
   return fields;
@@ -166,6 +175,11 @@ function mapSnapshotFields(crsResult, clientRecordId, opts) {
   const perBureau = derivePerBureauMetrics(crsResult.normalized);
   const pullScope = opts?.crs_pull_scope || "consumer_only";
   const _businessPullFailed = opts?.businessPullFailed || false;
+
+  const findingsJson =
+    Array.isArray(crsResult.optimization_findings) && crsResult.optimization_findings.length > 0
+      ? JSON.stringify(crsResult.optimization_findings)
+      : null;
 
   const fields = {
     // Core snapshot fields
@@ -205,6 +219,9 @@ function mapSnapshotFields(crsResult, clientRecordId, opts) {
     // Link to client record (field name matches table name in Airtable)
     CLIENTS: clientRecordId ? [clientRecordId] : []
   };
+
+  // Persist full findings array if present (additive — never removes existing fields)
+  if (findingsJson) fields.optimization_findings_full = findingsJson;
 
   // Only populate business-related snapshot fields when a business pull
   // actually ran AND returned data
