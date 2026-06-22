@@ -40,7 +40,8 @@ async function getAllContactIds() {
   let offset = null;
 
   do {
-    const params = new URLSearchParams({ fields: ["contact_id"], pageSize: "100" });
+    const params = new URLSearchParams({ pageSize: "100" });
+    params.append("fields[]", "contact_id"); // Airtable expects fields[] (bracketed), not fields
     if (offset) params.set("offset", offset);
 
     const resp = await fetchWithTimeout(
