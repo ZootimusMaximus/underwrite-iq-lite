@@ -176,6 +176,63 @@ function splitMultiline(text) {
     .filter(Boolean);
 }
 
+// Build a flat, prompt-ready text summary of the chart. GHL agent prompts
+// consume a single text variable far more reliably than deep nested JSON, so
+// this is the field to map into the agent's context in the GHL webhook node.
+function buildAgentContextText(chart) {
+  const c = chart.contact || {};
+  const cr = chart.credit || {};
+  const b = chart.behavioral || {};
+  const lines = [];
+
+  lines.push(
+    `Contact: ${c.name || "Unknown"} (status: ${c.client_status || "?"}, awareness: ${c.awareness_level || "?"}).`
+  );
+
+  const creditBits = [];
+  if (cr.primary_fico) creditBits.push(`FICO ${cr.primary_fico}`);
+  if (cr.prequal_amount) creditBits.push(`prequal $${cr.prequal_amount}`);
+  if (cr.preapproved_amount) creditBits.push(`preapproved $${cr.preapproved_amount}`);
+  if (cr.utilization) creditBits.push(`utilization ${cr.utilization}`);
+  if (cr.recommendation) creditBits.push(`recommendation: ${cr.recommendation}`);
+  if (creditBits.length) lines.push(`Credit: ${creditBits.join(", ")}.`);
+
+  if (Array.isArray(cr.optimization_suggestions) && cr.optimization_suggestions.length) {
+    lines.push(`Top fixes: ${cr.optimization_suggestions.slice(0, 5).join("; ")}.`);
+  }
+
+  if (Array.isArray(chart.funding_history) && chart.funding_history.length) {
+    const fh = chart.funding_history
+      .map(r =>
+        `round ${r.round || "?"} ${r.outcome || ""} ${r.amount ? "$" + r.amount : ""}`.trim()
+      )
+      .join("; ");
+    lines.push(`Funding history: ${fh}.`);
+  }
+
+  const behaviorBits = [];
+  if (b.responsiveness != null) behaviorBits.push(`responsiveness ${b.responsiveness}`);
+  if (b.engagement != null) behaviorBits.push(`engagement ${b.engagement}`);
+  if (b.friction != null) behaviorBits.push(`friction ${b.friction} (high=bad)`);
+  if (b.intent != null) behaviorBits.push(`intent ${b.intent}`);
+  if (b.motivation_label) behaviorBits.push(`motivation: ${b.motivation_label}`);
+  if (behaviorBits.length) lines.push(`Behavior: ${behaviorBits.join(", ")}.`);
+
+  const convo = Array.isArray(chart.conversation) ? chart.conversation : [];
+  if (convo.length) {
+    const recent = convo
+      .slice(-6)
+      .map(
+        m =>
+          `${m.role === "contact" ? "Them" : "Us"}: ${(m.text || "").replace(/\s+/g, " ").trim().slice(0, 200)}`
+      )
+      .join("\n");
+    lines.push(`Recent conversation:\n${recent}`);
+  }
+
+  return lines.join("\n");
+}
+
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
@@ -509,7 +566,10 @@ module.exports = async function handler(req, res) {
       messages: messages.length
     });
 
-    return res.status(200).json({ ok: true, chart });
+    // Flat prompt-ready summary — map THIS single field into the GHL agent.
+    const agent_context_text = buildAgentContextText(chart);
+
+    return res.status(200).json({ ok: true, agent_context_text, chart });
   } catch (err) {
     logError("context-fetcher: unhandled error", { contactId, error: err.message });
     return res.status(500).json({ ok: false, error: "Internal server error" });
