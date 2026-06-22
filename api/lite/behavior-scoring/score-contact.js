@@ -245,7 +245,7 @@ async function scoreContact(contactId, referenceDate) {
     intent_tier: intent.tier,
     motivation_label: intent.motivation_label || "",
     composite,
-    confidence: overall_confidence,
+    confidence: confidence_label, // BEHAVIOR_SCORES.confidence is text (high|provisional), not the 0-1 number
     trajectory: trajectory.direction,
     top_signals: JSON.stringify(top_signals)
   };
