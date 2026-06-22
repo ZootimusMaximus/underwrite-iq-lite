@@ -59,6 +59,40 @@ async function getAllContactIds() {
   return [...seen];
 }
 
+// ─── Sweep logic (exported for cron reuse) ───────────────────────────────────
+
+/**
+ * Run the full batch sweep: fetch all distinct contact_ids and score each one.
+ * Returns { scored, errors } counts. Does NOT write to res — safe to call from
+ * any context (POST handler or GET cron).
+ *
+ * @returns {Promise<{ scored: number, errors: number }>}
+ */
+async function runSweep() {
+  logInfo("behavior-score: sweep started");
+  const contactIds = await getAllContactIds();
+
+  let scored = 0;
+  let errors = 0;
+
+  for (const contactId of contactIds) {
+    try {
+      const r = await scoreContact(contactId);
+      if (r.ok) {
+        scored++;
+      } else {
+        errors++;
+      }
+    } catch (err) {
+      logError("behavior-score: sweep single failed", err, { contactId });
+      errors++;
+    }
+  }
+
+  logInfo("behavior-score: sweep complete", { scored, errors });
+  return { scored, errors };
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 module.exports = async function handler(req, res) {
@@ -88,28 +122,13 @@ module.exports = async function handler(req, res) {
 
   // ── Batch sweep ──────────────────────────────────────────────────────────
   if (body.sweep === true) {
-    logInfo("behavior-score: sweep started");
-    let contactIds;
     try {
-      contactIds = await getAllContactIds();
+      const { scored, errors } = await runSweep();
+      return res.status(200).json({ ok: true, sweep: true, scored, errors });
     } catch (err) {
-      logError("behavior-score: sweep contact list failed", err);
+      logError("behavior-score: sweep failed", err);
       return res.status(500).json({ ok: false, error: err.message });
     }
-
-    const results = [];
-    for (const contactId of contactIds) {
-      try {
-        const r = await scoreContact(contactId);
-        results.push({ contactId, ok: r.ok });
-      } catch (err) {
-        logError("behavior-score: sweep single failed", err, { contactId });
-        results.push({ contactId, ok: false, error: err.message });
-      }
-    }
-
-    logInfo("behavior-score: sweep complete", { total: results.length });
-    return res.status(200).json({ ok: true, sweep: true, results });
   }
 
   // ── Single recompute ──────────────────────────────────────────────────────
@@ -126,3 +145,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ ok: false, error: err.message });
   }
 };
+
+// Export sweep function for reuse by the cron endpoint
+module.exports.runSweep = runSweep;

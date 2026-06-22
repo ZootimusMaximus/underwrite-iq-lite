@@ -4,6 +4,10 @@
     {
       "path": "/api/lite/process-queue",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/lite/behavior-score-cron",
+      "schedule": "0 7 * * *"
     }
   ],
   "builds": [

@@ -133,12 +133,24 @@ async function scoreContact(contactId, referenceDate) {
   logInfo("score-contact: starting", { contactId });
 
   // ── 1. Fetch datalake ──────────────────────────────────────────────────────
-  const [messageRecords, clientRecords, fundingRecords, behaviorHistory] = await Promise.all([
+  // FUNDING_ROUNDS has no contact field — it links to CLIENTS via "Client".
+  // So fetch it via the CLIENTS record's linked "FUNDING_ROUNDS 2" record IDs
+  // (same approach as context-fetcher.js), not by a ghl_contact_id filter.
+  const [messageRecords, clientRecords, behaviorHistory] = await Promise.all([
     atFind(TABLE_CONVERSATION_MESSAGES, `{contact_id} = "${escaped}"`, 1000),
     atFind(TABLE_CLIENTS, `{ghl_contact_id} = "${escaped}"`, 1),
-    atFind(TABLE_FUNDING_ROUNDS, `{ghl_contact_id} = "${escaped}"`, 50),
     atFind(TABLE_BEHAVIOR_SCORES, `{contact_id} = "${escaped}"`, 50)
   ]);
+
+  const fundingRoundIds = (clientRecords[0] && clientRecords[0].fields["FUNDING_ROUNDS 2"]) || [];
+  let fundingRecords = [];
+  if (fundingRoundIds.length) {
+    const formula =
+      fundingRoundIds.length === 1
+        ? `RECORD_ID()="${fundingRoundIds[0]}"`
+        : `OR(${fundingRoundIds.map(id => `RECORD_ID()="${id}"`).join(",")})`;
+    fundingRecords = await atFind(TABLE_FUNDING_ROUNDS, formula, fundingRoundIds.length);
+  }
 
   const messages = messageRecords.map(r => r.fields);
   const clients = clientRecords.map(r => r.fields);
