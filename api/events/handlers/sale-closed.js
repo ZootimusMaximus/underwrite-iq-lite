@@ -321,4 +321,4 @@ async function handle(event) {
 // Exports
 // ---------------------------------------------------------------------------
 
-module.exports = { handle };
+module.exports = { handle, resolveServiceFamily };
