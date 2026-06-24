@@ -38,14 +38,20 @@ function validateCronAuth(req) {
 // ─── Health Checks ────────────────────────────────────────────────────────────
 
 async function runHealthChecks(fetchImpl = fetchWithTimeout) {
-  const checks = await Promise.all([
+  const baseChecks = await Promise.all([
     checkAirtable(fetchImpl),
     checkGHL(fetchImpl),
     checkContextFetcher(fetchImpl),
     checkInquiryRemovalAI(fetchImpl),
     checkRequiredEnvVars()
   ]);
-  return checks;
+
+  const crsCheck = await checkCRS(fetchImpl);
+  if (crsCheck !== null) {
+    baseChecks.push(crsCheck);
+  }
+
+  return baseChecks;
 }
 
 async function checkAirtable(fetchImpl) {
@@ -148,6 +154,50 @@ async function checkInquiryRemovalAI(fetchImpl) {
       detail: err.message,
       latencyMs: Date.now() - start
     };
+  }
+}
+
+async function checkCRS(fetchImpl) {
+  if (process.env.CRS_HEALTHCHECK_ENABLED !== "true") {
+    return null; // Skipped — excluded from results entirely
+  }
+
+  const start = Date.now();
+  try {
+    const base = process.env.STITCH_CREDIT_API_BASE || "https://api-sandbox.stitchcredit.com";
+    const username = process.env.STITCH_CREDIT_USERNAME || process.env.STITCH_CREDIT_EMAIL;
+    const password = process.env.STITCH_CREDIT_PASSWORD;
+
+    const resp = await fetchImpl(
+      `${base}/api/users/login`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      },
+      CHECK_TIMEOUT_MS
+    );
+
+    if (resp.status !== 200) {
+      return {
+        name: "CRS",
+        ok: false,
+        detail: `auth returned ${resp.status}`,
+        latencyMs: Date.now() - start
+      };
+    }
+
+    const data = await resp.json();
+    const token = data.token || data.accessToken || data.jwt;
+
+    return {
+      name: "CRS",
+      ok: !!token,
+      detail: token ? String(resp.status) : "200 but no token in response",
+      latencyMs: Date.now() - start
+    };
+  } catch (err) {
+    return { name: "CRS", ok: false, detail: err.message, latencyMs: Date.now() - start };
   }
 }
 

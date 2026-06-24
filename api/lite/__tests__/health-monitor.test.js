@@ -345,6 +345,160 @@ describe("sendHealthAlert", () => {
   });
 });
 
+// ─── runHealthChecks — CRS check ─────────────────────────────────────────────
+
+describe("runHealthChecks — CRS check", () => {
+  let savedEnv = {};
+
+  beforeEach(() => {
+    savedEnv = {
+      AIRTABLE_BASE_ID: process.env.AIRTABLE_BASE_ID,
+      AIRTABLE_API_KEY: process.env.AIRTABLE_API_KEY,
+      GHL_LOCATION_ID: process.env.GHL_LOCATION_ID,
+      GHL_PRIVATE_API_KEY: process.env.GHL_PRIVATE_API_KEY,
+      CONTEXT_FETCHER_SECRET: process.env.CONTEXT_FETCHER_SECRET,
+      CRS_HEALTHCHECK_ENABLED: process.env.CRS_HEALTHCHECK_ENABLED,
+      STITCH_CREDIT_API_BASE: process.env.STITCH_CREDIT_API_BASE,
+      STITCH_CREDIT_USERNAME: process.env.STITCH_CREDIT_USERNAME,
+      STITCH_CREDIT_PASSWORD: process.env.STITCH_CREDIT_PASSWORD
+    };
+    process.env.AIRTABLE_BASE_ID = "appTestBase";
+    process.env.AIRTABLE_API_KEY = "key_test";
+    process.env.GHL_LOCATION_ID = "loc_test";
+    process.env.GHL_PRIVATE_API_KEY = "ghl_test";
+    process.env.CONTEXT_FETCHER_SECRET = "ctx_test";
+    process.env.STITCH_CREDIT_API_BASE = "https://mware.crscreditapi.com";
+    process.env.STITCH_CREDIT_USERNAME = "FundHubProd";
+    process.env.STITCH_CREDIT_PASSWORD = "prod_pass";
+  });
+
+  afterEach(() => {
+    for (const [k, v] of Object.entries(savedEnv)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+
+  it("skips CRS check when CRS_HEALTHCHECK_ENABLED is unset (5 checks returned, all ok)", async () => {
+    delete process.env.CRS_HEALTHCHECK_ENABLED;
+    const checks = await runHealthChecks(mockFetchAll200());
+    assert.equal(checks.length, 5, "Should have 5 checks (CRS excluded when disabled)");
+    const crsCheck = checks.find(c => c.name === "CRS");
+    assert.equal(crsCheck, undefined, "CRS check should not appear in results");
+    assert.equal(
+      checks.every(c => c.ok),
+      true,
+      "overallOk should be unaffected"
+    );
+  });
+
+  it("skips CRS check when CRS_HEALTHCHECK_ENABLED is 'false' (5 checks returned)", async () => {
+    process.env.CRS_HEALTHCHECK_ENABLED = "false";
+    const checks = await runHealthChecks(mockFetchAll200());
+    assert.equal(checks.length, 5);
+    assert.equal(
+      checks.find(c => c.name === "CRS"),
+      undefined
+    );
+  });
+
+  it("includes CRS check and ok:true when login returns 200 + token", async () => {
+    process.env.CRS_HEALTHCHECK_ENABLED = "true";
+
+    const mockFetch = async (url, _opts, _timeout) => {
+      if (url.includes("/api/users/login")) {
+        return {
+          status: 200,
+          ok: true,
+          json: async () => ({ token: "eyJhbGciOiJIUzI1NiJ9.test.sig" })
+        };
+      }
+      return { status: 200, ok: true, json: async () => ({}) };
+    };
+
+    const checks = await runHealthChecks(mockFetch);
+    assert.equal(checks.length, 6, "Should have 6 checks (CRS included when enabled)");
+    const crsCheck = checks.find(c => c.name === "CRS");
+    assert.ok(crsCheck, "CRS check should be present");
+    assert.equal(crsCheck.ok, true, "CRS check should be ok when 200+token received");
+    assert.equal(crsCheck.detail, "200");
+    assert.ok(typeof crsCheck.latencyMs === "number");
+  });
+
+  it("CRS ok:false when login returns 401 — contributes to failing checks", async () => {
+    process.env.CRS_HEALTHCHECK_ENABLED = "true";
+
+    const mockFetch = async (url, _opts, _timeout) => {
+      if (url.includes("/api/users/login")) {
+        return { status: 401, ok: false, json: async () => ({}) };
+      }
+      return { status: 200, ok: true, json: async () => ({}) };
+    };
+
+    const checks = await runHealthChecks(mockFetch);
+    const crsCheck = checks.find(c => c.name === "CRS");
+    assert.ok(crsCheck, "CRS check should be present");
+    assert.equal(crsCheck.ok, false);
+    assert.ok(crsCheck.detail.includes("401"), `detail was: ${crsCheck.detail}`);
+
+    const overallOk = checks.every(c => c.ok);
+    assert.equal(overallOk, false, "overallOk should be false when CRS fails");
+  });
+
+  it("CRS ok:false when login throws (network error)", async () => {
+    process.env.CRS_HEALTHCHECK_ENABLED = "true";
+
+    const mockFetch = async (url, _opts, _timeout) => {
+      if (url.includes("/api/users/login")) throw new Error("connect ETIMEDOUT");
+      return { status: 200, ok: true, json: async () => ({}) };
+    };
+
+    const checks = await runHealthChecks(mockFetch);
+    const crsCheck = checks.find(c => c.name === "CRS");
+    assert.ok(crsCheck, "CRS check should be present");
+    assert.equal(crsCheck.ok, false);
+    assert.ok(crsCheck.detail.includes("ETIMEDOUT"), `detail was: ${crsCheck.detail}`);
+  });
+
+  it("CRS ok:false when 200 but no token in response body", async () => {
+    process.env.CRS_HEALTHCHECK_ENABLED = "true";
+
+    const mockFetch = async (url, _opts, _timeout) => {
+      if (url.includes("/api/users/login")) {
+        return { status: 200, ok: true, json: async () => ({ message: "no token here" }) };
+      }
+      return { status: 200, ok: true, json: async () => ({}) };
+    };
+
+    const checks = await runHealthChecks(mockFetch);
+    const crsCheck = checks.find(c => c.name === "CRS");
+    assert.ok(crsCheck, "CRS check should be present");
+    assert.equal(crsCheck.ok, false);
+    assert.ok(crsCheck.detail.includes("no token"), `detail was: ${crsCheck.detail}`);
+  });
+
+  it("CRS failure does not throw the whole handler — other checks still returned", async () => {
+    process.env.CRS_HEALTHCHECK_ENABLED = "true";
+
+    const mockFetch = async (url, _opts, _timeout) => {
+      if (url.includes("/api/users/login")) throw new Error("CRS down");
+      return { status: 200, ok: true, json: async () => ({}) };
+    };
+
+    const checks = await runHealthChecks(mockFetch);
+    // Other 5 checks should be present and ok
+    const others = checks.filter(c => c.name !== "CRS");
+    assert.equal(others.length, 5);
+    for (const c of others) {
+      assert.equal(c.ok, true, `Expected ${c.name} to be ok`);
+    }
+    // CRS check present and failing
+    const crsCheck = checks.find(c => c.name === "CRS");
+    assert.ok(crsCheck);
+    assert.equal(crsCheck.ok, false);
+  });
+});
+
 // ─── handler — auth ───────────────────────────────────────────────────────────
 
 describe("handler — auth", () => {
