@@ -20,6 +20,23 @@ const API_USERNAME = process.env.STITCH_CREDIT_USERNAME || process.env.STITCH_CR
 const API_PASSWORD = process.env.STITCH_CREDIT_PASSWORD;
 const TIMEOUT_MS = 30000;
 
+const ALL_CONSUMER_BUREAUS = ["transunion", "experian", "equifax"];
+
+// Active consumer bureaus, env-configurable. Production may not have all 3 live
+// (e.g. TransUnion not yet provisioned at launch) — set CRS_ACTIVE_BUREAUS to a
+// comma-separated subset (e.g. "experian,equifax") to skip pulling an
+// unavailable bureau entirely instead of attempting a call that always fails.
+// Defaults to all 3 (unchanged behavior) when unset/empty/invalid.
+function getActiveConsumerBureaus() {
+  const raw = process.env.CRS_ACTIVE_BUREAUS;
+  if (!raw) return ALL_CONSUMER_BUREAUS;
+  const parsed = raw
+    .split(",")
+    .map(b => b.trim().toLowerCase())
+    .filter(b => ALL_CONSUMER_BUREAUS.includes(b));
+  return parsed.length ? parsed : ALL_CONSUMER_BUREAUS;
+}
+
 // ---------------------------------------------------------------------------
 // Consumer Soft-Pull Endpoints
 // ---------------------------------------------------------------------------
@@ -450,8 +467,9 @@ async function pullTopBusinessReportPdf(ids) {
  * @returns {Promise<{ rawResponses: Object[], businessReport: Object|null, errors: Object[] }>}
  */
 async function pullFullCRS(applicant, businessInfo) {
-  // Consumer pulls (parallel)
-  const { responses, errors } = await pullAllConsumerBureaus(applicant);
+  // Consumer pulls (parallel) — only the bureaus currently active in this env
+  // (e.g. TransUnion excluded at launch until provisioned). See CRS_ACTIVE_BUREAUS.
+  const { responses, errors } = await pullAllConsumerBureaus(applicant, getActiveConsumerBureaus());
 
   if (responses.length === 0) {
     throw new Error(
@@ -512,7 +530,9 @@ module.exports = {
   pullTopBusinessReportPdf,
   pullFullCRS,
   invalidateToken,
+  getActiveConsumerBureaus,
   // For testing
+  ALL_CONSUMER_BUREAUS,
   BUREAU_ENDPOINTS,
   BUSINESS_ENDPOINTS,
   TOP_BUSINESS_ENDPOINTS
