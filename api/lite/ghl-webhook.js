@@ -25,7 +25,13 @@ const GHL_WEBHOOK_BASE =
 const WEBHOOK_URLS = {
   analyzer_start: `${GHL_WEBHOOK_BASE}/03f27697-68e1-411a-81e4-6ecff03fb239`,
   analyzer_complete: `${GHL_WEBHOOK_BASE}/330139cd-098d-46f8-9e65-25cd3545a612`,
-  crs_snapshot_complete: `${GHL_WEBHOOK_BASE}/faa8c0be-31b0-48a6-97a3-d39eff741665`
+  crs_snapshot_complete: `${GHL_WEBHOOK_BASE}/faa8c0be-31b0-48a6-97a3-d39eff741665`,
+  // CRS funding-letters delivery trigger (U-02 repointed to CRS Complete).
+  // Fired at the END of the deliver_letters task, AFTER the letter URLs are
+  // written — so U-02's delivery email has the URLs ready (no race). Env-gated:
+  // set GHL_LETTERS_READY_WEBHOOK_URL to U-02's CRS-Complete trigger URL to
+  // enable. Unset = no-op (safe; nothing fires until Chris repoints U-02).
+  crs_letters_ready: process.env.GHL_LETTERS_READY_WEBHOOK_URL || null
 };
 
 // Airtable automation webhook URLs
@@ -149,6 +155,42 @@ async function notifyCRSSnapshotComplete(params) {
 }
 
 // ---------------------------------------------------------------------------
+// Notify GHL: CRS Funding Letters Ready (triggers U-02 delivery on CRS path)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fire the letters-ready webhook so U-02 emails the funding letters to the
+ * client. Called at the END of the deliver_letters task (URLs already written),
+ * so U-02 fires when letters are actually ready — closing the gap where CRS
+ * clients got letter URLs but never the delivery email.
+ *
+ * Env-gated: no-op (returns { ok:true, skipped:true }) when
+ * GHL_LETTERS_READY_WEBHOOK_URL is not set, so it's safe to deploy before
+ * Chris repoints U-02 to a CRS-Complete trigger.
+ *
+ * @param {Object} params
+ * @param {string} [params.contactId]
+ * @param {Object} [params.urls] - the funding_letter_url__* values written to GHL
+ * @param {string} [params.path] - "funding" | "repair"
+ * @returns {Promise<{ ok: boolean, error?: string, skipped?: boolean }>}
+ */
+async function notifyLettersReady(params) {
+  if (!WEBHOOK_URLS.crs_letters_ready) {
+    logInfo(
+      "notifyLettersReady: GHL_LETTERS_READY_WEBHOOK_URL not set — skipping (U-02 not yet repointed)"
+    );
+    return { ok: true, skipped: true };
+  }
+  const payload = {
+    event: "crs_letters_ready",
+    contact_id: params.contactId || "",
+    path: params.path || "",
+    letter_urls: params.urls || {}
+  };
+  return fireWebhook(WEBHOOK_URLS.crs_letters_ready, payload, "U-02 crs_letters_ready");
+}
+
+// ---------------------------------------------------------------------------
 // Notify Airtable: Analyzer Complete (triggers AX01A automation)
 // ---------------------------------------------------------------------------
 
@@ -228,6 +270,7 @@ module.exports = {
   notifyAnalyzerStart,
   notifyAnalyzerComplete,
   notifyCRSSnapshotComplete,
+  notifyLettersReady,
   notifyAirtableAnalyzerComplete,
   WEBHOOK_URLS,
   AIRTABLE_WEBHOOK_URLS
