@@ -188,10 +188,18 @@ async function notifyLettersReady(params) {
     );
     return { ok: true, skipped: true };
   }
+  // Split fullName → first/last so U-02's "GATE — Identity Present" (First name +
+  // Email not empty) and "MAP — Analyzer Fields" steps are satisfied.
+  const nameParts = (params.fullName || "").trim().split(/\s+/).filter(Boolean);
+  const firstName = params.firstName || nameParts[0] || "";
+  const lastName = params.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(" ") : "");
   const payload = {
     event: "crs_letters_ready",
     email: params.email || "",
+    first_name: firstName,
+    last_name: lastName,
     full_name: params.fullName || "",
+    full_legal_name: params.fullName || "",
     contact_id: params.contactId || "",
     analyzer_status: "complete",
     analyzer_path: params.path || ""
