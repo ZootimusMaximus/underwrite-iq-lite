@@ -406,6 +406,20 @@ describe("context-fetcher handler", () => {
     assert.match(res.body.error, /contactId/);
   });
 
+  it("accepts GHL's nested customData.contactId shape", async () => {
+    const handler = loadHandler();
+    const res = makeRes();
+    await handler(makeReq({ customData: { contactId: CONTACT_ID } }), res);
+    assert.notEqual(res.statusCode, 400);
+  });
+
+  it("accepts GHL's standard contact_id shape", async () => {
+    const handler = loadHandler();
+    const res = makeRes();
+    await handler(makeReq({ contact_id: CONTACT_ID }), res);
+    assert.notEqual(res.statusCode, 400);
+  });
+
   it("returns 500 when Airtable is not configured", async () => {
     delete process.env.AIRTABLE_API_KEY;
     const handler = loadHandler();

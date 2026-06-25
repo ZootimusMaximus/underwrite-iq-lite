@@ -265,12 +265,21 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ ok: false, error: "Airtable not configured" });
   }
 
-  const body = req.body;
-  if (!body || !body.contactId) {
+  const body = req.body || {};
+  // GHL's native "Webhook" workflow action nests custom data under `customData`
+  // and exposes the contact id as `contact_id`/`id` in its standard payload — so
+  // accept those shapes too, not just the canonical top-level `contactId`.
+  const contactId =
+    body.contactId ||
+    (body.customData && body.customData.contactId) ||
+    body.contact_id ||
+    body.id;
+  if (!contactId) {
     return res.status(400).json({ ok: false, error: "contactId is required" });
   }
 
-  const { contactId, behavioral: behavioralFromPayload } = body;
+  const behavioralFromPayload =
+    body.behavioral || (body.customData && body.customData.behavioral);
 
   // Strict allowlist — GHL contact ids are alphanumeric. Rejecting anything else
   // prevents Airtable formula injection via the filterByFormula strings below.
