@@ -168,9 +168,16 @@ async function notifyCRSSnapshotComplete(params) {
  * GHL_LETTERS_READY_WEBHOOK_URL is not set, so it's safe to deploy before
  * Chris repoints U-02 to a CRS-Complete trigger.
  *
+ * Payload mirrors notifyAnalyzerComplete (the shape U-02 already understands) so
+ * it's drop-in compatible: email/full_name to match the contact, analyzer_path,
+ * and the funding_letter_url__* fields flattened in so U-02's email uses the
+ * webhook values directly (no race on contact-field reads).
+ *
  * @param {Object} params
  * @param {string} [params.contactId]
- * @param {Object} [params.urls] - the funding_letter_url__* values written to GHL
+ * @param {string} [params.email]
+ * @param {string} [params.fullName]
+ * @param {Object} [params.urls] - { funding_letter_url__*: url } written to GHL
  * @param {string} [params.path] - "funding" | "repair"
  * @returns {Promise<{ ok: boolean, error?: string, skipped?: boolean }>}
  */
@@ -183,10 +190,17 @@ async function notifyLettersReady(params) {
   }
   const payload = {
     event: "crs_letters_ready",
+    email: params.email || "",
+    full_name: params.fullName || "",
     contact_id: params.contactId || "",
-    path: params.path || "",
-    letter_urls: params.urls || {}
+    analyzer_status: "complete",
+    analyzer_path: params.path || ""
   };
+  // Flatten the funding_letter_url__* fields into the payload (same as
+  // notifyAnalyzerComplete) so U-02 can email them straight from the webhook.
+  if (params.urls && typeof params.urls === "object") {
+    Object.assign(payload, params.urls);
+  }
   return fireWebhook(WEBHOOK_URLS.crs_letters_ready, payload, "U-02 crs_letters_ready");
 }
 

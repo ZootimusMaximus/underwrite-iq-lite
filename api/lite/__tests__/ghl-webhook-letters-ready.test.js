@@ -50,6 +50,8 @@ describe("notifyLettersReady", () => {
     const { notifyLettersReady } = require("../ghl-webhook");
     const res = await notifyLettersReady({
       contactId: "contact_123",
+      email: "client@example.com",
+      fullName: "Jane Client",
       urls: { funding_letter_url__inquiry_cleanup__ex: "https://blob/x.pdf" },
       path: "funding"
     });
@@ -58,10 +60,11 @@ describe("notifyLettersReady", () => {
     assert.equal(capturedUrl, "https://example.test/u02-crs-letters");
     assert.equal(capturedBody.event, "crs_letters_ready");
     assert.equal(capturedBody.contact_id, "contact_123");
-    assert.equal(capturedBody.path, "funding");
-    assert.equal(
-      capturedBody.letter_urls.funding_letter_url__inquiry_cleanup__ex,
-      "https://blob/x.pdf"
-    );
+    assert.equal(capturedBody.email, "client@example.com");
+    assert.equal(capturedBody.full_name, "Jane Client");
+    assert.equal(capturedBody.analyzer_status, "complete");
+    assert.equal(capturedBody.analyzer_path, "funding");
+    // letter URL fields flattened into the payload (U-02 reads them directly)
+    assert.equal(capturedBody.funding_letter_url__inquiry_cleanup__ex, "https://blob/x.pdf");
   });
 });

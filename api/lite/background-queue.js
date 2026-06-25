@@ -203,6 +203,8 @@ async function executeLetterDelivery(payload) {
     const { notifyLettersReady } = require("./ghl-webhook");
     await notifyLettersReady({
       contactId: result.contactId,
+      email: payload.contactData?.email,
+      fullName: payload.personal?.name,
       urls: result.urls,
       path: result.path
     });
