@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "regions": ["iad1"],
   "crons": [
     {
       "path": "/api/lite/process-queue",
