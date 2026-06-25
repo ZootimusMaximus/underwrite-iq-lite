@@ -281,6 +281,15 @@ module.exports = async function handler(req, res) {
   const behavioralFromPayload =
     body.behavioral || (body.customData && body.customData.behavioral);
 
+  // writeBack: when truthy, the endpoint writes the flattened agent_context_text
+  // straight into the GHL contact's `agent_context` field via the GHL API — so a
+  // GHL workflow only needs to fire this webhook (no response-mapping step). Flag
+  // is opt-in so Josh (Voice) keeps reading the response inline with zero added
+  // latency. GHL custom data sends strings, so treat "true"/true/1 as enabled.
+  const writeBackRaw = body.writeBack ?? (body.customData && body.customData.writeBack);
+  const writeBack =
+    writeBackRaw === true || writeBackRaw === "true" || writeBackRaw === 1 || writeBackRaw === "1";
+
   // Strict allowlist — GHL contact ids are alphanumeric. Rejecting anything else
   // prevents Airtable formula injection via the filterByFormula strings below.
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(contactId)) {
@@ -578,7 +587,25 @@ module.exports = async function handler(req, res) {
     // Flat prompt-ready summary — map THIS single field into the GHL agent.
     const agent_context_text = buildAgentContextText(chart);
 
-    return res.status(200).json({ ok: true, agent_context_text, chart });
+    // Optional server-side writeback (text-agent path): persist the summary into
+    // the GHL contact's `agent_context` field so the chat bots can read it with a
+    // plain merge tag — no GHL response-mapping step needed. Non-fatal: a GHL write
+    // failure must not break the fetch response.
+    let wroteBack = false;
+    if (writeBack) {
+      try {
+        const { updateContactCustomFields } = require("./ghl-contact-service");
+        const wb = await updateContactCustomFields(contactId, { agent_context: agent_context_text });
+        wroteBack = !!(wb && wb.ok);
+        if (!wroteBack) {
+          logWarn("context-fetcher: writeBack failed", { contactId, error: wb && wb.error });
+        }
+      } catch (wbErr) {
+        logWarn("context-fetcher: writeBack threw (non-fatal)", { contactId, error: wbErr.message });
+      }
+    }
+
+    return res.status(200).json({ ok: true, agent_context_text, chart, wroteBack });
   } catch (err) {
     logError("context-fetcher: unhandled error", { contactId, error: err.message });
     return res.status(500).json({ ok: false, error: "Internal server error" });

@@ -254,6 +254,12 @@ const mockGetGHLContact = async _contactId => {
   return mockGHLContactResult;
 };
 
+let mockUpdateCustomFieldsCalls = [];
+const mockUpdateContactCustomFields = async (contactId, customFields) => {
+  mockUpdateCustomFieldsCalls.push({ contactId, customFields });
+  return { ok: true };
+};
+
 function loadHandler() {
   const modPath = require.resolve("../context-fetcher");
   const fetchPath = require.resolve("../fetch-utils");
@@ -281,7 +287,10 @@ function loadHandler() {
     id: ghlPath,
     filename: ghlPath,
     loaded: true,
-    exports: { getGHLContact: mockGetGHLContact }
+    exports: {
+      getGHLContact: mockGetGHLContact,
+      updateContactCustomFields: mockUpdateContactCustomFields
+    }
   };
 
   return require("../context-fetcher");
@@ -320,6 +329,7 @@ describe("context-fetcher handler", () => {
     mockFetchError = null;
     mockGHLContactResult = { ok: true, contact: { customFields: [] } };
     mockGHLContactThrows = false;
+    mockUpdateCustomFieldsCalls = [];
     // Set env vars
     process.env.AIRTABLE_API_KEY = "test_key";
     process.env.AIRTABLE_BASE_ID = "appXsq65yB9VuNup5";
@@ -418,6 +428,36 @@ describe("context-fetcher handler", () => {
     const res = makeRes();
     await handler(makeReq({ contact_id: CONTACT_ID }), res);
     assert.notEqual(res.statusCode, 400);
+  });
+
+  it("writes agent_context back to GHL when writeBack is true", async () => {
+    mockFindResults["CLIENTS"] = [makeClientRecord()];
+    const handler = loadHandler();
+    const res = makeRes();
+    await handler(makeReq({ contactId: CONTACT_ID, writeBack: true }), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.wroteBack, true);
+    assert.equal(mockUpdateCustomFieldsCalls.length, 1);
+    assert.equal(mockUpdateCustomFieldsCalls[0].contactId, CONTACT_ID);
+    assert.ok("agent_context" in mockUpdateCustomFieldsCalls[0].customFields);
+  });
+
+  it("treats string \"true\" (GHL custom data) as writeBack enabled", async () => {
+    mockFindResults["CLIENTS"] = [makeClientRecord()];
+    const handler = loadHandler();
+    const res = makeRes();
+    await handler(makeReq({ customData: { contactId: CONTACT_ID, writeBack: "true" } }), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(mockUpdateCustomFieldsCalls.length, 1);
+  });
+
+  it("does NOT write back when writeBack is absent (Voice path)", async () => {
+    mockFindResults["CLIENTS"] = [makeClientRecord()];
+    const handler = loadHandler();
+    const res = makeRes();
+    await handler(makeReq({ contactId: CONTACT_ID }), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(mockUpdateCustomFieldsCalls.length, 0);
   });
 
   it("returns 500 when Airtable is not configured", async () => {
