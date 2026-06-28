@@ -1016,28 +1016,14 @@ describe("router.js", () => {
       assert.equal(capturedEnvelope.payload.entry_mode, "slo_deposit");
     });
 
-    it("loadHandler returns null for a nonexistent event module", () => {
-      // The HANDLER_NOT_AVAILABLE path in routeEvent is exercised when loadHandler() returns null.
-      // We verify this indirectly by confirming loadHandler returns null for a module that
-      // doesn't exist on disk. We do this by temporarily patching EVENT_HANDLERS in a fresh router
-      // instance to point to a non-existent path.
-      const _path = require("path");
-      const routerPath = require.resolve("../router");
-      delete require.cache[routerPath];
-      const freshRouter = require("../router");
-
-      // Directly call the exposed loadHandler with an event that maps to a bogus path.
-      // We achieve this by temporarily overriding EVENT_HANDLERS (the exported object is the
-      // same reference used internally).
-      const origPath = freshRouter.EVENT_HANDLERS["fundhub.entry.captured"];
-      freshRouter.EVENT_HANDLERS["fundhub.entry.captured"] = "./handlers/__nonexistent__";
-
-      const result = freshRouter.loadHandler("fundhub.entry.captured");
-
-      // Restore
-      freshRouter.EVENT_HANDLERS["fundhub.entry.captured"] = origPath;
-
-      assert.equal(result, null, "loadHandler should return null for a non-existent module");
+    it("loadHandler returns null for an event with no handler module", () => {
+      // HANDLER_NOT_AVAILABLE in routeEvent is exercised when loadHandler() returns null.
+      // Since the April static-require refactor, handlers are pre-required into the internal
+      // _HANDLER_MODULES map (not resolved by path at runtime), so loadHandler returns null when
+      // an event name has no entry there. Calling it with an unknown event name hits that null
+      // path directly — no patching needed.
+      const result = router.loadHandler("fundhub.__nonexistent__.event");
+      assert.equal(result, null, "loadHandler should return null when no handler module exists");
     });
 
     it("returns HANDLER_ERROR when handler throws", async () => {
