@@ -189,8 +189,9 @@ async function generateFurnisherLetter(furnisher, tradelines, bureau, round, kbS
     }))
   };
 
-  // 4. Call Claude (Round 1 = default Sonnet, Rounds 2/3 = Opus)
-  const model = round === 1 ? undefined : "claude-opus-4-6";
+  // 4. Call Claude (Round 1 = default Sonnet, Rounds 2/3 = Opus).
+  // Use the current Opus (4.8); opus-4-6 was retired. Env-overridable.
+  const model = round === 1 ? undefined : process.env.CLAUDE_OPUS_MODEL || "claude-opus-4-8";
   const text = await callClaude({
     system: systemPrompt,
     user: JSON.stringify(userPayload),
