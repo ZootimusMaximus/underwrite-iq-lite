@@ -136,6 +136,19 @@ async function createOpsTask(fields) {
  * @param {string} serviceSelected
  * @returns {"funding" | "repair" | "unknown"}
  */
+
+// Maps a service family to the EXACT GHL "Sales Outcome" (sales_outcome) picklist
+// value that drives the post-call workflows (S-06 funding close, S-07 repair
+// close). Strings must match the GHL Single-Options field exactly — GHL silently
+// drops an unknown picklist value, which would make the close fire nothing.
+// (Full option set in GHL: "Funding Purchased", "Repair Purchased",
+//  "Funding Didn’t Buy", "Repair Didn’t Buy" — the didn't-buy cases are not
+//  emitted by this handler; a sale.closed event always represents a purchase.)
+const SALES_OUTCOME_BY_FAMILY = {
+  funding: "Funding Purchased",
+  repair: "Repair Purchased"
+};
+
 function resolveServiceFamily(serviceSelected) {
   if (!serviceSelected) return "unknown";
   const lower = serviceSelected.toLowerCase();
@@ -267,6 +280,25 @@ async function handle(event) {
     cf_last_canonical_event_ts: now
   };
 
+  // Sales Outcome is the MASTER post-call trigger: GHL workflows S-06 (funding
+  // close), S-07 (repair close), S-08/S-09 (didn't buy) all key off this single
+  // dropdown — nothing listens to the cf_* fields above. So we must write
+  // `sales_outcome` with an EXACT GHL picklist value or the close fires nothing.
+  // S-06 then runs full intake only when its other gates are also true (Contract
+  // Funding Signed, CRS Paid, Funding Fee Percent — set by the sale process, not
+  // this event); otherwise S-06 drops an ops task. That gating is intentional and
+  // lives in GHL, so we only own writing the outcome here.
+  const salesOutcomeValue = SALES_OUTCOME_BY_FAMILY[serviceFamily];
+  if (salesOutcomeValue) {
+    customFields.sales_outcome = salesOutcomeValue;
+  } else {
+    logWarn("sale-closed: no sales_outcome mapping for service family — S-06/S-07 will not fire", {
+      ghlContactId,
+      serviceFamily,
+      service_selected
+    });
+  }
+
   if (crossLaneFlag) {
     customFields.cf_unapplied_credit_amount = String(depositCreditApplied);
   }
@@ -321,4 +353,4 @@ async function handle(event) {
 // Exports
 // ---------------------------------------------------------------------------
 
-module.exports = { handle, resolveServiceFamily };
+module.exports = { handle, resolveServiceFamily, SALES_OUTCOME_BY_FAMILY };
