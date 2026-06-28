@@ -270,16 +270,12 @@ module.exports = async function handler(req, res) {
   // and exposes the contact id as `contact_id`/`id` in its standard payload — so
   // accept those shapes too, not just the canonical top-level `contactId`.
   const contactId =
-    body.contactId ||
-    (body.customData && body.customData.contactId) ||
-    body.contact_id ||
-    body.id;
+    body.contactId || (body.customData && body.customData.contactId) || body.contact_id || body.id;
   if (!contactId) {
     return res.status(400).json({ ok: false, error: "contactId is required" });
   }
 
-  const behavioralFromPayload =
-    body.behavioral || (body.customData && body.customData.behavioral);
+  const behavioralFromPayload = body.behavioral || (body.customData && body.customData.behavioral);
 
   // writeBack: when truthy, the endpoint writes the flattened agent_context_text
   // straight into the GHL contact's `agent_context` field via the GHL API — so a
@@ -595,13 +591,18 @@ module.exports = async function handler(req, res) {
     if (writeBack) {
       try {
         const { updateContactCustomFields } = require("./ghl-contact-service");
-        const wb = await updateContactCustomFields(contactId, { agent_context: agent_context_text });
+        const wb = await updateContactCustomFields(contactId, {
+          agent_context: agent_context_text
+        });
         wroteBack = !!(wb && wb.ok);
         if (!wroteBack) {
           logWarn("context-fetcher: writeBack failed", { contactId, error: wb && wb.error });
         }
       } catch (wbErr) {
-        logWarn("context-fetcher: writeBack threw (non-fatal)", { contactId, error: wbErr.message });
+        logWarn("context-fetcher: writeBack threw (non-fatal)", {
+          contactId,
+          error: wbErr.message
+        });
       }
     }
 

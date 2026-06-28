@@ -136,7 +136,15 @@ function prioritizeFurnishers(furnisherEntries, maxCount) {
  * Generate a single dispute letter for one furnisher on one bureau.
  * Returns the letter object or null if no violations / validation fails.
  */
-async function generateFurnisherLetter(furnisher, tradelines, bureau, round, kbSection, personal, existingLetters) {
+async function generateFurnisherLetter(
+  furnisher,
+  tradelines,
+  bureau,
+  round,
+  kbSection,
+  personal,
+  existingLetters
+) {
   // 1. Detect violations for all tradelines in this furnisher group
   const violations = tradelines.flatMap(tl => detectViolations(tl).violations);
   if (violations.length === 0) return null;
@@ -243,7 +251,9 @@ async function generateFurnisherLetter(furnisher, tradelines, bureau, round, kbS
         return { type: "dispute", bureau, round, furnisher, violations, text: retryText };
       }
     }
-    logError(`generate-deliverables: CRO similarity still too high after retry for ${furnisher}/${bureau}`);
+    logError(
+      `generate-deliverables: CRO similarity still too high after retry for ${furnisher}/${bureau}`
+    );
     return null;
   }
 
@@ -284,7 +294,15 @@ async function generateDisputeLetters(crsResult, personal) {
       const batch = prioritized.slice(i, i + batchSize);
       const results = await Promise.all(
         batch.map(([furnisher, tradelines]) =>
-          generateFurnisherLetter(furnisher, tradelines, bureauName, round, kbSection, personal, letters)
+          generateFurnisherLetter(
+            furnisher,
+            tradelines,
+            bureauName,
+            round,
+            kbSection,
+            personal,
+            letters
+          )
         )
       );
       letters.push(...results.filter(Boolean));
