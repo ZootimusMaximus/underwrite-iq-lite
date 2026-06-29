@@ -27,7 +27,14 @@ const { buildProxyForCity } = require("./oxylabs-proxy");
 function validateAuth(req) {
   const secret = process.env.PROXY_DOOR_SECRET || process.env.CONTEXT_FETCHER_SECRET;
   if (!secret) {
-    logWarn("proxy-door: no secret set — running unauthenticated (dev mode)");
+    // FAIL CLOSED in production — this endpoint returns proxy credentials, so
+    // never serve it unauthenticated on a live deploy. Dev/local (no
+    // NODE_ENV=production) keeps the open path for convenience.
+    if (process.env.NODE_ENV === "production") {
+      logError("proxy-door: no secret configured — refusing to serve in production");
+      return { ok: false };
+    }
+    logWarn("proxy-door: no secret set — running unauthenticated (dev mode only)");
     return { ok: true };
   }
   const bearer = req.headers["authorization"] || "";
@@ -40,7 +47,14 @@ function validateAuth(req) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // No wildcard CORS — this endpoint returns credentials. Only echo an allowed
+  // dashboard origin (set DASHBOARD_ORIGIN). Server-to-server callers don't need
+  // CORS at all, so the default (no Allow-Origin) is the safe one.
+  const allowedOrigin = process.env.DASHBOARD_ORIGIN;
+  if (allowedOrigin && req.headers.origin === allowedOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+    res.setHeader("Vary", "Origin");
+  }
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-proxy-door-secret");
 

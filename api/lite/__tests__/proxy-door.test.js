@@ -78,6 +78,20 @@ describe("proxy-door handler", () => {
     assert.equal(res.statusCode, 400);
   });
 
+  it("FAILS CLOSED (401) in production when no secret is configured", async () => {
+    const origEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    // no PROXY_DOOR_SECRET / CONTEXT_FETCHER_SECRET set
+    const res = makeRes();
+    try {
+      await loadHandler()(makeReq({ contactId: "c1" }), res);
+      assert.equal(res.statusCode, 401);
+    } finally {
+      if (origEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = origEnv;
+    }
+  });
+
   it("500 when proxy password not configured", async () => {
     delete process.env.OXYLABS_PROXY_PASSWORD;
     const res = makeRes();
