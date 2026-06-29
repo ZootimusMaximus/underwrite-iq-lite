@@ -53,7 +53,8 @@ describe("notifyLettersReady", () => {
       email: "client@example.com",
       fullName: "Jane Client",
       urls: { funding_letter_url__inquiry_cleanup__ex: "https://blob/x.pdf" },
-      path: "funding"
+      path: "funding",
+      creditSuggestions: "Pay down revolving utilization"
     });
     assert.equal(res.ok, true);
     assert.notEqual(res.skipped, true);
@@ -66,5 +67,7 @@ describe("notifyLettersReady", () => {
     assert.equal(capturedBody.analyzer_path, "funding");
     // letter URL fields flattened into the payload (U-02 reads them directly)
     assert.equal(capturedBody.funding_letter_url__inquiry_cleanup__ex, "https://blob/x.pdf");
+    // credit_suggestions fills U-02's placeholder
+    assert.equal(capturedBody.credit_suggestions, "Pay down revolving utilization");
   });
 });

@@ -195,22 +195,29 @@ async function executeLetterDelivery(payload) {
     throw new Error(result.error || "Letter delivery failed");
   }
 
-  // Letters are now generated, uploaded, and their URLs written to GHL. Fire the
-  // CRS letters-ready signal so U-02 emails them to the client (closes the gap
-  // where CRS clients got URLs but no delivery email). No-op until
-  // GHL_LETTERS_READY_WEBHOOK_URL is set (Chris repoints U-02). Non-fatal.
-  try {
-    const { notifyLettersReady } = require("./ghl-webhook");
-    await notifyLettersReady({
-      contactId: result.contactId,
-      email: payload.contactData?.email,
-      fullName: payload.personal?.name,
-      urls: result.urls,
-      path: result.path
-    });
-  } catch (err) {
-    const { logWarn } = require("./logger");
-    logWarn("executeLetterDelivery: notifyLettersReady failed (non-fatal)", { error: err.message });
+  // Fire the CRS letters-ready signal so U-02 emails the letters to the client
+  // (closes the gap where CRS clients got URLs but no delivery email). CRS PATH
+  // ONLY: the legacy PDF/analyzer path already fires U-02 via
+  // notifyAnalyzerComplete, and both paths flow through this same task — so
+  // gating on payload.crsResult prevents a double U-02 fire (double email) for
+  // legacy clients. No-op until GHL_LETTERS_READY_WEBHOOK_URL is set. Non-fatal.
+  if (payload.crsResult) {
+    try {
+      const { notifyLettersReady } = require("./ghl-webhook");
+      await notifyLettersReady({
+        contactId: result.contactId,
+        email: payload.contactData?.email,
+        fullName: payload.personal?.name,
+        urls: result.urls,
+        path: result.path,
+        creditSuggestions: payload.crsResult?.crmPayload?.suggestionSummary || ""
+      });
+    } catch (err) {
+      const { logWarn } = require("./logger");
+      logWarn("executeLetterDelivery: notifyLettersReady failed (non-fatal)", {
+        error: err.message
+      });
+    }
   }
 
   return result;

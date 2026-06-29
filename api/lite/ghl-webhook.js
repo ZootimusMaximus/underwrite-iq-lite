@@ -202,7 +202,10 @@ async function notifyLettersReady(params) {
     full_legal_name: params.fullName || "",
     contact_id: params.contactId || "",
     analyzer_status: "complete",
-    analyzer_path: params.path || ""
+    analyzer_path: params.path || "",
+    // U-02's email template has a credit_suggestions placeholder — fill it so the
+    // CRS funding email matches the analyzer one (Chris confirmed the key).
+    credit_suggestions: params.creditSuggestions || ""
   };
   // Flatten the funding_letter_url__* fields into the payload (same as
   // notifyAnalyzerComplete) so U-02 can email them straight from the webhook.
