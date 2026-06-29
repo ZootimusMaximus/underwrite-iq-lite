@@ -24,8 +24,10 @@
 const { logInfo, logWarn, logError } = require("./logger");
 const { updateContactCustomFields } = require("./ghl-contact-service");
 
-// GHL checkbox "true" is the option label, which for crs_paid is "CRS Paid".
-const CRS_PAID_TRUE = "CRS Paid";
+// crs_paid is a GHL CHECKBOX — its "checked" value is the option label inside an
+// ARRAY (["CRS Paid"]). updateContactCustomFields passes arrays through untouched
+// so GHL gets the multi-select shape it requires (a plain string no-ops the box).
+const CRS_PAID_CHECKED = ["CRS Paid"];
 
 function validateAuth(req) {
   const secret = process.env.CRS_PAYMENT_SECRET || process.env.CONTEXT_FETCHER_SECRET;
@@ -72,7 +74,7 @@ module.exports = async function handler(req, res) {
 
   // Build the field writes. crs_paid is always flipped; charge amount + consent
   // are recorded when provided so the contact carries the full charge context.
-  const fields = { crs_paid: CRS_PAID_TRUE };
+  const fields = { crs_paid: CRS_PAID_CHECKED };
   const amount = body.amount ?? (body.customData && body.customData.amount);
   if (amount !== undefined && amount !== null && amount !== "") {
     const num = Number(amount);

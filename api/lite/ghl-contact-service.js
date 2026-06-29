@@ -389,9 +389,12 @@ async function updateContactCustomFields(contactId, customFields) {
 
   // Convert custom fields object to GHL format
   // GHL expects: customFields: [{ key: "field_name", field_value: "value" }]
+  // CHECKBOX / multi-select fields take an ARRAY of option labels in the GHL v2
+  // API (e.g. crs_paid → ["CRS Paid"]); a plain string silently fails to check
+  // the box. So pass arrays through untouched and only String()-ify scalars.
   const customFieldsArray = Object.entries(customFields).map(([key, value]) => ({
     key,
-    field_value: String(value)
+    field_value: Array.isArray(value) ? value : String(value)
   }));
 
   const payload = {

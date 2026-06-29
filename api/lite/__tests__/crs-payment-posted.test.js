@@ -104,7 +104,7 @@ describe("crs-payment-posted handler", () => {
     assert.match(res.body.error, /Invalid/);
   });
 
-  it("flips crs_paid = 'CRS Paid' on a valid call", async () => {
+  it("flips crs_paid as the checkbox array ['CRS Paid'] on a valid call", async () => {
     const handler = loadHandler();
     const res = makeRes();
     await handler(makeReq({ contactId: "contact_123" }), res);
@@ -112,7 +112,8 @@ describe("crs-payment-posted handler", () => {
     assert.equal(res.body.ok, true);
     assert.equal(updateCalls.length, 1);
     assert.equal(updateCalls[0].contactId, "contact_123");
-    assert.equal(updateCalls[0].fields.crs_paid, "CRS Paid");
+    // CHECKBOX must be an array of option labels, not a plain string
+    assert.deepEqual(updateCalls[0].fields.crs_paid, ["CRS Paid"]);
   });
 
   it("records charge amount + consent when provided", async () => {
