@@ -8,6 +8,23 @@
  */
 
 /**
+ * Map full bureau name → the 2-letter abbreviation used in GHL letter fieldKeys
+ * (funding_letter_url__inquiry_cleanup__ex / __eq / __tu, etc).
+ *
+ * NOTE: do NOT use bureau.substring(0, 2) — "transunion" → "tr", but the GHL
+ * field is "__tu". That mismatch silently dropped every TransUnion letter URL.
+ */
+const BUREAU_ABBR = {
+  experian: "ex",
+  equifax: "eq",
+  transunion: "tu"
+};
+
+function bureauAbbr(bureau) {
+  return BUREAU_ABBR[String(bureau).toLowerCase()] || String(bureau).slice(0, 2).toLowerCase();
+}
+
+/**
  * buildDocuments(outcome, findings, normalized, consumerSignals)
  *
  * @returns {{ package, letters[], summary }}
@@ -49,7 +66,7 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
         bureau,
         round: 1,
         bundled: true,
-        fieldKey: `repair_letter_url__round_1__${bureau.substring(0, 2)}`
+        fieldKey: `repair_letter_url__round_1__${bureauAbbr(bureau)}`
       });
     }
 
@@ -59,7 +76,7 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
         type: "personal_info",
         bureau,
         round: null,
-        fieldKey: `repair_letter_url__personal_info_dispute__${bureau.substring(0, 2)}`
+        fieldKey: `repair_letter_url__personal_info_dispute__${bureauAbbr(bureau)}`
       });
     }
 
@@ -99,7 +116,7 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
         type: "inquiry_removal",
         bureau,
         round: null,
-        fieldKey: `funding_letter_url__inquiry_cleanup__${bureau.substring(0, 2)}`
+        fieldKey: `funding_letter_url__inquiry_cleanup__${bureauAbbr(bureau)}`
       });
     }
   }
@@ -110,7 +127,7 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
       type: "personal_info",
       bureau,
       round: null,
-      fieldKey: `funding_letter_url__personal_info_cleanup__${bureau.substring(0, 2)}`
+      fieldKey: `funding_letter_url__personal_info_cleanup__${bureauAbbr(bureau)}`
     });
   }
 
@@ -126,7 +143,7 @@ function buildDocuments(outcome, findings, normalized, consumerSignals) {
           bureau,
           round: 1,
           bundled: true,
-          fieldKey: `repair_letter_url__round_1__${bureau.substring(0, 2)}`
+          fieldKey: `repair_letter_url__round_1__${bureauAbbr(bureau)}`
         });
       }
     }

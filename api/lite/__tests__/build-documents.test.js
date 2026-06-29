@@ -98,7 +98,8 @@ test("buildDocuments: FUNDING_PLUS_REPAIR adds dispute specs for dirty bureaus",
   assert.equal(disputes[0].bureau, "transunion");
   assert.equal(disputes[0].round, 1);
   assert.equal(disputes[0].bundled, true);
-  assert.equal(disputes[0].fieldKey, "repair_letter_url__round_1__tr");
+  // TransUnion must map to the GHL "tu" suffix, NOT substring "tr" (bug #51).
+  assert.equal(disputes[0].fieldKey, "repair_letter_url__round_1__tu");
 
   // Summary mentions dirty bureaus
   assert.ok(result.summary.includes("dirty bureaus"));
@@ -112,7 +113,12 @@ test("buildDocuments: FUNDING_PLUS_REPAIR no dispute specs when all pulled burea
       equifax: { pulled: false, clean: false, count: 0, items: [] }
     }
   };
-  const result = buildDocuments("FUNDING_PLUS_REPAIR", [], makeNormalized(["transunion", "experian"]), consumerSignals);
+  const result = buildDocuments(
+    "FUNDING_PLUS_REPAIR",
+    [],
+    makeNormalized(["transunion", "experian"]),
+    consumerSignals
+  );
   const disputes = result.letters.filter(l => l.type === "dispute");
   assert.equal(disputes.length, 0);
   // Summary should not mention dirty bureaus
@@ -128,9 +134,11 @@ test("buildDocuments: summary describes letter counts", () => {
 test("buildDocuments: bureau key abbreviations correct", () => {
   const result = buildDocuments("REPAIR_ONLY", [], makeNormalized(), {});
   const keys = result.letters.map(l => l.fieldKey);
-  assert.ok(keys.some(k => k.includes("_ex")));
-  assert.ok(keys.some(k => k.includes("_eq")));
-  assert.ok(keys.some(k => k.includes("_tr")));
+  assert.ok(keys.some(k => k.endsWith("_ex")));
+  assert.ok(keys.some(k => k.endsWith("_eq")));
+  // transunion → "tu" to match the GHL field key, NOT substring "tr" (bug #51).
+  assert.ok(keys.some(k => k.endsWith("_tu")));
+  assert.ok(!keys.some(k => k.endsWith("_tr")));
 });
 
 // ============================================================================
