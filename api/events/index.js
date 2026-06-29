@@ -32,8 +32,15 @@ function validateAuth(authHeader) {
   const globalSecret = process.env.API_SECRET;
   const eventToken = process.env.EVENT_ROUTER_TOKEN;
 
-  // If neither secret is configured, skip auth (log warning once)
+  // If neither secret is configured: FAIL CLOSED in production. This is the main
+  // event bus (deposits, decisions, sales, analysis) — if both secrets are ever
+  // dropped from prod, an open bus accepts any unauthenticated POST. Dev/local
+  // (no NODE_ENV=production) keeps the open path for convenience.
   if (!globalSecret && !eventToken) {
+    if (process.env.NODE_ENV === "production") {
+      logError("Event router auth not configured in production — refusing all events");
+      return { ok: false, error: "Event router not configured" };
+    }
     logWarn("Event router auth not configured — API_SECRET and EVENT_ROUTER_TOKEN both missing");
     return { ok: true };
   }

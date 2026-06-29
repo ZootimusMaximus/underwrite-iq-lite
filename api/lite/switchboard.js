@@ -610,7 +610,11 @@ module.exports = async function handler(req, res) {
           recommendation: uw.fundable ? "FULL_FUNDING" : "REPAIR_ONLY",
           letters_ready: true,
           score: m.score || null,
-          utilization_pct: m.utilization || null,
+          // Metrics key is utilization_pct (m.utilization was always undefined),
+          // and the analysis-completed handler reads payload.utilization — so emit
+          // under `utilization`. Both ends were mismatched; cf_credit_utilization
+          // never populated.
+          utilization: m.utilization_pct || null,
           outcome_tier: uw.fundable ? "funding" : "repair",
           total_funding: t.total_combined_funding || 0
         },

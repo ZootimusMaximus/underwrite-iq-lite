@@ -59,7 +59,11 @@ async function handle(event) {
     }
   }
 
-  const ghlContactId = identity?.ghl_contact_id || contact.ghl_contact_id;
+  // upsertClient returns camelCase ghlContactId (see client-upsert.js + the
+  // analysis-completed handler). Reading snake_case here was always undefined,
+  // so any contact resolved by email/phone (no ghl_contact_id pre-set on the
+  // event) fell through to NO_GHL_CONTACT_ID and the decision was never written.
+  const ghlContactId = identity?.ghlContactId || contact.ghl_contact_id;
   if (!ghlContactId) {
     return { ok: false, error: "NO_GHL_CONTACT_ID" };
   }
