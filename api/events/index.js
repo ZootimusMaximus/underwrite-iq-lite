@@ -128,3 +128,6 @@ module.exports = async function handler(req, res) {
     });
   }
 };
+
+// Exposed for unit tests (the default export stays the Vercel handler function).
+module.exports.validateAuth = validateAuth;
