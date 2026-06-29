@@ -482,3 +482,78 @@ test("deliverLetters ignores crsDocuments when letters array is empty", async ()
   assert.equal(result.path, "fundable");
   assert.equal(result.letters.generated, 6); // legacy fundable = 6 letters
 });
+
+// ============================================================================
+// updateLetterUrlsFromCRS — regression for the double-translation bug (06-29)
+// The urls passed in are keyed by filename; fieldKeyMap translates them to FINAL
+// GHL field keys. The function must write those final keys straight through
+// (via updateContactCustomFields), NOT re-route through updateLetterUrls which
+// re-maps from shorthand keys and would drop every CRS letter URL + null path.
+// ============================================================================
+test("updateLetterUrlsFromCRS writes translated GHL field keys (not shorthand)", () => {
+  const ghlPath = require.resolve("../ghl-contact-service");
+  const ldPath = require.resolve("../letter-delivery");
+
+  let captured = null;
+  const origGhl = require.cache[ghlPath];
+  const origLd = require.cache[ldPath];
+  delete require.cache[ghlPath];
+  delete require.cache[ldPath];
+  require.cache[ghlPath] = {
+    id: ghlPath,
+    filename: ghlPath,
+    loaded: true,
+    exports: {
+      // updateLetterUrlsFromCRS must call THIS one with the final field keys.
+      updateContactCustomFields: (contactId, fields) => {
+        captured = { fn: "updateContactCustomFields", contactId, fields };
+        return Promise.resolve({ ok: true });
+      },
+      // If the bug regresses, the call would route here and re-map from shorthand.
+      updateLetterUrls: (contactId, fields) => {
+        captured = { fn: "updateLetterUrls", contactId, fields };
+        return Promise.resolve({ ok: true });
+      },
+      createOrUpdateContact: () => Promise.resolve({ ok: true })
+    }
+  };
+
+  const { updateLetterUrlsFromCRS } = require("../letter-delivery");
+
+  const urls = {
+    inquiry_ex: "https://blob/inquiry_ex.pdf",
+    inquiry_tu: "https://blob/inquiry_tu.pdf"
+  };
+  const fieldKeyMap = {
+    inquiry_ex: "funding_letter_url__inquiry_cleanup__ex",
+    inquiry_tu: "funding_letter_url__inquiry_cleanup__tu"
+  };
+
+  return updateLetterUrlsFromCRS("contact123", urls, fieldKeyMap, "funding").then(() => {
+    // Restore module cache before assertions can throw.
+    delete require.cache[ghlPath];
+    delete require.cache[ldPath];
+    if (origGhl) require.cache[ghlPath] = origGhl;
+    if (origLd) require.cache[ldPath] = origLd;
+
+    assert.ok(captured, "a GHL write should have happened");
+    assert.equal(
+      captured.fn,
+      "updateContactCustomFields",
+      "must NOT route through updateLetterUrls"
+    );
+    // Final GHL field keys present (TU included via the bug #51 fix upstream).
+    assert.equal(
+      captured.fields["funding_letter_url__inquiry_cleanup__ex"],
+      "https://blob/inquiry_ex.pdf"
+    );
+    assert.equal(
+      captured.fields["funding_letter_url__inquiry_cleanup__tu"],
+      "https://blob/inquiry_tu.pdf"
+    );
+    // analyzer_path must be the real path, not null.
+    assert.equal(captured.fields.analyzer_path, "funding");
+    assert.equal(captured.fields.letters_ready, "true");
+    assert.equal(captured.fields.analyzer_status, "complete");
+  });
+});

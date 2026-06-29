@@ -5,7 +5,11 @@
 
 const { generateLetters } = require("./letter-generator");
 const { uploadAllPdfs } = require("./storage");
-const { updateLetterUrls, createOrUpdateContact } = require("./ghl-contact-service");
+const {
+  updateLetterUrls,
+  updateContactCustomFields,
+  createOrUpdateContact
+} = require("./ghl-contact-service");
 const { logInfo, logError, logWarn } = require("./logger");
 const { generateAllSummaryDocuments } = require("./crs/summary-doc-generator");
 
@@ -484,7 +488,12 @@ async function updateLetterUrlsFromCRS(contactId, urls, fieldKeyMap, path) {
   fields.letters_ready = "true";
   fields.analyzer_status = "complete";
 
-  return updateLetterUrls(contactId, fields, null);
+  // `fields` is ALREADY keyed by final GHL field names (we translated via
+  // fieldKeyMap above), so write it straight through. Do NOT route through
+  // updateLetterUrls — that function re-maps from shorthand keys (inquiry_ex,
+  // personal_info_ex…) and would match none of our translated keys, silently
+  // dropping every CRS letter URL and nulling analyzer_path. (Bug found 06-29.)
+  return updateContactCustomFields(contactId, fields);
 }
 
 /**
@@ -515,5 +524,6 @@ function deliverLettersAsync(params) {
 module.exports = {
   deliverLetters,
   deliverLettersAsync,
-  generateLettersFromCRS
+  generateLettersFromCRS,
+  updateLetterUrlsFromCRS
 };

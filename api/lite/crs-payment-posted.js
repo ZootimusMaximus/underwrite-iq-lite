@@ -32,6 +32,13 @@ const CRS_PAID_CHECKED = ["CRS Paid"];
 function validateAuth(req) {
   const secret = process.env.CRS_PAYMENT_SECRET || process.env.CONTEXT_FETCHER_SECRET;
   if (!secret) {
+    // FAIL CLOSED in production — this endpoint flips a payment-state field, so
+    // never allow anonymous POSTs on a live deploy if the secret is unset.
+    // Dev/local keeps the open path for convenience.
+    if (process.env.NODE_ENV === "production") {
+      logError("crs-payment-posted: no secret configured — refusing to serve in production");
+      return { ok: false };
+    }
     logWarn("crs-payment-posted: no secret set — running unauthenticated (dev mode)");
     return { ok: true };
   }

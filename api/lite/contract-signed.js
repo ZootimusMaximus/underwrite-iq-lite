@@ -30,6 +30,13 @@ const CONTRACT_SIGNED_CHECKED = ["Contract Funding Signed"];
 function validateAuth(req) {
   const secret = process.env.CONTRACT_SIGNED_SECRET || process.env.CONTEXT_FETCHER_SECRET;
   if (!secret) {
+    // FAIL CLOSED in production — this endpoint flips a funding-state field, so
+    // never allow anonymous POSTs on a live deploy if the secret is unset.
+    // Dev/local keeps the open path for convenience.
+    if (process.env.NODE_ENV === "production") {
+      logError("contract-signed: no secret configured — refusing to serve in production");
+      return { ok: false };
+    }
     logWarn("contract-signed: no secret set — running unauthenticated (dev mode)");
     return { ok: true };
   }
