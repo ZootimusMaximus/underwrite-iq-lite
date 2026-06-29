@@ -199,8 +199,10 @@ test("getNextAction: all outcome tiers", () => {
 // ============================================================================
 
 test("table names: have defaults", () => {
-  assert.equal(TABLE_CLIENTS, "Clients");
-  assert.equal(TABLE_SNAPSHOTS, "Credit Snapshots");
+  // Defaults must match the live FUNDHUB MATRIX base (all-caps) so writes don't
+  // 404 if the env var is ever missing.
+  assert.equal(TABLE_CLIENTS, "CLIENTS");
+  assert.equal(TABLE_SNAPSHOTS, "SNAPSHOTS");
 });
 
 // ============================================================================
@@ -234,8 +236,8 @@ const {
 } = require("../crs/airtable-sync");
 
 test("tradeline table names: have defaults", () => {
-  assert.equal(TABLE_PERSONAL_TRADELINES, "Personal Tradelines");
-  assert.equal(TABLE_BUSINESS_TRADELINES, "Business Tradelines");
+  assert.equal(TABLE_PERSONAL_TRADELINES, "PERSONAL_TRADELINES");
+  assert.equal(TABLE_BUSINESS_TRADELINES, "BUSINESS_TRADELINES");
 });
 
 // ============================================================================

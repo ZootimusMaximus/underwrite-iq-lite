@@ -26,14 +26,16 @@ const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_API_BASE = "https://api.airtable.com/v0";
 
-// Table names (configurable via env, with sensible defaults)
-const TABLE_CLIENTS = process.env.AIRTABLE_TABLE_CLIENTS || "Clients";
-const TABLE_SNAPSHOTS = process.env.AIRTABLE_TABLE_SNAPSHOTS || "Credit Snapshots";
-const TABLE_APPLICATIONS = process.env.AIRTABLE_TABLE_APPLICATIONS || "Applications";
+// Table names (configurable via env). Defaults MUST match the live FUNDHUB MATRIX
+// base table names (all-caps) — a mismatched default silently 404s every write if
+// the env var is ever missing (e.g. a new/staging deploy without full env config).
+const TABLE_CLIENTS = process.env.AIRTABLE_TABLE_CLIENTS || "CLIENTS";
+const TABLE_SNAPSHOTS = process.env.AIRTABLE_TABLE_SNAPSHOTS || "SNAPSHOTS";
+const TABLE_APPLICATIONS = process.env.AIRTABLE_TABLE_APPLICATIONS || "APPLICATIONS";
 const TABLE_PERSONAL_TRADELINES =
-  process.env.AIRTABLE_TABLE_PERSONAL_TRADELINES || "Personal Tradelines";
+  process.env.AIRTABLE_TABLE_PERSONAL_TRADELINES || "PERSONAL_TRADELINES";
 const TABLE_BUSINESS_TRADELINES =
-  process.env.AIRTABLE_TABLE_BUSINESS_TRADELINES || "Business Tradelines";
+  process.env.AIRTABLE_TABLE_BUSINESS_TRADELINES || "BUSINESS_TRADELINES";
 
 // ---------------------------------------------------------------------------
 // Helpers

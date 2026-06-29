@@ -283,7 +283,9 @@ module.exports = async function handler(req, res) {
         resultType: redirect.resultType,
         creditScore: result.consumerSignals?.scores?.median || 0,
         totalFunding: result.preapprovals?.totalCombined || 0,
-        creditSuggestions: result.crmPayload?.suggestionSummary || "",
+        // Canonical key is crm_payload (snake_case) — see resultType read above.
+        // The crmPayload camelCase alias also exists today, but don't depend on it.
+        creditSuggestions: result.crm_payload?.suggestionSummary || "",
         refId
       });
 
