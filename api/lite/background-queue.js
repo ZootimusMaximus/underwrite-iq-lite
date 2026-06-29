@@ -204,11 +204,24 @@ async function executeLetterDelivery(payload) {
   if (payload.crsResult) {
     try {
       const { notifyLettersReady } = require("./ghl-webhook");
+      // result.urls is keyed by FILENAME (storage.js). U-02's field map expects
+      // the GHL field keys (e.g. funding_letter_url__inquiry_cleanup__ex) 1:1, so
+      // translate filename → field key via result.fieldKeyMap before flattening
+      // into the webhook payload. Without this, the payload would carry filename
+      // keys and U-02's letter fields would never populate.
+      let letterUrls = result.urls || {};
+      if (result.fieldKeyMap && result.urls) {
+        letterUrls = {};
+        for (const [fileKey, url] of Object.entries(result.urls)) {
+          const fieldKey = result.fieldKeyMap[fileKey];
+          if (fieldKey) letterUrls[fieldKey] = url;
+        }
+      }
       await notifyLettersReady({
         contactId: result.contactId,
         email: payload.contactData?.email,
         fullName: payload.personal?.name,
-        urls: result.urls,
+        urls: letterUrls,
         path: result.path,
         creditSuggestions: payload.crsResult?.crmPayload?.suggestionSummary || ""
       });
