@@ -63,14 +63,22 @@ function buildProxyForCity(city, opts = {}) {
     ? `${DEFAULT_USER}-cc-${country}-city-${cityToken}`
     : `${DEFAULT_USER}-cc-${country}`;
 
+  // `authString` is the raw user:pass for clients that take credentials
+  // separately (e.g. curl -U, or a browser proxy-auth prompt). `proxyUrl`
+  // embeds them in URL userinfo, so it MUST be percent-encoded — the real
+  // password contains "+", which several HTTP/proxy clients decode to a space
+  // in unencoded userinfo (and "@"/":"/"/"" would break the URL outright).
+  // encodeURIComponent is a no-op for ordinary alphanumerics, so this is safe
+  // for every password while fixing the special-char case.
   const authString = `${username}:${password}`;
+  const proxyUrl = `http://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${DEFAULT_HOST}:${DEFAULT_PORT}`;
   return {
     host: DEFAULT_HOST,
     port: DEFAULT_PORT,
     username,
     password,
     authString,
-    proxyUrl: `http://${authString}@${DEFAULT_HOST}:${DEFAULT_PORT}`,
+    proxyUrl,
     country,
     city: cityToken || null,
     cityTargeted: Boolean(cityToken)

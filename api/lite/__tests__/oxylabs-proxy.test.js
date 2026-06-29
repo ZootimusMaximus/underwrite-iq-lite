@@ -59,6 +59,16 @@ describe("buildProxyForCity", () => {
     );
   });
 
+  it("URL-encodes special chars in the proxy URL (real password has '+')", () => {
+    const p = buildProxyForCity("Mesa", { password: "Millionaire95+" });
+    // raw forms preserved for the -U / separate-auth path
+    assert.equal(p.password, "Millionaire95+");
+    assert.equal(p.authString, "customer-fundhub_uiyg4-cc-US-city-mesa:Millionaire95+");
+    // but the URL userinfo is percent-encoded so '+' can't be read as a space
+    assert.ok(p.proxyUrl.includes("Millionaire95%2B"), "password should be %-encoded in URL");
+    assert.ok(!/Millionaire95\+@/.test(p.proxyUrl), "raw '+' must not appear in URL userinfo");
+  });
+
   it("throws when no password is configured", () => {
     const orig = process.env.OXYLABS_PROXY_PASSWORD;
     delete process.env.OXYLABS_PROXY_PASSWORD;
