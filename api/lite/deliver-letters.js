@@ -92,15 +92,15 @@ module.exports = async function handler(req, res) {
       c.contactName ||
       c.fullNameLowerCase ||
       "";
-    personal = {
-      name,
-      address: {
-        addressLine1: c.address1 || c.address || "",
-        city: c.city || "",
-        state: c.state || "",
-        postalCode: c.postalCode || ""
-      }
-    };
+    // The letter generators draw `address` as a single STRING (same shape the pull
+    // builds: "line1, city, state zip"). Passing a structured object crashes pdf-lib
+    // (drawText needs a string). Compose the one-line string here.
+    const cityState = [c.city, c.state].filter(Boolean).join(", ");
+    const address = [c.address1 || c.address, cityState, c.postalCode]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    personal = { name, address };
   } catch (err) {
     logError("deliver-letters: GHL lookup threw", { contactId, error: err.message });
     return res.status(502).json({ ok: false, error: "Contact lookup failed" });

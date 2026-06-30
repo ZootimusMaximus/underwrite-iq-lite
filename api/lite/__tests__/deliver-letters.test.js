@@ -120,6 +120,10 @@ describe("deliver-letters handler", () => {
     assert.ok(deliverCalledWith);
     assert.equal(deliverCalledWith.contactId, "GrpVLpkbfK0SxVuSYWMT");
     assert.equal(deliverCalledWith.personal.name, "Chris S");
+    // address MUST be a string ("line, city, state zip") — an object crashes the
+    // pdf-lib letter generators (drawText needs a string).
+    assert.equal(typeof deliverCalledWith.personal.address, "string");
+    assert.match(deliverCalledWith.personal.address, /Gilbert, AZ 85233/);
     assert.equal(deliverCalledWith.crsDocuments.package, "repair");
     assert.ok(deliverCalledWith.crsDocuments.letters.length > 0);
     // TransUnion must map to the "tu" suffix (bug #51) in the generated specs.
