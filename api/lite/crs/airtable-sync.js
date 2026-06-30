@@ -541,13 +541,18 @@ async function syncCRSResultToAirtable(crsResult, clientRecordId, email, opts) {
     return { ok: false, error: "not_configured", clientUpdated: false, snapshotCreated: false };
   }
 
-  let resolvedRecordId = clientRecordId;
+  // Only trust a real Airtable record id (rec + 14 alphanumerics). A bad/placeholder
+  // id passed from the funnel (e.g. an unfilled "recXXXXXXXXXX") would PATCH a
+  // non-existent record → 404. Treat anything malformed as missing and fall back to
+  // the email lookup instead.
+  const VALID_REC_ID = /^rec[A-Za-z0-9]{14}$/;
+  let resolvedRecordId = VALID_REC_ID.test(String(clientRecordId || "")) ? clientRecordId : null;
   let clientUpdated = false;
   let snapshotCreated = false;
   let snapshotRecordId = null;
 
   try {
-    // If no record ID provided, try email lookup
+    // If no valid record ID, try email lookup
     if (!resolvedRecordId && email) {
       resolvedRecordId = await findClientByEmail(email);
     }
