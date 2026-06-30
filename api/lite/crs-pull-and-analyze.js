@@ -305,29 +305,11 @@ module.exports = async function handler(req, res) {
       }).catch(() => {});
     }
 
-    // Letter delivery (queued)
-    if (
-      result.documents?.letters?.length > 0 &&
-      result.outcome !== "FRAUD_HOLD" &&
-      result.outcome !== "MANUAL_REVIEW"
-    ) {
-      enqueueTask("deliver_letters", {
-        contactId: null,
-        contactData: {
-          email: sanitized.email || formData?.email,
-          phone: sanitized.phone || formData?.phone
-        },
-        bureaus: null,
-        underwrite: {
-          fundable: redirectPath === "funding",
-          personal: { total_personal_funding: result.preapprovals?.totalPersonal || 0 },
-          business: { business_funding: result.preapprovals?.totalBusiness || 0 }
-        },
-        personal: { name: submittedName, address: submittedAddress || null, ssn: ssnClean },
-        crsDocuments: result.documents,
-        crsResult: result
-      });
-    }
+    // Letters are DECOUPLED from the soft pull (2026-06-30 direction): the pull
+    // produces data only. Repair dispute letters are the on-call DOWNSELL
+    // deliverable and fire via POST /api/lite/deliver-letters, triggered by the
+    // GHL downsell workflow (funding cleanup letters fire on funding purchase).
+    // The pull no longer enqueues deliver_letters.
 
     // Airtable sync (queued) — pass crs_pull_scope so snapshot knows whether
     // business was expected and whether it failed
