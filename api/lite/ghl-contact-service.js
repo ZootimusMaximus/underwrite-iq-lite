@@ -414,12 +414,27 @@ async function updateContactCustomFields(contactId, customFields) {
 
     if (!resp.ok) {
       const text = await resp.text().catch(() => "");
+      // Diagnostic: log the field keys sent + flag any malformed values so a 422
+      // (GHL value-validation failure) points straight at the offending field.
+      const suspicious = customFieldsArray
+        .filter(
+          f =>
+            f.field_value == null ||
+            f.field_value === "" ||
+            f.field_value === "undefined" ||
+            f.field_value === "null" ||
+            typeof f.field_value === "object"
+        )
+        .map(f => `${f.key}=${JSON.stringify(f.field_value)}`);
       logError("GHL custom field update failed", new Error(text), {
         status: resp.status,
         contactId,
-        fieldCount: customFieldsArray.length
+        fieldCount: customFieldsArray.length,
+        fieldKeys: customFieldsArray.map(f => f.key),
+        suspiciousValues: suspicious,
+        ghlBody: text.slice(0, 500)
       });
-      return { ok: false, error: `GHL API error: ${resp.status}` };
+      return { ok: false, error: `GHL API error: ${resp.status}`, ghlBody: text.slice(0, 500) };
     }
 
     const result = await resp.json();
