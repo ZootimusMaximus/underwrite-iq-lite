@@ -32,7 +32,7 @@ const REDIRECT_PATHS = {
  */
 function buildCrmPayload(options) {
   const {
-    normalized,
+    // normalized no longer destructured — bureau_count (its only use) was dropped (Q2).
     consumerSignals,
     businessSignals,
     outcomeResult,
