@@ -21,10 +21,11 @@
 
 const { logInfo, logWarn, logError } = require("./logger");
 const { getGHLContact } = require("./ghl-contact-service");
-const { buildDocuments } = require("./crs/build-documents");
 const { deliverLetters } = require("./letter-delivery");
 
 const ALL_BUREAUS = ["transunion", "experian", "equifax"];
+// Full bureau name → the 2-letter GHL fieldKey suffix (transunion → "tu", bug #51).
+const BUREAU_ABBR = { experian: "ex", equifax: "eq", transunion: "tu" };
 
 function validateAuth(req) {
   const secret = process.env.DELIVER_LETTERS_SECRET || process.env.CONTEXT_FETCHER_SECRET;
@@ -106,15 +107,50 @@ module.exports = async function handler(req, res) {
     return res.status(502).json({ ok: false, error: "Contact lookup failed" });
   }
 
-  // Build the letter specs. Reuse buildDocuments so the field-key mapping (incl the
-  // transunion → "tu" fix) is identical to the pull path. For a repair downsell we
-  // dispute the given bureaus (default all three); funding builds cleanup letters.
-  // inquiries left empty here — funding inquiry letters need pull-time inquiry data,
-  // so the funding path currently emits personal-info cleanup only (repair is the
-  // launch use; funding can be enriched later).
-  const outcome = type === "funding" ? "FULL_FUNDING" : "REPAIR_ONLY";
-  const normalized = { meta: { availableBureaus: bureaus }, inquiries: [] };
-  const crsDocuments = buildDocuments(outcome, [], normalized, {});
+  // Build the exact letter sets each downsell trigger expects (2026-07-01):
+  //   funding (C-06 branch): Personal Info Cleanup + Inquiry Cleanup per bureau (6)
+  //   repair  (DS-02 DIY):   Personal Info Dispute + Round 1/2/3 per bureau (12)
+  // Field keys use the tu/ex/eq abbreviations (transunion → "tu", bug #51). CRS
+  // already ran on the call, so no re-pull is needed here.
+  const letters = [];
+  for (const b of bureaus) {
+    const ab = BUREAU_ABBR[b] || b.slice(0, 2);
+    if (type === "funding") {
+      letters.push({
+        type: "personal_info",
+        bureau: b,
+        round: null,
+        fieldKey: `funding_letter_url__personal_info_cleanup__${ab}`
+      });
+      letters.push({
+        type: "inquiry_removal",
+        bureau: b,
+        round: null,
+        fieldKey: `funding_letter_url__inquiry_cleanup__${ab}`
+      });
+    } else {
+      letters.push({
+        type: "personal_info",
+        bureau: b,
+        round: null,
+        fieldKey: `repair_letter_url__personal_info_dispute__${ab}`
+      });
+      for (const round of [1, 2, 3]) {
+        letters.push({
+          type: "dispute",
+          bureau: b,
+          round,
+          bundled: true,
+          fieldKey: `repair_letter_url__round_${round}__${ab}`
+        });
+      }
+    }
+  }
+  const crsDocuments = {
+    package: type === "funding" ? "funding" : "repair",
+    letters,
+    summaryDocuments: []
+  };
 
   if (!crsDocuments.letters?.length) {
     return res

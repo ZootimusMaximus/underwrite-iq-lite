@@ -71,6 +71,17 @@ async function createOrUpdateContact(contactData) {
       key: "analyzer_result_type",
       field_value: contactData.resultType
     });
+    // cf_analyzer_recommendation (2026-07-01): the field C-06 (CRS Results Router)
+    // and the S/BS workflows actually branch on. Translate the result type to the
+    // three routing values: funding | repair | disqualified.
+    //   funding (full-funding / funding-plus-repair) → funding
+    //   repair (repair-only)                          → repair
+    //   hold (decline / fraud / manual)               → disqualified
+    const RECOMMENDATION_MAP = { funding: "funding", repair: "repair", hold: "disqualified" };
+    customFields.push({
+      key: "cf_analyzer_recommendation",
+      field_value: RECOMMENDATION_MAP[contactData.resultType] || "disqualified"
+    });
   }
 
   if (contactData.creditScore) {
