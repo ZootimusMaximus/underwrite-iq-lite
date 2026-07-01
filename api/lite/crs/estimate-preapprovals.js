@@ -44,11 +44,11 @@ const _BUREAU_CONFIDENCE_MODIFIER = {
 
 const UTILIZATION_MODIFIER = {
   excellent: 1.0,
-  good: 0.95,
-  moderate: 0.8,
+  good: 0.9,
+  moderate: 0.75,
   high: 0.6,
   critical: 0.4,
-  unknown: 0.8
+  unknown: 0.75
 };
 
 const _INQUIRY_PRESSURE_MODIFIER = {

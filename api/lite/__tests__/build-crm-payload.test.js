@@ -47,7 +47,8 @@ test("buildCrmPayload: full stack structure", () => {
   assert.equal(payload.redirect.path, "funding");
   assert.equal(payload.customFields.analyzer_path, "funding");
   assert.equal(payload.customFields.analyzer_status, "complete");
-  assert.equal(payload.customFields.outcome_tier, "FULL_FUNDING");
+  // outcome_tier dropped (Q2, 2026-07-01) — Analyzer-era, no workflow reads it.
+  assert.equal(payload.customFields.outcome_tier, undefined);
 });
 
 test("buildCrmPayload: repair path", () => {
@@ -101,7 +102,9 @@ test("buildCrmPayload: scores populated", () => {
 test("buildCrmPayload: custom fields include business flag", () => {
   const payload = buildCrmPayload(makeOptions());
   assert.equal(payload.customFields.business_available, true);
-  assert.equal(payload.customFields.bureau_count, 3);
+  // bureau_count / utilization_pct dropped (Q2, 2026-07-01) — Analyzer-era dead fields.
+  assert.equal(payload.customFields.bureau_count, undefined);
+  assert.equal(payload.customFields.utilization_pct, undefined);
 });
 
 test("REDIRECT_PATHS: correct mapping", () => {

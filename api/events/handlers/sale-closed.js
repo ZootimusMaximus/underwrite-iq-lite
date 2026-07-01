@@ -32,7 +32,7 @@
 
 const { logInfo, logWarn, logError } = require("../../lite/logger");
 const { upsertClient } = require("./client-upsert");
-const { updateContactCustomFields } = require("../../lite/ghl-contact-service");
+const { updateContactCustomFields, addContactTags } = require("../../lite/ghl-contact-service");
 
 // ---------------------------------------------------------------------------
 // Config
@@ -292,11 +292,33 @@ async function handle(event) {
   if (salesOutcomeValue) {
     customFields.sales_outcome = salesOutcomeValue;
   } else {
-    logWarn("sale-closed: no sales_outcome mapping for service family — S-06/S-07 will not fire", {
+    // Q1 (2026-07-01): products are only funding or repair. An unrecognized one
+    // shouldn't happen — but never let a weird sale fail silently. Tag it +
+    // create an ops task so a human catches it (not just a log line).
+    logWarn("sale-closed: unrecognized service_selected — flagging for human review", {
       ghlContactId,
       serviceFamily,
       service_selected
     });
+    await addContactTags(ghlContactId, ["error:sale-unknown-product"]);
+    const unknownTaskFields = {
+      task_type: "sale_unknown_product_review",
+      priority: "high",
+      status: "open",
+      ghl_contact_id: ghlContactId,
+      client_master_key: clientMasterKey || "",
+      description: [
+        `Sale closed with an unrecognized product: "${service_selected}".`,
+        `Expected funding or repair. sales_outcome was NOT written, so S-06/S-07 did not fire.`,
+        `Action required: confirm the product + record the correct sale.`,
+        `Event ID: ${event_id}`
+      ].join(" "),
+      created_at: now,
+      correlation_id: correlation_id || ""
+    };
+    if (airtableClientRecordId) unknownTaskFields["Client"] = [airtableClientRecordId];
+    const unknownTask = await createOpsTask(unknownTaskFields);
+    opsTaskRecordId = opsTaskRecordId || unknownTask.recordId || null;
   }
 
   if (crossLaneFlag) {

@@ -127,21 +127,21 @@ test("getBusinessOverlayModifier: all brackets", () => {
 
 test("estimatePreapprovals: full stack, clean modifiers", () => {
   const cs = makeConsumerSignals();
-  // v2: outcomeMod=1.0, utilMod=0.95 (good), thinMod=1.0
-  // Card: 15000 * 5.5 = 82500, 82500 * 1.0 * 0.95 * 1.0 = 78375
+  // v2: outcomeMod=1.0, utilMod=0.9 (good, doc-aligned Q9), thinMod=1.0
+  // Card: 15000 * 5.5 = 82500, 82500 * 1.0 * 0.9 * 1.0 = 74250
   const result = estimatePreapprovals(cs, null, "FULL_FUNDING");
 
   assert.equal(result.personalCard.base, 82500);
-  assert.equal(result.personalCard.final, 78375);
+  assert.equal(result.personalCard.final, 74250);
   assert.equal(result.personalCard.eligible, true);
 
-  // Loan: 25000 * 3.0 = 75000, 75000 * 0.95 = 71250
+  // Loan: 25000 * 3.0 = 75000, 75000 * 0.9 = 67500
   assert.equal(result.personalLoan.base, 75000);
-  assert.equal(result.personalLoan.final, 71250);
+  assert.equal(result.personalLoan.final, 67500);
   assert.equal(result.personalLoan.eligible, true);
 
   assert.equal(result.suppressedByOutcome, false);
-  assert.equal(result.totalPersonal, 78375 + 71250);
+  assert.equal(result.totalPersonal, 74250 + 67500);
 });
 
 // ============================================================================
@@ -227,12 +227,12 @@ test("estimatePreapprovals: business with mature company", () => {
   const cs = makeConsumerSignals();
   const bs = makeBusinessSignals();
   // v2: cardBase=82500, ageMult=2.0, businessBase=165000
-  // bizUtilMod=0.95 (good), outcomeMod=1.0 → final = floor(165000 * 0.95 * 1.0) = 156750
+  // bizUtilMod=0.9 (good, doc-aligned Q9), outcomeMod=1.0 → floor(165000 * 0.9 * 1.0) = 148500
   const result = estimatePreapprovals(cs, bs, "FULL_FUNDING");
 
   assert.equal(result.business.base, 165000);
   assert.equal(result.business.multiplier, 2.0);
-  assert.equal(result.business.final, Math.floor(165000 * 0.95 * 1.0));
+  assert.equal(result.business.final, Math.floor(165000 * 0.9 * 1.0));
   assert.equal(result.business.capReason, "utilization_based");
   assert.equal(result.business.eligible, true);
   assert.ok(result.totalBusiness > 0);

@@ -93,11 +93,10 @@ function buildCrmPayload(options) {
       analyzer_status: "complete",
       credit_score: cs.scores.median,
       total_funding_estimate: preapprovals.totalCombined,
-      outcome_tier: outcome,
-      bureau_count: normalized.meta.bureauCount,
-      utilization_pct: cs.utilization.pct,
       business_available: businessSignals?.available || false,
-      letters_ready: "false" // Updated to 'true' after letter-delivery.js runs
+      // outcome_tier / bureau_count / utilization_pct removed (Q2, 2026-07-01):
+      // Analyzer-era fields — the Analyzer is decommissioned, no workflow reads them.
+      letters_ready: "false" // downsell field; not read until the downsell is built
     }
   };
 }

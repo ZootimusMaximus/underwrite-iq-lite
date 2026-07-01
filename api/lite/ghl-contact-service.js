@@ -221,6 +221,36 @@ async function updateContact(contactId, updateData) {
 }
 
 // ----------------------------------------------------------------------------
+// Add tags to a contact (POST /contacts/{id}/tags ADDS — does not replace).
+// Use this instead of updateContact({tags}), which would overwrite existing tags.
+// ----------------------------------------------------------------------------
+async function addContactTags(contactId, tags) {
+  const key = getApiKey();
+  if (!key) return { ok: false, error: "No API key" };
+  const list = (Array.isArray(tags) ? tags : [tags]).filter(Boolean);
+  if (!list.length) return { ok: true, skipped: true };
+  try {
+    const resp = await fetch(`${getApiBase()}/contacts/${contactId}/tags`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        Version: API_VERSION
+      },
+      body: JSON.stringify({ tags: list })
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      return { ok: false, error: `Add tags failed: ${resp.status} ${text.slice(0, 120)}` };
+    }
+    return { ok: true, contactId, tags: list };
+  } catch (err) {
+    logError("GHL add tags exception", err, { contactId });
+    return { ok: false, error: err.message };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // Create Affiliate from Contact
 // ----------------------------------------------------------------------------
 async function createAffiliate(contactId, campaignId = null) {
@@ -514,5 +544,6 @@ module.exports = {
   createContactAndAffiliate,
   parseFullName,
   updateContactCustomFields,
-  updateLetterUrls
+  updateLetterUrls,
+  addContactTags
 };

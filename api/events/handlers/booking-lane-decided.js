@@ -65,9 +65,8 @@ async function handle(event) {
   // ---- 2. Build GHL field writes ----
   const customFields = {
     cf_booking_lane: booking_lane,
-    // Sales call is always required per spec section 3.
-    // cf_precall_backend_active controls optional pre-call selling (feature flag).
-    cf_call_required: "true",
+    // cf_call_required removed (Q4, 2026-07-01): dead Analyzer-era gating field,
+    // no workflow reads it.
     cf_last_canonical_event: "fundhub.booking.lane.decided",
     cf_last_canonical_event_ts: now
   };

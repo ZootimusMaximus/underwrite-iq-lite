@@ -111,7 +111,8 @@ async function handle(event) {
 
   // ---- 2. Build GHL field writes ----
   const customFields = {
-    cf_analysis_required: "true",
+    // cf_analysis_required removed (Q4, 2026-07-01): dead Analyzer-era gating field,
+    // no workflow reads it.
     cf_analysis_method: method,
     cf_analysis_request_id: analysis_request_id,
     cf_last_canonical_event: "fundhub.analysis.requested",
