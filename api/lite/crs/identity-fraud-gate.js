@@ -199,7 +199,6 @@ function checkFileIntegrity(bureaus) {
 function runIdentityAndFraudGate(normalized, submittedName, _submittedAddress, referenceDate) {
   const { identity, bureaus, fraudFinders, securityFreezes, fraudAlertsOnFile } = normalized;
   const reasons = [];
-  let fraudSignalCount = 0;
   let warningCount = 0;
 
   // 1. Name match
@@ -219,11 +218,12 @@ function runIdentityAndFraudGate(normalized, submittedName, _submittedAddress, r
     warningCount++;
   }
 
-  // 4. Fraud signals (TU fraudFinders)
+  // 4. Fraud signals (TU fraudFinders) — INFORMATIONAL ONLY (Q10). These no longer
+  // drive a hold; only the credit-report fraud-alert boolean does. Kept as reasons
+  // for visibility/audit.
   const fraudResult = checkFraudSignals(fraudFinders);
   if (!fraudResult.ok) {
     reasons.push(...fraudResult.flags);
-    fraudSignalCount = fraudResult.flags.length;
   }
 
   // 5. File integrity
@@ -255,11 +255,17 @@ function runIdentityAndFraudGate(normalized, submittedName, _submittedAddress, r
     };
   }
 
-  // Consumer fraud alert on file → MANUAL_REVIEW (hard blocker for funding)
+  // Q10 (2026-07-01): the ONLY thing that counts as fraud is the credit-report
+  // fraud alert (a boolean). No fraud score, no threshold, no OFAC, no multi-signal
+  // logic. A fraud alert is a RESOLVABLE hold, not a disqualifier — it's common on
+  // a fresh pull. Set FRAUD_HOLD and route to the resolution process; do NOT
+  // dead-end the file (resolvable: true signals downstream this is a step, not a
+  // block). The old fraudFinders score/tumbling FRAUD_HOLD logic is removed.
   if (fraudAlertResult.detected) {
     return {
       passed: false,
-      outcome: "MANUAL_REVIEW",
+      outcome: "FRAUD_HOLD",
+      resolvable: true,
       reasons,
       confidence: "high",
       fraudAlertOnFile: {
@@ -268,15 +274,6 @@ function runIdentityAndFraudGate(normalized, submittedName, _submittedAddress, r
         types: fraudAlertResult.types
       }
     };
-  }
-
-  // Strong fraud signals → FRAUD_HOLD
-  const hasHighRisk = (fraudResult.flags || []).includes("HIGH_FRAUD_RISK_SCORE");
-  const hasTumbling = (fraudResult.flags || []).includes("TUMBLING_RISK");
-  const isFraudHold = fraudSignalCount >= 2 || (hasHighRisk && hasTumbling);
-
-  if (isFraudHold) {
-    return { passed: false, outcome: "FRAUD_HOLD", reasons, confidence: "high" };
   }
 
   // No bureaus or no scores → MANUAL_REVIEW
@@ -294,8 +291,10 @@ function runIdentityAndFraudGate(normalized, submittedName, _submittedAddress, r
     return { passed: false, outcome: "MANUAL_REVIEW", reasons, confidence: "medium" };
   }
 
-  // Single fraud flag or address conflict → pass with reduced confidence
-  if (fraudSignalCount === 1 || reasons.includes("ADDRESS_CONFLICT")) {
+  // Address conflict → pass with reduced confidence. (Q10: fraud no longer drives
+  // this — only the fraud-alert boolean above holds; fraudFinders scores are
+  // informational only.)
+  if (reasons.includes("ADDRESS_CONFLICT")) {
     const confidence = warningCount > 1 ? "low" : "medium";
     return { passed: true, outcome: null, reasons, confidence };
   }

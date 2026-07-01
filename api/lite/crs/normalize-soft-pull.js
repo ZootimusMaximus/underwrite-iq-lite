@@ -15,6 +15,8 @@
  * - AU detection via accountOwnershipType
  */
 
+const { logWarn } = require("../logger");
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -566,6 +568,13 @@ function normalizeSoftPullPayload(rawResponses) {
       // Bureau-level info
       if (!bureaus[bureauKey]) {
         bureaus[bureauKey] = { available: true, infileDate: id.infileDate };
+      } else {
+        // Q11 (2026-07-01): Stitch should return one response per bureau. If a
+        // second response for the same bureau arrives, the later score overwrites
+        // the first silently below — log it so we actually know it happened.
+        logWarn("normalize: duplicate bureau response — later score will overwrite", {
+          bureau: bureauKey
+        });
       }
     }
 

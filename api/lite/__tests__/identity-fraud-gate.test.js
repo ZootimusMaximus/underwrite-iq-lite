@@ -389,7 +389,9 @@ test("runIdentityAndFraudGate: no bureaus → MANUAL_REVIEW", () => {
   assert.ok(result.reasons.includes("NO_BUREAUS_AVAILABLE"));
 });
 
-test("runIdentityAndFraudGate: strong fraud signals → FRAUD_HOLD", () => {
+test("runIdentityAndFraudGate: fraudFinders signals alone do NOT FRAUD_HOLD (Q10)", () => {
+  // Q10 (2026-07-01): fraud score / tumbling / multi-signal no longer drive a hold.
+  // Only the credit-report fraud-alert boolean does. fraudFinders are informational.
   const normalized = makeNormalized({
     identity: {
       names: [{ first: "JOHN", last: "SMITH", source: "transunion" }],
@@ -404,9 +406,7 @@ test("runIdentityAndFraudGate: strong fraud signals → FRAUD_HOLD", () => {
     }
   });
   const result = runIdentityAndFraudGate(normalized, "John Smith");
-  assert.equal(result.passed, false);
-  assert.equal(result.outcome, "FRAUD_HOLD");
-  assert.equal(result.confidence, "high");
+  assert.notEqual(result.outcome, "FRAUD_HOLD");
 });
 
 test("runIdentityAndFraudGate: single fraud flag → pass with reduced confidence", () => {

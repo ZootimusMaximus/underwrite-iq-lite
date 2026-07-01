@@ -336,7 +336,9 @@ test("QA-08a: high fraud risk score + tumbling risk → route-outcome returns FR
   assert.ok(result.reasonCodes.includes("FRAUD_HIGH_RISK"), "FRAUD_HIGH_RISK reason code expected");
 });
 
-test("QA-08b: consumer fraud alert on file → identity-fraud-gate returns MANUAL_REVIEW", () => {
+test("QA-08b: consumer fraud alert on file → identity-fraud-gate returns FRAUD_HOLD (resolvable)", () => {
+  // Q10 (2026-07-01): the credit-report fraud alert IS the fraud signal → FRAUD_HOLD,
+  // and it's a RESOLVABLE hold (resolvable: true), not a dead-end.
   const normalized = makeNormalized({
     fraudAlertsOnFile: {
       detected: true,
@@ -348,9 +350,10 @@ test("QA-08b: consumer fraud alert on file → identity-fraud-gate returns MANUA
   assert.equal(result.passed, false, "Gate should fail on consumer fraud alert");
   assert.equal(
     result.outcome,
-    "MANUAL_REVIEW",
-    `Expected MANUAL_REVIEW from fraud alert, got ${result.outcome}`
+    "FRAUD_HOLD",
+    `Expected FRAUD_HOLD from fraud alert, got ${result.outcome}`
   );
+  assert.equal(result.resolvable, true, "fraud alert is a resolvable hold");
   assert.ok(
     result.reasons.includes("CONSUMER_FRAUD_ALERT_ON_FILE"),
     "CONSUMER_FRAUD_ALERT_ON_FILE reason expected"
