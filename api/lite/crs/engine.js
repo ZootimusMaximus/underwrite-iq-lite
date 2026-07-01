@@ -226,6 +226,28 @@ function runCRSEngine(options) {
   const outcomeResult = routeOutcome(consumerSignals, businessSignals, identityGate);
   timings.outcome = Date.now() - t4;
 
+  // Q8 (2026-07-01): an errored / no-identity-match bureau blocks FULL_FUNDING.
+  // A bureau that returned a usable file is available:true; one that errored or
+  // didn't match the consumer (bad SSN/DOB, CRS-side error) is available:false.
+  // If any REQUESTED (expected) bureau is not available, the file is INCOMPLETE —
+  // never fund off a broken pull. Downgrade to MANUAL_REVIEW so the rep re-checks
+  // the identity inputs and retries once. A genuine thin file is available:true
+  // (just few tradelines), so it is NOT caught here. An old address on the report
+  // is a valid match, not a failure. Only expectedBureaus (passed by the live pull)
+  // triggers this; endpoints that supply raw responses directly are unaffected.
+  const expectedBureaus = options.expectedBureaus || normalized.meta.availableBureaus;
+  const availableSet = new Set(normalized.meta.availableBureaus);
+  const missingBureaus = expectedBureaus.filter(b => !availableSet.has(b));
+  if (
+    missingBureaus.length > 0 &&
+    (outcomeResult.outcome === "FULL_FUNDING" || outcomeResult.outcome === "PREMIUM_STACK")
+  ) {
+    outcomeResult.outcome = "MANUAL_REVIEW";
+    outcomeResult.reasonCodes = outcomeResult.reasonCodes || [];
+    outcomeResult.reasonCodes.push("INCOMPLETE_PULL");
+    outcomeResult.incompletePull = { missingBureaus };
+  }
+
   // 6. Estimate Pre-approvals
   const t5 = Date.now();
   const preapprovals = estimatePreapprovals(

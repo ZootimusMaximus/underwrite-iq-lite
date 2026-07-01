@@ -10,7 +10,7 @@
 // for operators (e.g., Airtable automation triggers).
 // ============================================================================
 
-const { pullFullCRS } = require("./crs/stitch-credit-client");
+const { pullFullCRS, getActiveConsumerBureaus } = require("./crs/stitch-credit-client");
 const { runCRSEngine } = require("./crs/engine");
 const { sanitizeFormFields } = require("./input-sanitizer");
 const { rateLimitMiddleware } = require("./rate-limiter");
@@ -223,6 +223,10 @@ module.exports = async function handler(req, res) {
       businessReport,
       submittedName,
       submittedAddress,
+      // Q8: the bureaus we REQUESTED. If any didn't come back as a usable file
+      // (errored / no identity match), the engine downgrades FULL_FUNDING →
+      // MANUAL_REVIEW so we never fund off an incomplete/broken pull.
+      expectedBureaus: getActiveConsumerBureaus(),
       formData: {
         email: sanitized.email || formData?.email || null,
         phone: sanitized.phone || formData?.phone || null,
