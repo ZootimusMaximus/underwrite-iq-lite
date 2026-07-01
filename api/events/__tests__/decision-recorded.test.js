@@ -14,6 +14,7 @@ const ghlPath = require.resolve("../../lite/ghl-contact-service");
 
 let upsertReturn;
 let capturedWrite;
+let capturedTags;
 
 function loadHandler() {
   delete require.cache[handlerPath];
@@ -33,6 +34,10 @@ function loadHandler() {
       updateContactCustomFields: async (contactId, fields) => {
         capturedWrite = { contactId, fields };
         return { ok: true };
+      },
+      addContactTags: async (contactId, tags) => {
+        capturedTags = { contactId, tags };
+        return { ok: true };
       }
     }
   };
@@ -42,6 +47,7 @@ function loadHandler() {
 describe("decision-recorded handler — ghlContactId resolution", () => {
   beforeEach(() => {
     capturedWrite = null;
+    capturedTags = null;
     // upsertClient returns camelCase ghlContactId (its real contract).
     upsertReturn = { ok: true, ghlContactId: "ghl_abc", airtableClientRecordId: "rec1" };
   });
@@ -65,6 +71,11 @@ describe("decision-recorded handler — ghlContactId resolution", () => {
     assert.ok(capturedWrite, "GHL field write should have happened");
     assert.equal(capturedWrite.contactId, "ghl_abc");
     assert.equal(capturedWrite.fields.cf_decision_status, "funded");
+    // Lifecycle (2026-07-01): set the client:funding tag (HX-02 writes the status),
+    // and do NOT direct-write lifecycle_status for funded/repair (would fight HX-02).
+    assert.equal(capturedWrite.fields.lifecycle_status, undefined);
+    assert.ok(capturedTags, "client tag should have been set");
+    assert.deepEqual(capturedTags.tags, ["client:funding"]);
   });
 
   it("still returns NO_GHL_CONTACT_ID when neither source has an id", async () => {

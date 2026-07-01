@@ -11,7 +11,7 @@
  */
 
 const { logInfo, logWarn } = require("../../lite/logger");
-const { updateContactCustomFields } = require("../../lite/ghl-contact-service");
+const { updateContactCustomFields, addContactTags } = require("../../lite/ghl-contact-service");
 
 // Import client upsert — try both export shapes
 let upsertClient;
@@ -25,15 +25,20 @@ try {
 /**
  * Valid decision statuses and their downstream effects
  */
+// Lifecycle Status (2026-07-01, Chris): HX-02 (Lifecycle Manager) OWNS Funding
+// Client / Repair Client — it writes them off the client:funding / client:repair
+// tags. So for funded/repair we set the TAG (lifecycleTag) and do NOT direct-write
+// lifecycle_status (would fight HX-02). HX-02 does NOT cover Churned/New Lead, so
+// close_file keeps a direct cf_lifecycle_status write (New Lead is set at intake).
 const DECISION_EFFECTS = {
   funded: {
     cf_decision_status: "funded",
-    cf_lifecycle_status: "Funded Client",
+    lifecycleTag: "client:funding",
     tag: "decision:funded"
   },
   repair_purchased: {
     cf_decision_status: "repair_purchased",
-    cf_lifecycle_status: "Repair Client",
+    lifecycleTag: "client:repair",
     tag: "decision:repair"
   },
   reschedule: { cf_decision_status: "reschedule", tag: "decision:reschedule" },
@@ -101,6 +106,17 @@ async function handle(event) {
     await updateContactCustomFields(ghlContactId, fields);
   } catch (err) {
     logWarn("decision-recorded: GHL field write failed", { error: err.message, ghlContactId });
+  }
+
+  // Set the client tag that HX-02 keys the lifecycle status off (client:funding →
+  // Funding Client, client:repair → Repair Client). We no longer write those
+  // statuses directly (see DECISION_EFFECTS note).
+  if (effect.lifecycleTag) {
+    try {
+      await addContactTags(ghlContactId, [effect.lifecycleTag]);
+    } catch (err) {
+      logWarn("decision-recorded: lifecycle tag add failed", { error: err.message, ghlContactId });
+    }
   }
 
   logInfo("decision-recorded: processed", {
