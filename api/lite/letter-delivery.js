@@ -82,9 +82,11 @@ async function deliverLetters({
 
     if (isCRS) {
       logInfo("Generating CRS letters", { specs: crsDocuments.letters.length });
-      const crsResult = await generateLettersFromCRS(crsDocuments.letters, personal || {});
-      letters = crsResult.letters;
-      fieldKeyMap = crsResult.fieldKeyMap;
+      // Renamed from crsResult to avoid shadowing the crsResult PARAMETER (the CRS
+      // engine result) that summary-doc generation below reads at line ~102.
+      const letterGenResult = await generateLettersFromCRS(crsDocuments.letters, personal || {});
+      letters = letterGenResult.letters;
+      fieldKeyMap = letterGenResult.fieldKeyMap;
     } else {
       logInfo("Generating letters", { path });
       letters = await generateLetters({
@@ -146,7 +148,7 @@ async function deliverLetters({
     // Step 4: Update GHL with letter URLs
     let ghlUpdateResult = { ok: false, skipped: true };
 
-    if (finalContactId && uploadResult.urls) {
+    if (finalContactId && uploadResult.uploadedCount > 0) {
       logInfo("Updating GHL with letter URLs", { contactId: finalContactId });
 
       if (isCRS && fieldKeyMap) {

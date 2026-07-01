@@ -76,7 +76,10 @@ module.exports = async function handler(req, res) {
   const type = body.type === "funding" ? "funding" : "repair";
   const bureaus =
     Array.isArray(body.bureaus) && body.bureaus.length
-      ? body.bureaus.map(b => String(b).toLowerCase()).filter(b => ALL_BUREAUS.includes(b))
+      ? body.bureaus
+          .map(b => String(b).toLowerCase())
+          .filter(b => ALL_BUREAUS.includes(b))
+          .filter((b, i, arr) => arr.indexOf(b) === i) // dedup — avoid double blob uploads
       : ALL_BUREAUS;
 
   // Look up the client's name/address off their GHL record (needed on the letters).

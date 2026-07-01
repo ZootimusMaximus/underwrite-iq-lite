@@ -222,7 +222,7 @@ function _collectPersonalInfoVariations(bureaus, _round) {
  */
 async function createDisputeLetter({ bureau, personal, round, accounts, bureauData: _bureauData }) {
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([612, 792]); // Letter size
+  let page = pdfDoc.addPage([612, 792]); // Letter size (reassigned on page overflow)
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
@@ -249,7 +249,7 @@ async function createDisputeLetter({ bureau, personal, round, accounts, bureauDa
   y -= lineHeight * 2;
 
   // Bureau address
-  page.drawText(bureau.name, { x: leftMargin, y, size: 11, boldFont });
+  page.drawText(bureau.name, { x: leftMargin, y, size: 11, font: boldFont });
   y -= lineHeight;
   const bureauAddressLines = bureau.address.split("\n");
   bureauAddressLines.forEach(line => {
@@ -293,8 +293,8 @@ ${name}`;
       const wrapped = wrapText(line, font, 11, 512);
       wrapped.split("\n").forEach(wLine => {
         if (y < 50) {
-          // Add new page if needed
-          pdfDoc.addPage([612, 792]);
+          // Add new page if needed — reassign so subsequent draws target the new page
+          page = pdfDoc.addPage([612, 792]);
           y = 740;
         }
         page.drawText(wLine, { x: leftMargin, y, size: 11, font });
