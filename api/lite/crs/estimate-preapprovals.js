@@ -157,7 +157,8 @@ function estimatePreapprovals(consumerSignals, businessSignals, outcome) {
     base: cardBase,
     modifiers: { ...modifiers },
     final: cardFinal,
-    eligible: cardFinal > 0
+    eligible: cardFinal > 0,
+    offerBand: getOfferBand(cardFinal)
   };
 
   // Personal loan
@@ -166,7 +167,8 @@ function estimatePreapprovals(consumerSignals, businessSignals, outcome) {
     base: loanBase,
     modifiers: { ...modifiers },
     final: loanFinal,
-    eligible: loanFinal > 0
+    eligible: loanFinal > 0,
+    offerBand: getOfferBand(loanFinal)
   };
 
   // Business (v2: utilization-based, hard block on any negative/UCC)

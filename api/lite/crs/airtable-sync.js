@@ -17,6 +17,7 @@
 const { fetchWithTimeout } = require("../fetch-utils");
 const { logInfo, logWarn, logError } = require("../logger");
 const { extractPersonalTradelines, extractBusinessTradelines } = require("./extract-tradelines");
+const { buildCloserResult } = require("./build-closer-result");
 
 // ---------------------------------------------------------------------------
 // Config
@@ -157,6 +158,24 @@ function mapClientFields(crsResult, opts) {
     crsResult.optimization_findings.length > 0
   ) {
     fields.latest_optimization_findings_full = JSON.stringify(crsResult.optimization_findings);
+  }
+
+  // Closer Dashboard payload (dashboard spec Item 1A): the full engine output the
+  // read-only closer panel reads. GATED behind an env flag because Airtable ERRORS
+  // on a write to a non-existent field — enable only after the long-text field
+  // `latest_crs_result_full` is created on CLIENTS, else every client sync 422s.
+  if (process.env.CRS_CLOSER_RESULT_ENABLED === "true" && crsResult) {
+    try {
+      const closer = buildCloserResult(crsResult);
+      if (closer) {
+        closer.generatedAt = new Date().toISOString();
+        fields.latest_crs_result_full = JSON.stringify(closer);
+      }
+    } catch (e) {
+      logWarn("closer result build failed — skipping latest_crs_result_full", {
+        error: e.message
+      });
+    }
   }
 
   return fields;
