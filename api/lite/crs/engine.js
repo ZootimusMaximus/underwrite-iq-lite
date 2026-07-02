@@ -249,14 +249,27 @@ function runCRSEngine(options) {
     b => !consumerSignals.bureauNegatives?.[b]?.pulled
   );
   const incompleteBureaus = Array.from(new Set([...missingBureaus, ...noDataBureaus]));
-  if (
-    incompleteBureaus.length > 0 &&
-    (outcomeResult.outcome === "FULL_FUNDING" || outcomeResult.outcome === "PREMIUM_STACK")
-  ) {
-    outcomeResult.outcome = "MANUAL_REVIEW";
-    outcomeResult.reasonCodes = outcomeResult.reasonCodes || [];
-    outcomeResult.reasonCodes.push("INCOMPLETE_PULL");
-    outcomeResult.incompletePull = { missingBureaus, noDataBureaus };
+  if (incompleteBureaus.length > 0) {
+    if (outcomeResult.outcome === "FULL_FUNDING" || outcomeResult.outcome === "PREMIUM_STACK") {
+      // Never fund off an incomplete pull — downgrade for human review.
+      outcomeResult.outcome = "MANUAL_REVIEW";
+      outcomeResult.reasonCodes = outcomeResult.reasonCodes || [];
+      outcomeResult.reasonCodes.push("INCOMPLETE_PULL");
+      outcomeResult.incompletePull = { missingBureaus, noDataBureaus };
+    } else if (
+      missingBureaus.length > 0 &&
+      (outcomeResult.outcome === "FUNDING_PLUS_REPAIR" || outcomeResult.outcome === "REPAIR_ONLY")
+    ) {
+      // #69 (2026-07-02): don't change the outcome, but flag that this routing was
+      // made on a PARTIAL pull (a requested bureau errored / didn't return) so ops
+      // can see the decision wasn't based on all bureaus. Only errored/missing
+      // bureaus trigger this — a thin available bureau (noData) is normal here.
+      outcomeResult.reasonCodes = outcomeResult.reasonCodes || [];
+      if (!outcomeResult.reasonCodes.includes("INCOMPLETE_PULL")) {
+        outcomeResult.reasonCodes.push("INCOMPLETE_PULL");
+      }
+      outcomeResult.incompletePull = { missingBureaus, noDataBureaus };
+    }
   }
 
   // 6. Estimate Pre-approvals
