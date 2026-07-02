@@ -189,6 +189,7 @@ async function deliverLetters({
         failed: uploadResult.failedCount
       },
       urls: uploadResult.urls,
+      uploadErrors: uploadResult.errors, // surface per-file upload failures to callers/ops
       // fieldKeyMap (filename → GHL field key) so callers can translate the
       // filename-keyed urls above into GHL field keys (e.g. for the U-02
       // letters-ready webhook payload, which must carry the field keys 1:1).

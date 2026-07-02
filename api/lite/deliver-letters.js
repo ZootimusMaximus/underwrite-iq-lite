@@ -180,6 +180,7 @@ module.exports = async function handler(req, res) {
       type,
       bureaus,
       letters: result.letters,
+      uploadErrors: result.uploadErrors, // surface per-file upload failures for diagnosis
       ghlUpdated: result.ghlUpdated
     });
   } catch (err) {
