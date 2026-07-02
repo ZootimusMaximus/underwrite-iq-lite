@@ -238,14 +238,25 @@ function runCRSEngine(options) {
   const expectedBureaus = options.expectedBureaus || normalized.meta.availableBureaus;
   const availableSet = new Set(normalized.meta.availableBureaus);
   const missingBureaus = expectedBureaus.filter(b => !availableSet.has(b));
+  // BUG-1 fix (2026-07-02): a bureau can be available:true (identity + score
+  // returned) yet come back with ZERO tradelines. deriveConsumerSignals excludes
+  // such a bureau from the clean-check (only bureaus with tradelines are "pulled"),
+  // so allBureausClean reflects ONLY bureaus that had data — FULL_FUNDING could be
+  // reached without evaluating every available bureau, treating an unknown bureau
+  // as clean. We can't confirm a no-tradeline bureau is clean, so treat it as
+  // incomplete too (same spirit as Q8: never fund off an incomplete pull).
+  const noDataBureaus = normalized.meta.availableBureaus.filter(
+    b => !consumerSignals.bureauNegatives?.[b]?.pulled
+  );
+  const incompleteBureaus = Array.from(new Set([...missingBureaus, ...noDataBureaus]));
   if (
-    missingBureaus.length > 0 &&
+    incompleteBureaus.length > 0 &&
     (outcomeResult.outcome === "FULL_FUNDING" || outcomeResult.outcome === "PREMIUM_STACK")
   ) {
     outcomeResult.outcome = "MANUAL_REVIEW";
     outcomeResult.reasonCodes = outcomeResult.reasonCodes || [];
     outcomeResult.reasonCodes.push("INCOMPLETE_PULL");
-    outcomeResult.incompletePull = { missingBureaus };
+    outcomeResult.incompletePull = { missingBureaus, noDataBureaus };
   }
 
   // 6. Estimate Pre-approvals

@@ -6,6 +6,23 @@
 const { PDFDocument, StandardFonts } = require("pdf-lib");
 const { logInfo } = require("./logger");
 
+// pdf-lib StandardFonts (Helvetica) only encode WinAnsi/Latin-1. Any char outside
+// that (curly quotes, em-dash, bullet, ellipsis, emoji, CJK) throws at drawText and
+// crashes the whole letter. Client names/addresses from GHL routinely carry smart
+// punctuation; accented Latin (é, ñ, ü) IS WinAnsi-safe so we keep it. Transliterate
+// the common offenders to ASCII and drop anything still unencodable.
+function pdfSafe(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/[‘’‚‛′]/g, "'")
+    .replace(/[“”„‟″]/g, '"')
+    .replace(/[–—―]/g, "-")
+    .replace(/…/g, "...")
+    .replace(/[•●·]/g, "-")
+    .replace(/\u00A0/g, " ")
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, "");
+}
+
 const BUREAUS = {
   experian: {
     name: "Experian",
@@ -240,8 +257,8 @@ async function createDisputeLetter({ bureau, personal, round, accounts, bureauDa
   y -= lineHeight * 2;
 
   // Consumer info (from personal data or placeholder)
-  const name = personal?.name || "[CONSUMER NAME]";
-  const address = personal?.address || "[CONSUMER ADDRESS]";
+  const name = pdfSafe(personal?.name || "[CONSUMER NAME]");
+  const address = pdfSafe(personal?.address || "[CONSUMER ADDRESS]");
 
   page.drawText(name, { x: leftMargin, y, size: 11, font });
   y -= lineHeight;
@@ -330,8 +347,8 @@ async function createInquiryLetter({ bureau, personal, inquiryCount }) {
   y -= lineHeight * 2;
 
   // Consumer info
-  const name = personal?.name || "[CONSUMER NAME]";
-  const address = personal?.address || "[CONSUMER ADDRESS]";
+  const name = pdfSafe(personal?.name || "[CONSUMER NAME]");
+  const address = pdfSafe(personal?.address || "[CONSUMER ADDRESS]");
   page.drawText(name, { x: leftMargin, y, size: 11, font });
   y -= lineHeight;
   page.drawText(address, { x: leftMargin, y, size: 11, font });
@@ -406,8 +423,8 @@ async function createPersonalInfoLetter({ bureau, personal, variations }) {
   y -= lineHeight * 2;
 
   // Consumer info
-  const name = personal?.name || "[CONSUMER NAME]";
-  const address = personal?.address || "[CONSUMER ADDRESS]";
+  const name = pdfSafe(personal?.name || "[CONSUMER NAME]");
+  const address = pdfSafe(personal?.address || "[CONSUMER ADDRESS]");
   page.drawText(name, { x: leftMargin, y, size: 11, font });
   y -= lineHeight;
   page.drawText(address, { x: leftMargin, y, size: 11, font });
