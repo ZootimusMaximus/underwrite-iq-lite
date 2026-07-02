@@ -1,135 +1,16 @@
 "use strict";
 
-/**
- * decision-recorded.js — Handler for fundhub.decision.recorded
- *
- * Fired after the sales call when a rep or customer records a decision.
- * Drives close, reschedule, or close-file flows.
- *
- * Required payload: decision_status
- * Optional: decision_source, decision_notes, reschedule_date
- */
+// Handler retired 2026-07-02 — GHL owns this stage in the new model.
+// The router still dispatches here; we return a no-op marker so stray
+// events get a 200 instead of a 501 HANDLER_NOT_AVAILABLE.
 
-const { logInfo, logWarn } = require("../../lite/logger");
-const { updateContactCustomFields, addContactTags } = require("../../lite/ghl-contact-service");
-
-// Import client upsert — try both export shapes
-let upsertClient;
-try {
-  const mod = require("./client-upsert");
-  upsertClient = mod.upsertClient || mod.handleClientUpsert;
-} catch (_e) {
-  upsertClient = null;
-}
-
-/**
- * Valid decision statuses and their downstream effects
- */
-// Lifecycle Status (2026-07-01, Chris): HX-02 (Lifecycle Manager) OWNS Funding
-// Client / Repair Client — it writes them off the client:funding / client:repair
-// tags. So for funded/repair we set the TAG (lifecycleTag) and do NOT direct-write
-// lifecycle_status (would fight HX-02). HX-02 does NOT cover Churned/New Lead, so
-// close_file keeps a direct cf_lifecycle_status write (New Lead is set at intake).
-const DECISION_EFFECTS = {
-  funded: {
-    cf_decision_status: "funded",
-    lifecycleTag: "client:funding",
-    tag: "decision:funded"
-  },
-  repair_purchased: {
-    cf_decision_status: "repair_purchased",
-    lifecycleTag: "client:repair",
-    tag: "decision:repair"
-  },
-  reschedule: { cf_decision_status: "reschedule", tag: "decision:reschedule" },
-  no_show: { cf_decision_status: "no_show", tag: "decision:no_show" },
-  declined: { cf_decision_status: "declined", tag: "decision:declined" },
-  close_file: {
-    cf_decision_status: "close_file",
-    cf_lifecycle_status: "Closed",
-    tag: "decision:closed"
-  }
-};
-
-async function handle(event) {
-  const { contact, payload, adapter } = event;
-  const { decision_status, decision_source, decision_notes, reschedule_date } = payload || {};
-
-  // Ensure client exists
-  let identity = null;
-  if (upsertClient) {
-    identity = await upsertClient(contact, adapter);
-    if (!identity?.ok) {
-      return { ok: false, error: "CLIENT_UPSERT_FAILED", detail: identity?.error };
-    }
-  }
-
-  // upsertClient returns camelCase ghlContactId (see client-upsert.js + the
-  // analysis-completed handler). Reading snake_case here was always undefined,
-  // so any contact resolved by email/phone (no ghl_contact_id pre-set on the
-  // event) fell through to NO_GHL_CONTACT_ID and the decision was never written.
-  const ghlContactId = identity?.ghlContactId || contact.ghl_contact_id;
-  if (!ghlContactId) {
-    return { ok: false, error: "NO_GHL_CONTACT_ID" };
-  }
-
-  const effect = DECISION_EFFECTS[decision_status];
-  if (!effect) {
-    logWarn("decision-recorded: unknown decision_status", { decision_status });
-    return { ok: false, error: "UNKNOWN_DECISION_STATUS", decision_status };
-  }
-
-  // Write decision fields to GHL
-  const fields = {
-    cf_decision_status: effect.cf_decision_status,
-    cf_decision_source: decision_source || "sales_call",
-    cf_decision_timestamp: new Date().toISOString(),
-    cf_last_canonical_event: "fundhub.decision.recorded",
-    cf_last_canonical_event_ts: new Date().toISOString(),
-    cf_last_progress_action: `decision_${decision_status}`,
-    cf_last_progress_timestamp: new Date().toISOString()
-  };
-
-  if (effect.cf_lifecycle_status) {
-    fields.lifecycle_status = effect.cf_lifecycle_status;
-  }
-
-  if (decision_notes) {
-    fields.cf_decision_notes = decision_notes;
-  }
-
-  if (decision_status === "reschedule" && reschedule_date) {
-    fields.cf_reschedule_date = reschedule_date;
-  }
-
-  try {
-    await updateContactCustomFields(ghlContactId, fields);
-  } catch (err) {
-    logWarn("decision-recorded: GHL field write failed", { error: err.message, ghlContactId });
-  }
-
-  // Set the client tag that HX-02 keys the lifecycle status off (client:funding →
-  // Funding Client, client:repair → Repair Client). We no longer write those
-  // statuses directly (see DECISION_EFFECTS note).
-  if (effect.lifecycleTag) {
-    try {
-      await addContactTags(ghlContactId, [effect.lifecycleTag]);
-    } catch (err) {
-      logWarn("decision-recorded: lifecycle tag add failed", { error: err.message, ghlContactId });
-    }
-  }
-
-  logInfo("decision-recorded: processed", {
-    ghlContactId,
-    decision_status,
-    decision_source: decision_source || "sales_call"
-  });
-
+async function handle() {
+  // Retired: fundhub.decision.recorded — GHL owns this stage in the new model.
   return {
     ok: true,
-    action: `decision_${decision_status}`,
-    ghl_contact_id: ghlContactId,
-    effect: effect.cf_decision_status
+    retired: true,
+    event: "fundhub.decision.recorded",
+    note: "handler retired 2026-07-02 — GHL owns this stage in the new model"
   };
 }
 

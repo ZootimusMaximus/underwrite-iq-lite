@@ -3,10 +3,8 @@
 const { describe, it, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 
-// Regression for the bug where decision-recorded read identity.ghl_contact_id
-// (snake_case) but upsertClient returns camelCase ghlContactId. Result: every
-// decision for a contact resolved by email/phone (no ghl_contact_id on the
-// event) fell through to NO_GHL_CONTACT_ID and wrote nothing to GHL.
+// Tests updated 2026-07-02: decision-recorded handler is now retired.
+// The handler returns { ok: true, retired: true } for all inputs — no GHL writes.
 
 const handlerPath = require.resolve("../handlers/decision-recorded");
 const upsertPath = require.resolve("../handlers/client-upsert");
@@ -66,16 +64,12 @@ describe("decision-recorded handler — ghlContactId resolution", () => {
       event_id: "evt1"
     });
 
-    assert.equal(result.ok, true, "should not fail with NO_GHL_CONTACT_ID");
-    assert.equal(result.ghl_contact_id, "ghl_abc");
-    assert.ok(capturedWrite, "GHL field write should have happened");
-    assert.equal(capturedWrite.contactId, "ghl_abc");
-    assert.equal(capturedWrite.fields.cf_decision_status, "funded");
-    // Lifecycle (2026-07-01): set the client:funding tag (HX-02 writes the status),
-    // and do NOT direct-write lifecycle_status for funded/repair (would fight HX-02).
-    assert.equal(capturedWrite.fields.lifecycle_status, undefined);
-    assert.ok(capturedTags, "client tag should have been set");
-    assert.deepEqual(capturedTags.tags, ["client:funding"]);
+    // Retired handler: always returns ok + retired, never writes to GHL
+    assert.equal(result.ok, true, "should return ok: true");
+    assert.equal(result.retired, true, "should be marked retired");
+    assert.equal(result.event, "fundhub.decision.recorded");
+    assert.equal(capturedWrite, null, "no GHL field write should happen");
+    assert.equal(capturedTags, null, "no tag write should happen");
   });
 
   it("still returns NO_GHL_CONTACT_ID when neither source has an id", async () => {
@@ -87,7 +81,8 @@ describe("decision-recorded handler — ghlContactId resolution", () => {
       adapter: {},
       event_id: "evt2"
     });
-    assert.equal(result.ok, false);
-    assert.equal(result.error, "NO_GHL_CONTACT_ID");
+    // Retired handler: always returns ok + retired regardless of contact id
+    assert.equal(result.ok, true);
+    assert.equal(result.retired, true);
   });
 });
