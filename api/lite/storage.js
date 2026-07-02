@@ -33,9 +33,15 @@ async function uploadPdf(pdfBuffer, contactId, filename) {
     const pathname = `letters/${contactId}/${filename}`;
 
     // Add timeout wrapper (30s)
+    // allowOverwrite: the path is deterministic (letters/{contactId}/{filename}),
+    // so re-delivering letters to the same contact reuses the same path. Newer
+    // @vercel/blob defaults to erroring on an existing path (older versions added
+    // a random suffix), which silently broke all re-deliveries. Overwrite so the
+    // latest letters win and the GHL field URLs stay stable.
     const uploadPromise = put(pathname, pdfBuffer, {
       access: "public",
       contentType: "application/pdf",
+      allowOverwrite: true,
       token
     });
 
