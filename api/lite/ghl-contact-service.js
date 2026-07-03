@@ -125,8 +125,16 @@ async function createOrUpdateContact(contactData) {
     const existingContact = await findContactByEmail(contactData.email);
 
     if (existingContact) {
-      // Update existing contact
-      return await updateContact(existingContact.id, payload);
+      // Update existing contact. Do NOT PUT `tags` — GHL's PUT REPLACES the full tag
+      // array, wiping workflow tags (client:funding, crs:completed, inquiry:completed,
+      // …) whenever a returning client is re-analyzed. Strip tags from the PUT, then
+      // append ours additively via POST /contacts/{id}/tags.
+      const { tags, ...updatePayload } = payload;
+      const result = await updateContact(existingContact.id, updatePayload);
+      if (result.ok && Array.isArray(tags) && tags.length) {
+        await addContactTags(existingContact.id, tags).catch(() => {});
+      }
+      return result;
     }
 
     // Create new contact
