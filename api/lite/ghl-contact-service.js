@@ -84,17 +84,21 @@ async function createOrUpdateContact(contactData) {
     });
   }
 
+  // credit_score + total_funding_estimate are GHL NUMBER-type fields (verified in
+  // GHL 2026-07-03). Write actual numbers — String() values get dropped/coerced and
+  // break any workflow numeric comparison. Truthy guard is intentional: 0 = no score
+  // / suppressed funding, which we correctly skip rather than write a fake 0.
   if (contactData.creditScore) {
     customFields.push({
       key: "credit_score",
-      field_value: String(contactData.creditScore)
+      field_value: Number(contactData.creditScore)
     });
   }
 
   if (contactData.totalFunding) {
     customFields.push({
       key: "total_funding_estimate",
-      field_value: String(contactData.totalFunding)
+      field_value: Number(contactData.totalFunding)
     });
   }
 
