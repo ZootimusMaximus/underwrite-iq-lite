@@ -121,7 +121,7 @@ describe("crs-payment-posted handler", () => {
     const res = makeRes();
     await handler(makeReq({ contactId: "c1", amount: 49.99, consent: true }), res);
     assert.equal(res.statusCode, 200);
-    assert.equal(updateCalls[0].fields.cf_crs_charge_amount, "49.99");
+    assert.equal(updateCalls[0].fields.cf_crs_charge_amount, 49.99); // monetary — number, not string
     assert.equal(updateCalls[0].fields.cf_crs_softpull_consent, "Yes");
   });
 

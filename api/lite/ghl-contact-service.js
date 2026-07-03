@@ -62,7 +62,7 @@ async function createOrUpdateContact(contactData) {
   if (contactData.businessAgeMonths !== undefined) {
     customFields.push({
       key: "business_age_months",
-      field_value: String(contactData.businessAgeMonths)
+      field_value: Number(contactData.businessAgeMonths) // GHL Number field — string breaks comparisons
     });
   }
 
@@ -437,10 +437,14 @@ async function updateContactCustomFields(contactId, customFields) {
   // CHECKBOX / multi-select fields take an ARRAY of option labels in the GHL v2
   // API (e.g. crs_paid → ["CRS Paid"]); a plain string silently fails to check
   // the box. So pass arrays through untouched and only String()-ify scalars.
-  const customFieldsArray = Object.entries(customFields).map(([key, value]) => ({
-    key,
-    field_value: Array.isArray(value) ? value : String(value)
-  }));
+  // Skip null/undefined (String() would write the literal "null"/"undefined" to GHL)
+  // and preserve numbers as numbers (String() breaks numeric/monetary field types).
+  const customFieldsArray = Object.entries(customFields)
+    .filter(([, value]) => value !== null && value !== undefined)
+    .map(([key, value]) => ({
+      key,
+      field_value: Array.isArray(value) || typeof value === "number" ? value : String(value)
+    }));
 
   const payload = {
     customFields: customFieldsArray

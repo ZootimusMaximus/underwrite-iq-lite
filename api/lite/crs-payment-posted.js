@@ -85,7 +85,7 @@ module.exports = async function handler(req, res) {
   const amount = body.amount ?? (body.customData && body.customData.amount);
   if (amount !== undefined && amount !== null && amount !== "") {
     const num = Number(amount);
-    if (!Number.isNaN(num)) fields.cf_crs_charge_amount = String(num);
+    if (!Number.isNaN(num)) fields.cf_crs_charge_amount = num; // monetary field — number, not string
   }
   const consent = body.consent ?? (body.customData && body.customData.consent);
   if (consent === true || consent === "true" || consent === "Yes") {
