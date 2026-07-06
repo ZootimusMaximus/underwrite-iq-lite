@@ -37,16 +37,12 @@ const VALID_DISPUTE_LETTER = [
   "The Field 24 (Date Reported / Account Status Date) and Field 25 (Date of First Delinquency) are incorrectly reported.",
   "The balance and payment history shown is inaccurate because the account data does not match my records.",
   "I have enclosed supporting documentation as evidence of these violations.",
-  "Please investigate this matter and correct all inaccurate information immediately.",
+  "Please investigate this matter and correct all inaccurate information immediately."
 ].join(" ");
 
 const VALID_PI_LETTER =
   "I am writing to ensure my personal information is accurate on my credit report. " +
   "I have enclosed identification documents for your reference.";
-
-const VALID_INQ_LETTER =
-  "I am writing to request removal of unauthorized inquiries from my credit report. " +
-  "I have enclosed supporting documentation as evidence of my request.";
 
 /**
  * Make a stub function that returns appropriate letter text.
@@ -58,7 +54,7 @@ const VALID_INQ_LETTER =
  * which contains the words "personal" and "inquiry".
  */
 function makeLetterStub(overrideFn) {
-  return async (opts) => {
+  return async opts => {
     if (overrideFn) return overrideFn(opts);
     try {
       const payload = JSON.parse(opts.user || "{}");
@@ -86,7 +82,7 @@ async function withStub(stub, testFn) {
     id: CLAUDE_CLIENT_PATH,
     filename: CLAUDE_CLIENT_PATH,
     loaded: true,
-    exports: { callClaude: stub },
+    exports: { callClaude: stub }
   };
 
   // Bust generate-deliverables so it re-captures our stub
@@ -146,10 +142,10 @@ function makeDerogTradeline(overrides = {}) {
     adverseRatings: {
       highest: { date: "2021-06-01", type: "ChargeOff" },
       mostRecent: { date: "2022-01-01", type: "ChargeOff" },
-      prior: [],
+      prior: []
     },
     comments: [],
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -159,24 +155,24 @@ function makeCRSResult(overrides = {}) {
     bureaus: {
       experian: { clean: false },
       equifax: { clean: true },
-      transunion: { clean: true },
+      transunion: { clean: true }
     },
     normalized: {
       tradelines: [makeDerogTradeline()],
       inquiries: [],
-      identity: {},
+      identity: {}
     },
     consumerSignals: {
       scores: { median: 590 },
       utilization: { overall: 64 },
       bureauNegatives: {},
-      auImpact: null,
+      auImpact: null
     },
     businessSignals: { available: false },
     preapprovals: { totalPersonal: 0, totalBusiness: 0, totalCombined: 0 },
     projectedPreapproval: null,
     suggestions: { fullSuggestions: [] },
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -185,7 +181,7 @@ function makePersonal() {
     name: "Barbara Doty",
     address: "123 Main St, Denton TX 76201",
     firstName: "Barbara",
-    lastName: "Doty",
+    lastName: "Doty"
   };
 }
 
@@ -228,7 +224,7 @@ test("buildEngineDataPayload: includes cta field with bookingUrl", () => {
 test("generateDisputeLetters: dirty experian bureau → generates dispute letter for that bureau", async () => {
   await withStub(makeLetterStub(), async ({ generateDisputeLetters }) => {
     const result = await generateDisputeLetters(makeCRSResult(), makePersonal());
-    const disputeLetters = result.filter((l) => l.type === "dispute");
+    const disputeLetters = result.filter(l => l.type === "dispute");
     assert.ok(disputeLetters.length >= 1, "expected at least 1 dispute letter for dirty experian");
     assert.equal(disputeLetters[0].bureau, "experian");
     assert.equal(disputeLetters[0].round, 1);
@@ -243,11 +239,11 @@ test("generateDisputeLetters: clean bureaus → no dispute letters", async () =>
       bureaus: {
         experian: { clean: true },
         equifax: { clean: true },
-        transunion: { clean: true },
-      },
+        transunion: { clean: true }
+      }
     });
     const result = await generateDisputeLetters(crs, makePersonal());
-    const disputeLetters = result.filter((l) => l.type === "dispute");
+    const disputeLetters = result.filter(l => l.type === "dispute");
     assert.equal(disputeLetters.length, 0, "no dispute letters when all bureaus are clean");
   });
 });
@@ -256,7 +252,7 @@ test("generateDisputeLetters: tradeline with null creditorName → no throw", as
   await withStub(makeLetterStub(), async ({ generateDisputeLetters }) => {
     const tlNullCreditor = makeDerogTradeline({ creditorName: null });
     const crs = makeCRSResult({
-      normalized: { tradelines: [tlNullCreditor], inquiries: [], identity: {} },
+      normalized: { tradelines: [tlNullCreditor], inquiries: [], identity: {} }
     });
     let threw = false;
     try {
@@ -275,22 +271,25 @@ test("generateDisputeLetters: always generates personal info letters for all 3 b
       bureaus: {
         experian: { clean: true },
         equifax: { clean: true },
-        transunion: { clean: true },
+        transunion: { clean: true }
       },
-      normalized: { tradelines: [], inquiries: [], identity: {} },
+      normalized: { tradelines: [], inquiries: [], identity: {} }
     });
     const result = await generateDisputeLetters(crs, makePersonal());
-    const piLetters = result.filter((l) => l.type === "personal_info");
+    const piLetters = result.filter(l => l.type === "personal_info");
     assert.equal(piLetters.length, 3, "expected 1 PI letter per bureau = 3 total");
   });
 });
 
 test("generateDisputeLetters: callClaude returning null → gracefully skips all letters", async () => {
-  await withStub(async () => null, async ({ generateDisputeLetters }) => {
-    const result = await generateDisputeLetters(makeCRSResult(), makePersonal());
-    assert.ok(Array.isArray(result));
-    assert.equal(result.length, 0, "all letters skipped when Claude returns null");
-  });
+  await withStub(
+    async () => null,
+    async ({ generateDisputeLetters }) => {
+      const result = await generateDisputeLetters(makeCRSResult(), makePersonal());
+      assert.ok(Array.isArray(result));
+      assert.equal(result.length, 0, "all letters skipped when Claude returns null");
+    }
+  );
 });
 
 test("generateDisputeLetters: multiple derogatory tradelines from same furnisher → single letter", async () => {
@@ -298,10 +297,10 @@ test("generateDisputeLetters: multiple derogatory tradelines from same furnisher
     const tl1 = makeDerogTradeline({ accountIdentifier: "ACCT-0001" });
     const tl2 = makeDerogTradeline({ accountIdentifier: "ACCT-0002" }); // same creditorName: Capital One
     const crs = makeCRSResult({
-      normalized: { tradelines: [tl1, tl2], inquiries: [], identity: {} },
+      normalized: { tradelines: [tl1, tl2], inquiries: [], identity: {} }
     });
     const result = await generateDisputeLetters(crs, makePersonal());
-    const disputeLetters = result.filter((l) => l.type === "dispute" && l.bureau === "experian");
+    const disputeLetters = result.filter(l => l.type === "dispute" && l.bureau === "experian");
     assert.equal(disputeLetters.length, 1, "two tradelines from same furnisher → 1 letter");
   });
 });
@@ -317,11 +316,11 @@ test("generateDisputeLetters: tradelines from different furnishers → one lette
       "The Field 24 (Date Reported / Account Status Date) and Field 25 (Date of First Delinquency) are incorrectly reported.",
       "The balance and payment history shown is inaccurate because the account data does not match my records.",
       "I have enclosed supporting documentation as evidence of these violations.",
-      "Please investigate this matter and correct all inaccurate information immediately.",
+      "Please investigate this matter and correct all inaccurate information immediately."
     ].join(" ");
   }
 
-  const stub = makeLetterStub((opts) => {
+  const stub = makeLetterStub(opts => {
     try {
       const payload = JSON.parse(opts.user || "{}");
       if (!payload.furnisher) return VALID_PI_LETTER;
@@ -333,10 +332,10 @@ test("generateDisputeLetters: tradelines from different furnishers → one lette
 
   await withStub(stub, async ({ generateDisputeLetters }) => {
     const crs = makeCRSResult({
-      normalized: { tradelines: [tl1, tl2], inquiries: [], identity: {} },
+      normalized: { tradelines: [tl1, tl2], inquiries: [], identity: {} }
     });
     const result = await generateDisputeLetters(crs, makePersonal());
-    const disputeLetters = result.filter((l) => l.type === "dispute" && l.bureau === "experian");
+    const disputeLetters = result.filter(l => l.type === "dispute" && l.bureau === "experian");
     assert.equal(disputeLetters.length, 2, "two different furnishers → 2 letters");
   });
 });
@@ -353,12 +352,12 @@ test("generateDisputeLetters: higher severity furnisher is processed before lowe
     "The Field 25 (Date of First Delinquency) shows an expired seven-year reporting window.",
     "The balance and payment history for this collection account is inaccurate because the data violates the FCRA.",
     "I have enclosed supporting documentation as evidence of these violations.",
-    "Please investigate this matter and correct all inaccurate information immediately.",
+    "Please investigate this matter and correct all inaccurate information immediately."
   ].join(" ");
 
   const ACME_LETTER = VALID_DISPUTE_LETTER.replace("Capital One", "Acme Bank");
 
-  const stub = makeLetterStub((opts) => {
+  const stub = makeLetterStub(opts => {
     try {
       const payload = JSON.parse(opts.user || "{}");
       if (!payload.furnisher) return VALID_PI_LETTER; // PI or inquiry call
@@ -383,9 +382,9 @@ test("generateDisputeLetters: higher severity furnisher is processed before lowe
       adverseRatings: {
         highest: { date: "2014-01-01", type: "ChargeOff" },
         mostRecent: { date: "2014-01-01", type: "ChargeOff" },
-        prior: [],
+        prior: []
       },
-      comments: [],
+      comments: []
     });
 
     // Acme Bank: AsAgreed + isDerogatory — score 7
@@ -398,17 +397,17 @@ test("generateDisputeLetters: higher severity furnisher is processed before lowe
       chargeOffAmount: null,
       pastDue: null,
       adverseRatings: null,
-      reportedDate: "2024-06-01",
+      reportedDate: "2024-06-01"
     });
 
     callOrder.length = 0;
     // Put lowTL first — prioritizeFurnishers should reorder by severity
     const crs = makeCRSResult({
-      normalized: { tradelines: [lowTL, highTL], inquiries: [], identity: {} },
+      normalized: { tradelines: [lowTL, highTL], inquiries: [], identity: {} }
     });
     await generateDisputeLetters(crs, makePersonal());
 
-    const disputeCalls = callOrder.filter((n) => n === "Midland Funding" || n === "Acme Bank");
+    const disputeCalls = callOrder.filter(n => n === "Midland Funding" || n === "Acme Bank");
     if (disputeCalls.length >= 2) {
       assert.equal(
         disputeCalls[0],
@@ -422,7 +421,7 @@ test("generateDisputeLetters: higher severity furnisher is processed before lowe
 test("generateDisputeLetters: returned dispute letter objects have required shape", async () => {
   await withStub(makeLetterStub(), async ({ generateDisputeLetters }) => {
     const result = await generateDisputeLetters(makeCRSResult(), makePersonal());
-    const disputeLetters = result.filter((l) => l.type === "dispute");
+    const disputeLetters = result.filter(l => l.type === "dispute");
     assert.ok(disputeLetters.length > 0, "expected at least 1 dispute letter");
     const letter = disputeLetters[0];
     assert.ok("type" in letter, "missing: type");
@@ -445,13 +444,13 @@ test("generateDisputeLetters: tradeline with no violations → no dispute letter
       adverseRatings: null,
       currentBalance: 1000,
       creditLimit: 5000,
-      reportedDate: "2026-03-01",
+      reportedDate: "2026-03-01"
     });
     const crs = makeCRSResult({
-      normalized: { tradelines: [cleanTL], inquiries: [], identity: {} },
+      normalized: { tradelines: [cleanTL], inquiries: [], identity: {} }
     });
     const result = await generateDisputeLetters(crs, makePersonal());
-    const disputeLetters = result.filter((l) => l.type === "dispute");
+    const disputeLetters = result.filter(l => l.type === "dispute");
     assert.equal(disputeLetters.length, 0, "no violations → no letters");
   });
 });

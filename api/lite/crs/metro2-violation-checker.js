@@ -31,13 +31,13 @@
 // ---------------------------------------------------------------------------
 
 const PENDING_CHECKS = [
-  "DOUBLE_REPORTING",         // Check 21 — needs cross-tradeline grouping
+  "DOUBLE_REPORTING", // Check 21 — needs cross-tradeline grouping
   "JOINT_ACCOUNT_WRONG_ECOA", // Check 32 — needs cross-bureau comparison
-  "SSN_VARIATION",            // Check 34 — needs PII data
-  "INQUIRY_TOO_OLD",          // Check 35 — operates on inquiry objects
-  "INQUIRY_DUPLICATE",        // Check 36 — operates on inquiry objects
-  "INQUIRY_PERMISSIBLE",      // Check 37 — operates on inquiry objects
-  "INQUIRY_SOFT_MIXED",       // Check 38 — operates on inquiry objects
+  "SSN_VARIATION", // Check 34 — needs PII data
+  "INQUIRY_TOO_OLD", // Check 35 — operates on inquiry objects
+  "INQUIRY_DUPLICATE", // Check 36 — operates on inquiry objects
+  "INQUIRY_PERMISSIBLE", // Check 37 — operates on inquiry objects
+  "INQUIRY_SOFT_MIXED" // Check 38 — operates on inquiry objects
 ];
 
 // ---------------------------------------------------------------------------
@@ -95,11 +95,8 @@ function daysDiff(date1, date2) {
  */
 function hasCommentMatching(comments, pattern) {
   if (!Array.isArray(comments) || comments.length === 0) return false;
-  const re =
-    typeof pattern === "string"
-      ? new RegExp(pattern, "i")
-      : pattern;
-  return comments.some((c) => {
+  const re = typeof pattern === "string" ? new RegExp(pattern, "i") : pattern;
+  return comments.some(c => {
     const text = [c.text, c.code, c.type].filter(Boolean).join(" ");
     return re.test(text);
   });
@@ -116,7 +113,7 @@ function inferDofd(adverseRatings) {
   const candidates = [
     adverseRatings.highest?.date,
     adverseRatings.mostRecent?.date,
-    ...(adverseRatings.prior || []).map((p) => p?.date),
+    ...(adverseRatings.prior || []).map(p => p?.date)
   ].filter(Boolean);
   const parsed = candidates.map(parseDate).filter(Boolean);
   if (parsed.length === 0) return null;
@@ -142,7 +139,9 @@ function statusIndicatesClosed(status) {
 function statusIndicatesChargeOff(status) {
   if (!status) return false;
   const lower = status.toLowerCase();
-  return lower.includes("chargeoff") || lower.includes("charge off") || lower.includes("charge-off");
+  return (
+    lower.includes("chargeoff") || lower.includes("charge off") || lower.includes("charge-off")
+  );
 }
 
 /**
@@ -574,10 +573,7 @@ function checkCollectionWrongStatus(tl) {
  * ratingType is "ChargeOff" but monthlyPayment > 0.
  */
 function checkChargeoffWithPayments(tl) {
-  if (
-    tl.currentRatingType !== "ChargeOff" &&
-    tl.currentRatingType !== "CollectionOrChargeOff"
-  )
+  if (tl.currentRatingType !== "ChargeOff" && tl.currentRatingType !== "CollectionOrChargeOff")
     return null;
   if (!(tl.monthlyPayment > 0)) return null;
   return makeViolation(
@@ -833,42 +829,42 @@ function checkDeceasedFlagAlive(tl) {
 
 const CHECKS = [
   // Universal
-  (tl, rd) => checkDofdMissing(tl),
+  (tl, _rd) => checkDofdMissing(tl),
   (tl, rd) => checkDofdFuture(tl, rd),
   (tl, rd) => checkSevenYearExpired(tl, rd),
-  (tl, rd) => checkBalanceOnClosed(tl),
+  (tl, _rd) => checkBalanceOnClosed(tl),
   (tl, rd) => checkStaleReporting(tl, rd),
-  (tl, rd) => checkMissingAccountType(tl),
-  (tl, rd) => checkMissingCreditor(tl),
-  (tl, rd) => checkNegativeBalance(tl),
-  (tl, rd) => checkPastDueOnCurrent(tl),
+  (tl, _rd) => checkMissingAccountType(tl),
+  (tl, _rd) => checkMissingCreditor(tl),
+  (tl, _rd) => checkNegativeBalance(tl),
+  (tl, _rd) => checkPastDueOnCurrent(tl),
   (tl, rd) => checkOpenedFuture(tl, rd),
   // Status / Balance Consistency
-  (tl, rd) => checkStatusBalanceMismatchPaid(tl),
-  (tl, rd) => checkStatusCurrentWithPastDue(tl),
-  (tl, rd) => checkChargeoffNoAmount(tl),
-  (tl, rd) => checkPaymentRatingStatusConflict(tl),
-  (tl, rd) => checkBalanceExceedsLimit(tl),
-  (tl, rd) => checkPaymentHistoryConflict(tl),
-  (tl, rd) => checkSoldAccountWithBalance(tl),
+  (tl, _rd) => checkStatusBalanceMismatchPaid(tl),
+  (tl, _rd) => checkStatusCurrentWithPastDue(tl),
+  (tl, _rd) => checkChargeoffNoAmount(tl),
+  (tl, _rd) => checkPaymentRatingStatusConflict(tl),
+  (tl, _rd) => checkBalanceExceedsLimit(tl),
+  (tl, _rd) => checkPaymentHistoryConflict(tl),
+  (tl, _rd) => checkSoldAccountWithBalance(tl),
   // Charge-Off / Collection
-  (tl, rd) => checkCollectionMissingOriginal(tl),
-  (tl, rd) => checkCollectionWrongStatus(tl),
-  (tl, rd) => checkChargeoffWithPayments(tl),
-  (tl, rd) => checkCollectionBalanceExceedsOriginal(tl),
-  (tl, rd) => checkReagedDofd(tl),
+  (tl, _rd) => checkCollectionMissingOriginal(tl),
+  (tl, _rd) => checkCollectionWrongStatus(tl),
+  (tl, _rd) => checkChargeoffWithPayments(tl),
+  (tl, _rd) => checkCollectionBalanceExceedsOriginal(tl),
+  (tl, _rd) => checkReagedDofd(tl),
   // Bankruptcy
-  (tl, rd) => checkBankruptcyWithBalance(tl),
-  (tl, rd) => checkBankruptcyWrongRating(tl),
-  (tl, rd) => checkBankruptcyStillReportingLate(tl),
-  (tl, rd) => checkIncludedInBankruptcyNoFlag(tl),
+  (tl, _rd) => checkBankruptcyWithBalance(tl),
+  (tl, _rd) => checkBankruptcyWrongRating(tl),
+  (tl, _rd) => checkBankruptcyStillReportingLate(tl),
+  (tl, _rd) => checkIncludedInBankruptcyNoFlag(tl),
   // Dispute / Compliance
   (tl, rd) => checkDisputeFlagStale(tl, rd),
-  (tl, rd) => checkDisputedButNoNotation(tl),
-  (tl, rd) => checkComplianceCodeMissing(tl),
+  (tl, _rd) => checkDisputedButNoNotation(tl),
+  (tl, _rd) => checkComplianceCodeMissing(tl),
   // Personal Info / Mixed File
-  (tl, rd) => checkAuReportedNegative(tl),
-  (tl, rd) => checkDeceasedFlagAlive(tl),
+  (tl, _rd) => checkAuReportedNegative(tl),
+  (tl, _rd) => checkDeceasedFlagAlive(tl)
 ];
 
 // ---------------------------------------------------------------------------
@@ -889,10 +885,7 @@ function detectViolations(tradeline, reportDate = new Date()) {
     return { violations: [] };
   }
 
-  const rd =
-    reportDate instanceof Date && !isNaN(reportDate.getTime())
-      ? reportDate
-      : new Date();
+  const rd = reportDate instanceof Date && !isNaN(reportDate.getTime()) ? reportDate : new Date();
 
   const violations = [];
 
@@ -958,5 +951,5 @@ module.exports = {
   inferDofd,
 
   // Metadata
-  PENDING_CHECKS,
+  PENDING_CHECKS
 };

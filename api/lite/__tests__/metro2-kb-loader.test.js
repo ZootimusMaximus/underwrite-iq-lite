@@ -2,7 +2,6 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const path = require("node:path");
 
 // ---------------------------------------------------------------------------
 // The module caches state in module scope — we need the fresh require each
@@ -18,17 +17,8 @@ const {
   loadKnowledgeBase,
   getAvailableSections,
   getSectionByName,
-  getTokenEstimate,
+  getTokenEstimate
 } = require("../crs/metro2-kb-loader");
-
-// ---------------------------------------------------------------------------
-// Resolve paths used in tests
-// ---------------------------------------------------------------------------
-
-const REAL_KB_PATH = path.resolve(
-  __dirname,
-  "../../../../underwrite-iq-lite/data/metro2-kb.md"
-);
 
 // ---------------------------------------------------------------------------
 // loadKnowledgeBase — basic loading
@@ -71,19 +61,19 @@ test("loadKnowledgeBase(3) is approximately same length as loadKnowledgeBase(2)"
 test("loadKnowledgeBase: invalid round throws RangeError", () => {
   assert.throws(
     () => loadKnowledgeBase(0),
-    (err) => err instanceof RangeError
+    err => err instanceof RangeError
   );
   assert.throws(
     () => loadKnowledgeBase(4),
-    (err) => err instanceof RangeError
+    err => err instanceof RangeError
   );
   assert.throws(
     () => loadKnowledgeBase(null),
-    (err) => err instanceof RangeError
+    err => err instanceof RangeError
   );
   assert.throws(
     () => loadKnowledgeBase("one"),
-    (err) => err instanceof RangeError
+    err => err instanceof RangeError
   );
 });
 
@@ -102,10 +92,7 @@ test("round 1 contains Section 1 (Metro 2 specification) content", () => {
 
 test("round 1 contains Section 3 (Statutes) content", () => {
   const result = loadKnowledgeBase(1);
-  assert.ok(
-    result.includes("SECTION 3 — STATUTES"),
-    "round 1 should contain Section 3 heading"
-  );
+  assert.ok(result.includes("SECTION 3 — STATUTES"), "round 1 should contain Section 3 heading");
 });
 
 test("round 1 contains Section 5 (Violation Checklist) content", () => {
@@ -157,25 +144,25 @@ test("Section 1 content includes 'Account Status' (Field 17A)", () => {
 test("Section 2 content (round 2) includes Saunders case law", () => {
   const result = loadKnowledgeBase(2);
   // Saunders v. Branch Banking & Trust is a key case cited in Section 2
-  assert.ok(
-    result.includes("Saunders"),
-    "Section 2 (round 2) should reference Saunders case"
-  );
+  assert.ok(result.includes("Saunders"), "Section 2 (round 2) should reference Saunders case");
 });
 
 test("AI Prompt Integration Guide is present by default (round 1)", () => {
   const result = loadKnowledgeBase(1);
-  assert.ok(
-    result.includes("AI PROMPT INTEGRATION GUIDE"),
-    "guide should be appended by default"
-  );
+  assert.ok(result.includes("AI PROMPT INTEGRATION GUIDE"), "guide should be appended by default");
 });
 
 test("guide can be excluded via includeGuide=false", () => {
   const withGuide = loadKnowledgeBase(1, { includeGuide: true });
   const withoutGuide = loadKnowledgeBase(1, { includeGuide: false });
-  assert.ok(withGuide.includes("AI PROMPT INTEGRATION GUIDE"), "guide should be present when included");
-  assert.ok(!withoutGuide.includes("AI PROMPT INTEGRATION GUIDE"), "guide should be absent when excluded");
+  assert.ok(
+    withGuide.includes("AI PROMPT INTEGRATION GUIDE"),
+    "guide should be present when included"
+  );
+  assert.ok(
+    !withoutGuide.includes("AI PROMPT INTEGRATION GUIDE"),
+    "guide should be absent when excluded"
+  );
   assert.ok(withGuide.length > withoutGuide.length, "excluding guide should shorten the output");
 });
 
@@ -192,10 +179,7 @@ test("getTokenEstimate(1) returns a positive number", () => {
 test("getTokenEstimate(2) returns a number greater than getTokenEstimate(1)", () => {
   const est1 = getTokenEstimate(1);
   const est2 = getTokenEstimate(2);
-  assert.ok(
-    est2 > est1,
-    `round 2 estimate (${est2}) should exceed round 1 estimate (${est1})`
-  );
+  assert.ok(est2 > est1, `round 2 estimate (${est2}) should exceed round 1 estimate (${est1})`);
 });
 
 test("getTokenEstimate(1) is in a plausible range for a knowledge base (>1000 tokens)", () => {
@@ -249,13 +233,13 @@ test("getAvailableSections returns strings", () => {
 
 test("getAvailableSections includes Section 1 name", () => {
   const sections = getAvailableSections();
-  const hasSection1 = sections.some((s) => s.includes("Section 1") || s.includes("Metro 2 Complete"));
+  const hasSection1 = sections.some(s => s.includes("Section 1") || s.includes("Metro 2 Complete"));
   assert.ok(hasSection1, "should include Section 1 name");
 });
 
 test("getAvailableSections includes Section 2 name (Case Law)", () => {
   const sections = getAvailableSections();
-  const hasSection2 = sections.some((s) => s.includes("Case Law") || s.includes("Section 2"));
+  const hasSection2 = sections.some(s => s.includes("Case Law") || s.includes("Section 2"));
   assert.ok(hasSection2, "should include Section 2 name");
 });
 

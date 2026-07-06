@@ -79,6 +79,19 @@ function buildAuditTrail(options) {
     if (identityGate.reasons?.length > 0) {
       decisionsLog.push(`identityGate.reasons: [${identityGate.reasons.join(", ")}]`);
     }
+    // Name the specific bureau(s) behind a freeze/fraud hold so ops can see
+    // WHICH bureau to act on (a single-bureau freeze still returns a full file
+    // from the others — the bureau list disambiguates that).
+    if (identityGate.securityFreeze?.bureaus?.length > 0) {
+      decisionsLog.push(
+        `identityGate.frozenBureaus: [${identityGate.securityFreeze.bureaus.join(", ")}]`
+      );
+    }
+    if (identityGate.fraudAlertOnFile?.bureaus?.length > 0) {
+      decisionsLog.push(
+        `identityGate.fraudAlertBureaus: [${identityGate.fraudAlertOnFile.bureaus.join(", ")}]`
+      );
+    }
   }
 
   // ── Consumer Signal Summary ─────────────────────────────────────────

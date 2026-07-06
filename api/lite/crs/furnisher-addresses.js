@@ -28,7 +28,7 @@ const FURNISHER_ADDRESSES = {
     city: "Salt Lake City",
     state: "UT",
     zip: "84130",
-    full: "PO Box 30285, Salt Lake City, UT 84130",
+    full: "PO Box 30285, Salt Lake City, UT 84130"
   },
   chase: {
     name: "Chase",
@@ -36,7 +36,7 @@ const FURNISHER_ADDRESSES = {
     city: "Wilmington",
     state: "DE",
     zip: "19850-5298",
-    full: "PO Box 15298, Wilmington, DE 19850-5298",
+    full: "PO Box 15298, Wilmington, DE 19850-5298"
   },
   "jp morgan chase": {
     name: "JP Morgan Chase",
@@ -44,7 +44,7 @@ const FURNISHER_ADDRESSES = {
     city: "Wilmington",
     state: "DE",
     zip: "19850-5298",
-    full: "PO Box 15298, Wilmington, DE 19850-5298",
+    full: "PO Box 15298, Wilmington, DE 19850-5298"
   },
   "jpmorgan chase": {
     name: "JPMorgan Chase",
@@ -52,7 +52,7 @@ const FURNISHER_ADDRESSES = {
     city: "Wilmington",
     state: "DE",
     zip: "19850-5298",
-    full: "PO Box 15298, Wilmington, DE 19850-5298",
+    full: "PO Box 15298, Wilmington, DE 19850-5298"
   },
   citibank: {
     name: "Citibank",
@@ -60,7 +60,7 @@ const FURNISHER_ADDRESSES = {
     city: "St. Louis",
     state: "MO",
     zip: "63179",
-    full: "PO Box 790084, St. Louis, MO 63179",
+    full: "PO Box 790084, St. Louis, MO 63179"
   },
   citi: {
     name: "Citi",
@@ -68,7 +68,7 @@ const FURNISHER_ADDRESSES = {
     city: "St. Louis",
     state: "MO",
     zip: "63179",
-    full: "PO Box 790084, St. Louis, MO 63179",
+    full: "PO Box 790084, St. Louis, MO 63179"
   },
   discover: {
     name: "Discover",
@@ -76,7 +76,7 @@ const FURNISHER_ADDRESSES = {
     city: "Salt Lake City",
     state: "UT",
     zip: "84130",
-    full: "PO Box 30945, Salt Lake City, UT 84130",
+    full: "PO Box 30945, Salt Lake City, UT 84130"
   },
   "discover bank": {
     name: "Discover Bank",
@@ -84,7 +84,7 @@ const FURNISHER_ADDRESSES = {
     city: "Salt Lake City",
     state: "UT",
     zip: "84130",
-    full: "PO Box 30945, Salt Lake City, UT 84130",
+    full: "PO Box 30945, Salt Lake City, UT 84130"
   },
   "american express": {
     name: "American Express",
@@ -92,7 +92,7 @@ const FURNISHER_ADDRESSES = {
     city: "El Paso",
     state: "TX",
     zip: "79998-1537",
-    full: "PO Box 981537, El Paso, TX 79998-1537",
+    full: "PO Box 981537, El Paso, TX 79998-1537"
   },
   amex: {
     name: "American Express",
@@ -100,7 +100,7 @@ const FURNISHER_ADDRESSES = {
     city: "El Paso",
     state: "TX",
     zip: "79998-1537",
-    full: "PO Box 981537, El Paso, TX 79998-1537",
+    full: "PO Box 981537, El Paso, TX 79998-1537"
   },
   "bank of america": {
     name: "Bank of America",
@@ -108,7 +108,7 @@ const FURNISHER_ADDRESSES = {
     city: "El Paso",
     state: "TX",
     zip: "79998-2234",
-    full: "PO Box 982234, El Paso, TX 79998-2234",
+    full: "PO Box 982234, El Paso, TX 79998-2234"
   },
   "wells fargo": {
     name: "Wells Fargo",
@@ -116,7 +116,7 @@ const FURNISHER_ADDRESSES = {
     city: "Des Moines",
     state: "IA",
     zip: "50306-3517",
-    full: "PO Box 14517, Des Moines, IA 50306-3517",
+    full: "PO Box 14517, Des Moines, IA 50306-3517"
   },
   synchrony: {
     name: "Synchrony",
@@ -124,7 +124,7 @@ const FURNISHER_ADDRESSES = {
     city: "Orlando",
     state: "FL",
     zip: "32896-5060",
-    full: "PO Box 965060, Orlando, FL 32896-5060",
+    full: "PO Box 965060, Orlando, FL 32896-5060"
   },
   "synchrony bank": {
     name: "Synchrony Bank",
@@ -132,7 +132,7 @@ const FURNISHER_ADDRESSES = {
     city: "Orlando",
     state: "FL",
     zip: "32896-5060",
-    full: "PO Box 965060, Orlando, FL 32896-5060",
+    full: "PO Box 965060, Orlando, FL 32896-5060"
   },
   "synchrony financial": {
     name: "Synchrony Financial",
@@ -140,7 +140,7 @@ const FURNISHER_ADDRESSES = {
     city: "Orlando",
     state: "FL",
     zip: "32896-5060",
-    full: "PO Box 965060, Orlando, FL 32896-5060",
+    full: "PO Box 965060, Orlando, FL 32896-5060"
   },
   // -------------------------------------------------------------------------
   // Major Collection Agencies / Debt Buyers
@@ -151,7 +151,7 @@ const FURNISHER_ADDRESSES = {
     city: "San Diego",
     state: "CA",
     zip: "92108",
-    full: "350 Camino de la Reina, Suite 100, San Diego, CA 92108",
+    full: "350 Camino de la Reina, Suite 100, San Diego, CA 92108"
   },
   "midland credit": {
     name: "Midland Credit Management",
@@ -159,7 +159,7 @@ const FURNISHER_ADDRESSES = {
     city: "San Diego",
     state: "CA",
     zip: "92108",
-    full: "350 Camino de la Reina, Suite 100, San Diego, CA 92108",
+    full: "350 Camino de la Reina, Suite 100, San Diego, CA 92108"
   },
   "midland funding": {
     name: "Midland Funding",
@@ -167,7 +167,7 @@ const FURNISHER_ADDRESSES = {
     city: "San Diego",
     state: "CA",
     zip: "92108",
-    full: "350 Camino de la Reina, Suite 100, San Diego, CA 92108",
+    full: "350 Camino de la Reina, Suite 100, San Diego, CA 92108"
   },
   "portfolio recovery associates": {
     name: "Portfolio Recovery Associates",
@@ -175,7 +175,7 @@ const FURNISHER_ADDRESSES = {
     city: "Norfolk",
     state: "VA",
     zip: "23502",
-    full: "120 Corporate Blvd, Norfolk, VA 23502",
+    full: "120 Corporate Blvd, Norfolk, VA 23502"
   },
   "portfolio recovery": {
     name: "Portfolio Recovery Associates",
@@ -183,7 +183,7 @@ const FURNISHER_ADDRESSES = {
     city: "Norfolk",
     state: "VA",
     zip: "23502",
-    full: "120 Corporate Blvd, Norfolk, VA 23502",
+    full: "120 Corporate Blvd, Norfolk, VA 23502"
   },
   "lvnv funding": {
     name: "LVNV Funding",
@@ -191,7 +191,7 @@ const FURNISHER_ADDRESSES = {
     city: "Greenville",
     state: "SC",
     zip: "29603",
-    full: "PO Box 10584, Greenville, SC 29603",
+    full: "PO Box 10584, Greenville, SC 29603"
   },
   "encore capital": {
     name: "Encore Capital Group",
@@ -199,7 +199,7 @@ const FURNISHER_ADDRESSES = {
     city: "San Diego",
     state: "CA",
     zip: "92163",
-    full: "PO Box 3111, San Diego, CA 92163",
+    full: "PO Box 3111, San Diego, CA 92163"
   },
   "encore capital group": {
     name: "Encore Capital Group",
@@ -207,7 +207,7 @@ const FURNISHER_ADDRESSES = {
     city: "San Diego",
     state: "CA",
     zip: "92163",
-    full: "PO Box 3111, San Diego, CA 92163",
+    full: "PO Box 3111, San Diego, CA 92163"
   },
   "cavalry portfolio services": {
     name: "Cavalry Portfolio Services",
@@ -215,7 +215,7 @@ const FURNISHER_ADDRESSES = {
     city: "Valhalla",
     state: "NY",
     zip: "10595",
-    full: "500 Summit Lake Dr, Valhalla, NY 10595",
+    full: "500 Summit Lake Dr, Valhalla, NY 10595"
   },
   "cavalry spv": {
     name: "Cavalry SPV",
@@ -223,7 +223,7 @@ const FURNISHER_ADDRESSES = {
     city: "Valhalla",
     state: "NY",
     zip: "10595",
-    full: "500 Summit Lake Dr, Valhalla, NY 10595",
+    full: "500 Summit Lake Dr, Valhalla, NY 10595"
   },
   cavalry: {
     name: "Cavalry",
@@ -231,8 +231,8 @@ const FURNISHER_ADDRESSES = {
     city: "Valhalla",
     state: "NY",
     zip: "10595",
-    full: "500 Summit Lake Dr, Valhalla, NY 10595",
-  },
+    full: "500 Summit Lake Dr, Valhalla, NY 10595"
+  }
 };
 
 // Suffixes to strip when normalizing creditor names for matching
@@ -250,11 +250,7 @@ const STRIP_SUFFIXES =
  */
 function normalizeName(name) {
   if (!name || typeof name !== "string") return "";
-  return name
-    .toLowerCase()
-    .replace(STRIP_SUFFIXES, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return name.toLowerCase().replace(STRIP_SUFFIXES, " ").replace(/\s+/g, " ").trim();
 }
 
 /**

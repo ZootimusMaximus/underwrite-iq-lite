@@ -100,7 +100,7 @@ Reference dispute letters by round number.
 
 // Metro 2 KB is now loaded dynamically via metro2-kb-loader.js
 // The KB content is injected into the system prompt at call time
-const METRO2_KB_PLACEHOLDER = '[KB_SECTION]';
+const METRO2_KB_PLACEHOLDER = "[KB_SECTION]";
 
 // ---------------------------------------------------------------------------
 // 3.4 Dispute Round 1 — per-furnisher Metro 2 violations

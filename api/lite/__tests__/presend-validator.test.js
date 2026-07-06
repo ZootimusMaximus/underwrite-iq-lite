@@ -12,7 +12,7 @@ const {
   checkGate6,
   checkGate7,
   checkGate8,
-  GATE_NAMES,
+  GATE_NAMES
 } = require("../crs/presend-validator");
 
 // ---------------------------------------------------------------------------
@@ -28,7 +28,7 @@ function makeContext(overrides = {}) {
     accountIdentifier: "1234",
     furnisherAddress: null,
     priorRoundText: null,
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -41,7 +41,7 @@ function makeViolation(overrides = {}) {
     severity: "high",
     statute: "FCRA § 623",
     explanation: "Closed account should not carry a balance.",
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -89,7 +89,7 @@ test("checkGate1: letter without any category keywords → fail", () => {
 
 test("checkGate2: violations with account data codes → pass", () => {
   const ctx = makeContext({
-    violations: [makeViolation({ code: "BALANCE_ON_CLOSED" })],
+    violations: [makeViolation({ code: "BALANCE_ON_CLOSED" })]
   });
   const result = checkGate2("", ctx);
   assert.equal(result.pass, true);
@@ -97,7 +97,7 @@ test("checkGate2: violations with account data codes → pass", () => {
 
 test("checkGate2: only SSN violation → fail", () => {
   const ctx = makeContext({
-    violations: [makeViolation({ code: "SSN_MISMATCH" })],
+    violations: [makeViolation({ code: "SSN_MISMATCH" })]
   });
   const result = checkGate2("", ctx);
   assert.equal(result.pass, false);
@@ -106,7 +106,7 @@ test("checkGate2: only SSN violation → fail", () => {
 
 test("checkGate2: only INQUIRY violation → fail", () => {
   const ctx = makeContext({
-    violations: [makeViolation({ code: "INQUIRY_TOO_OLD" })],
+    violations: [makeViolation({ code: "INQUIRY_TOO_OLD" })]
   });
   const result = checkGate2("", ctx);
   assert.equal(result.pass, false);
@@ -114,7 +114,7 @@ test("checkGate2: only INQUIRY violation → fail", () => {
 
 test("checkGate2: only DECEASED violation → fail", () => {
   const ctx = makeContext({
-    violations: [makeViolation({ code: "DECEASED_FLAG_ALIVE" })],
+    violations: [makeViolation({ code: "DECEASED_FLAG_ALIVE" })]
   });
   const result = checkGate2("", ctx);
   assert.equal(result.pass, false);
@@ -130,8 +130,8 @@ test("checkGate2: mixed account data + SSN violations → pass (not all excepted
   const ctx = makeContext({
     violations: [
       makeViolation({ code: "BALANCE_ON_CLOSED" }),
-      makeViolation({ code: "SSN_MISMATCH" }),
-    ],
+      makeViolation({ code: "SSN_MISMATCH" })
+    ]
   });
   const result = checkGate2("", ctx);
   assert.equal(result.pass, true);
@@ -155,14 +155,18 @@ test("checkGate3: round 2 without address → fail", () => {
 });
 
 test("checkGate3: round 2 with furnisherAddress in context → pass", () => {
-  const ctx = makeContext({ round: 2, furnisherAddress: "123 Main St, Suite 100, New York NY 10001" });
+  const ctx = makeContext({
+    round: 2,
+    furnisherAddress: "123 Main St, Suite 100, New York NY 10001"
+  });
   const result = checkGate3("Please investigate.", ctx);
   assert.equal(result.pass, true);
 });
 
 test("checkGate3: round 2 with address block in letter text → pass", () => {
   const ctx = makeContext({ round: 2, furnisherAddress: null });
-  const letterWithAddress = "Capital One, 123 Main Street, Richmond VA 23236. I dispute the account.";
+  const letterWithAddress =
+    "Capital One, 123 Main Street, Richmond VA 23236. I dispute the account.";
   const result = checkGate3(letterWithAddress, ctx);
   assert.equal(result.pass, true);
 });
@@ -181,7 +185,7 @@ test("checkGate3: round 3 without address → fail", () => {
 test("checkGate4: letter with all 4 required elements → pass", () => {
   const ctx = makeContext({
     violations: [makeViolation({ field: "currentBalance" })],
-    accountIdentifier: "1234",
+    accountIdentifier: "1234"
   });
   const result = checkGate4(GOOD_LETTER, ctx);
   assert.equal(result.pass, true);
@@ -190,9 +194,10 @@ test("checkGate4: letter with all 4 required elements → pass", () => {
 test("checkGate4: letter missing account identification → fail", () => {
   const ctx = makeContext({
     violations: [makeViolation({ field: "currentBalance" })],
-    accountIdentifier: null,
+    accountIdentifier: null
   });
-  const letter = "The currentBalance is incorrect because the data is inaccurate. I have enclosed documentation.";
+  const letter =
+    "The currentBalance is incorrect because the data is inaccurate. I have enclosed documentation.";
   const result = checkGate4(letter, ctx);
   assert.equal(result.pass, false);
   assert.ok(result.reason.includes("account identification"));
@@ -201,10 +206,11 @@ test("checkGate4: letter missing account identification → fail", () => {
 test("checkGate4: letter missing basis for dispute → fail", () => {
   const ctx = makeContext({
     violations: [makeViolation({ field: "currentBalance" })],
-    accountIdentifier: "1234",
+    accountIdentifier: "1234"
   });
   // Remove 'because', 'reason', 'inaccurate', 'incorrect', 'violation'
-  const letter = "My account ending in 1234 has a problem with currentBalance. I have enclosed documentation.";
+  const letter =
+    "My account ending in 1234 has a problem with currentBalance. I have enclosed documentation.";
   const result = checkGate4(letter, ctx);
   assert.equal(result.pass, false);
   assert.ok(result.reason.includes("basis"));
@@ -241,7 +247,10 @@ test("checkGate5: 'Pursuant to' opener → fail", () => {
 
 test("checkGate5: 'credit repair' phrase → fail", () => {
   const ctx = makeContext();
-  const result = checkGate5("I am writing about my credit repair situation regarding my account.", ctx);
+  const result = checkGate5(
+    "I am writing about my credit repair situation regarding my account.",
+    ctx
+  );
   assert.equal(result.pass, false);
 });
 
@@ -265,9 +274,10 @@ test("checkGate5: no consumer voice pattern at all → fail", () => {
 test("checkGate6: specific furnisher + field reference → pass", () => {
   const ctx = makeContext({
     furnisher: "Capital One",
-    violations: [makeViolation({ field: "currentBalance" })],
+    violations: [makeViolation({ field: "currentBalance" })]
   });
-  const letter = "I am disputing the currentBalance on my Capital One account because it is incorrect.";
+  const letter =
+    "I am disputing the currentBalance on my Capital One account because it is incorrect.";
   const result = checkGate6(letter, ctx);
   assert.equal(result.pass, true);
 });
@@ -275,9 +285,12 @@ test("checkGate6: specific furnisher + field reference → pass", () => {
 test("checkGate6: 'I dispute everything' → fail (frivolous)", () => {
   const ctx = makeContext({
     furnisher: "Capital One",
-    violations: [makeViolation({ field: "currentBalance" })],
+    violations: [makeViolation({ field: "currentBalance" })]
   });
-  const result = checkGate6("I dispute everything on my report regarding Capital One currentBalance.", ctx);
+  const result = checkGate6(
+    "I dispute everything on my report regarding Capital One currentBalance.",
+    ctx
+  );
   assert.equal(result.pass, false);
   assert.ok(result.reason.includes("frivolous"));
 });
@@ -285,7 +298,7 @@ test("checkGate6: 'I dispute everything' → fail (frivolous)", () => {
 test("checkGate6: missing furnisher name in letter → fail", () => {
   const ctx = makeContext({
     furnisher: "Capital One",
-    violations: [makeViolation({ field: "currentBalance" })],
+    violations: [makeViolation({ field: "currentBalance" })]
   });
   const letter = "I dispute the currentBalance listed on my credit report. It is incorrect.";
   const result = checkGate6(letter, ctx);
@@ -296,7 +309,7 @@ test("checkGate6: missing furnisher name in letter → fail", () => {
 test("checkGate6: no violation field referenced → fail", () => {
   const ctx = makeContext({
     furnisher: "Capital One",
-    violations: [makeViolation({ field: "currentBalance" })],
+    violations: [makeViolation({ field: "currentBalance" })]
   });
   const letter = "I dispute the Capital One account because something is wrong.";
   const result = checkGate6(letter, ctx);
@@ -347,13 +360,15 @@ test("checkGate7: round 3 without round 3 keywords → fail", () => {
 });
 
 test("checkGate7: round 2 with MOV keyword but >80% similar to prior → fail", () => {
-  const priorText = "I am requesting your method of verification for this account balance on my Capital One credit report.";
+  const priorText =
+    "I am requesting your method of verification for this account balance on my Capital One credit report.";
   const ctx = makeContext({
     round: 2,
-    priorRoundText: priorText,
+    priorRoundText: priorText
   });
   // Nearly identical letter
-  const sameText = "I am requesting your method of verification for this account balance on my Capital One credit report again.";
+  const sameText =
+    "I am requesting your method of verification for this account balance on my Capital One credit report again.";
   const result = checkGate7(sameText, ctx);
   assert.equal(result.pass, false);
   assert.ok(result.reason.includes("similar"));
@@ -365,7 +380,10 @@ test("checkGate7: round 2 with MOV keyword but >80% similar to prior → fail", 
 
 test("checkGate8: no prohibited phrases → pass", () => {
   const ctx = makeContext();
-  const result = checkGate8("I am writing to dispute this account balance on my credit report.", ctx);
+  const result = checkGate8(
+    "I am writing to dispute this account balance on my credit report.",
+    ctx
+  );
   assert.equal(result.pass, true);
 });
 
@@ -409,7 +427,7 @@ test("validatePreSend: good letter passes all 8 gates → valid: true, failures:
     round: 1,
     furnisher: "Capital One",
     violations: [makeViolation({ field: "currentBalance" })],
-    accountIdentifier: "1234",
+    accountIdentifier: "1234"
   });
   const result = validatePreSend(GOOD_LETTER, ctx);
   assert.equal(result.valid, true);
@@ -441,18 +459,25 @@ test("validatePreSend: bad letter fails multiple gates → returns ALL failures 
   const ctx = makeContext({
     round: 1,
     furnisher: "Capital One",
-    violations: [],
+    violations: []
   });
   // Letter with no category keywords, no consumer voice, CROA language
-  const badLetter = "Pursuant to our services, we guarantee removal of this item to improve your credit score.";
+  const badLetter =
+    "Pursuant to our services, we guarantee removal of this item to improve your credit score.";
   const result = validatePreSend(badLetter, ctx);
   assert.equal(result.valid, false);
   assert.ok(result.failures.length >= 3, `expected ≥3 failures, got ${result.failures.length}`);
   // Verify each failure has the required shape
   for (const f of result.failures) {
     assert.ok(typeof f.gate === "number", "failure.gate must be number");
-    assert.ok(typeof f.name === "string" && f.name.length > 0, "failure.name must be non-empty string");
-    assert.ok(typeof f.reason === "string" && f.reason.length > 0, "failure.reason must be non-empty string");
+    assert.ok(
+      typeof f.name === "string" && f.name.length > 0,
+      "failure.name must be non-empty string"
+    );
+    assert.ok(
+      typeof f.reason === "string" && f.reason.length > 0,
+      "failure.reason must be non-empty string"
+    );
   }
 });
 
@@ -464,7 +489,7 @@ test("validatePreSend: all gates run even if early ones fail", () => {
     round: 1,
     furnisher: "Capital One",
     violations: [makeViolation({ field: "currentBalance" })],
-    accountIdentifier: "1234",
+    accountIdentifier: "1234"
   });
   const multiFailLetter =
     "We are writing on behalf of our client about Capital One account ending in 1234. " +
@@ -473,9 +498,12 @@ test("validatePreSend: all gates run even if early ones fail", () => {
     "We guarantee removal of this item.";
 
   const result = validatePreSend(multiFailLetter, ctx);
-  const gateCodes = result.failures.map((f) => f.gate);
+  const gateCodes = result.failures.map(f => f.gate);
   assert.ok(gateCodes.includes(5), `gate 5 should fail (CRO fingerprint); failures: ${gateCodes}`);
-  assert.ok(gateCodes.includes(8), `gate 8 should fail (guarantee removal); failures: ${gateCodes}`);
+  assert.ok(
+    gateCodes.includes(8),
+    `gate 8 should fail (guarantee removal); failures: ${gateCodes}`
+  );
   assert.ok(result.failures.length >= 2, `expected ≥2 failures, got ${result.failures.length}`);
 });
 

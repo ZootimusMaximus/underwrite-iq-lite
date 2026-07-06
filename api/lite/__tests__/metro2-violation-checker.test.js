@@ -16,24 +16,13 @@ const {
   checkPastDueOnCurrent,
   checkOpenedFuture,
   checkStatusBalanceMismatchPaid,
-  checkStatusCurrentWithPastDue,
   checkChargeoffNoAmount,
   checkPaymentRatingStatusConflict,
-  checkBalanceExceedsLimit,
-  checkPaymentHistoryConflict,
   checkSoldAccountWithBalance,
   checkCollectionMissingOriginal,
-  checkCollectionWrongStatus,
   checkChargeoffWithPayments,
-  checkCollectionBalanceExceedsOriginal,
   checkReagedDofd,
   checkBankruptcyWithBalance,
-  checkBankruptcyWrongRating,
-  checkBankruptcyStillReportingLate,
-  checkIncludedInBankruptcyNoFlag,
-  checkDisputeFlagStale,
-  checkDisputedButNoNotation,
-  checkComplianceCodeMissing,
   checkAuReportedNegative,
   checkDeceasedFlagAlive,
   // Helpers
@@ -42,7 +31,7 @@ const {
   hasCommentMatching,
   inferDofd,
   // Metadata
-  PENDING_CHECKS,
+  PENDING_CHECKS
 } = require("../crs/metro2-violation-checker");
 
 // ---------------------------------------------------------------------------
@@ -86,7 +75,7 @@ function makeTradeline(overrides = {}) {
     paymentPattern: null,
     adverseRatings: null,
     comments: [],
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -94,12 +83,12 @@ function makeAdverseRatings(highestDate, mostRecentDate) {
   return {
     highest: { date: highestDate, type: "ChargeOff" },
     mostRecent: { date: mostRecentDate, type: "ChargeOff" },
-    prior: [],
+    prior: []
   };
 }
 
 function violationCodes(tl, rd = REPORT_DATE) {
-  return detectViolations(tl, rd).violations.map((v) => v.code);
+  return detectViolations(tl, rd).violations.map(v => v.code);
 }
 
 // ---------------------------------------------------------------------------
@@ -190,7 +179,7 @@ test("inferDofd: returns earliest of highest and mostRecent dates", () => {
   const adverse = {
     highest: { date: "2019-03-01" },
     mostRecent: { date: "2020-06-01" },
-    prior: [],
+    prior: []
   };
   const d = inferDofd(adverse);
   assert.equal(d.toISOString().slice(0, 10), "2019-03-01");
@@ -200,7 +189,7 @@ test("inferDofd: handles prior array entries", () => {
   const adverse = {
     highest: null,
     mostRecent: { date: "2020-06-01" },
-    prior: [{ date: "2018-01-01" }],
+    prior: [{ date: "2018-01-01" }]
   };
   const d = inferDofd(adverse);
   assert.equal(d.toISOString().slice(0, 10), "2018-01-01");
@@ -243,7 +232,7 @@ test("detectViolations: handles undefined fields gracefully without throwing", (
     status: undefined,
     currentBalance: undefined,
     adverseRatings: undefined,
-    comments: undefined,
+    comments: undefined
   };
   assert.doesNotThrow(() => detectViolations(tl, REPORT_DATE));
 });
@@ -275,7 +264,7 @@ test("checkDofdMissing: chargeoff ratingType with no dates → DOFD_MISSING", ()
 test("checkDofdMissing: collection with adverse dates → no violation", () => {
   const tl = makeTradeline({
     status: "collection",
-    adverseRatings: makeAdverseRatings("2021-03-01", "2021-06-01"),
+    adverseRatings: makeAdverseRatings("2021-03-01", "2021-06-01")
   });
   assert.equal(checkDofdMissing(tl), null);
 });
@@ -299,7 +288,7 @@ test("checkDofdMissing: loanType includes collection → DOFD_MISSING", () => {
 test("checkDofdFuture: adverse date in future → DOFD_FUTURE", () => {
   const futureDate = "2027-01-01";
   const tl = makeTradeline({
-    adverseRatings: makeAdverseRatings(futureDate, futureDate),
+    adverseRatings: makeAdverseRatings(futureDate, futureDate)
   });
   const v = checkDofdFuture(tl, REPORT_DATE);
   assert.ok(v !== null);
@@ -309,7 +298,7 @@ test("checkDofdFuture: adverse date in future → DOFD_FUTURE", () => {
 
 test("checkDofdFuture: adverse date in past → no violation", () => {
   const tl = makeTradeline({
-    adverseRatings: makeAdverseRatings("2021-01-01", "2022-06-01"),
+    adverseRatings: makeAdverseRatings("2021-01-01", "2022-06-01")
   });
   assert.equal(checkDofdFuture(tl, REPORT_DATE), null);
 });
@@ -326,7 +315,7 @@ test("checkDofdFuture: no adverse ratings → no violation", () => {
 test("checkSevenYearExpired: DOFD 8 years ago → SEVEN_YEAR_EXPIRED", () => {
   // 8 years before report date 2026-04-01
   const tl = makeTradeline({
-    adverseRatings: makeAdverseRatings("2018-01-01", "2018-01-01"),
+    adverseRatings: makeAdverseRatings("2018-01-01", "2018-01-01")
   });
   const v = checkSevenYearExpired(tl, REPORT_DATE);
   assert.ok(v !== null);
@@ -336,7 +325,7 @@ test("checkSevenYearExpired: DOFD 8 years ago → SEVEN_YEAR_EXPIRED", () => {
 
 test("checkSevenYearExpired: DOFD 6 years ago → no violation", () => {
   const tl = makeTradeline({
-    adverseRatings: makeAdverseRatings("2020-01-01", "2020-01-01"),
+    adverseRatings: makeAdverseRatings("2020-01-01", "2020-01-01")
   });
   assert.equal(checkSevenYearExpired(tl, REPORT_DATE), null);
 });
@@ -344,14 +333,14 @@ test("checkSevenYearExpired: DOFD 6 years ago → no violation", () => {
 test("checkSevenYearExpired: DOFD exactly 7 years ago → no violation (expiry = today)", () => {
   // expiry == reportDate means expiry >= reportDate is true, so no violation
   const tl = makeTradeline({
-    adverseRatings: makeAdverseRatings("2019-04-01", "2019-04-01"),
+    adverseRatings: makeAdverseRatings("2019-04-01", "2019-04-01")
   });
   assert.equal(checkSevenYearExpired(tl, REPORT_DATE), null);
 });
 
 test("checkSevenYearExpired: very old date (1990s) → SEVEN_YEAR_EXPIRED", () => {
   const tl = makeTradeline({
-    adverseRatings: makeAdverseRatings("1995-06-01", "1995-06-01"),
+    adverseRatings: makeAdverseRatings("1995-06-01", "1995-06-01")
   });
   const v = checkSevenYearExpired(tl, REPORT_DATE);
   assert.ok(v !== null);
@@ -589,7 +578,7 @@ test("checkStatusBalanceMismatchPaid: ratingCode 1 with balance → no violation
 test("checkChargeoffNoAmount: ChargeOff ratingType with null chargeOffAmount → CHARGEOFF_NO_AMOUNT", () => {
   const tl = makeTradeline({
     currentRatingType: "ChargeOff",
-    chargeOffAmount: null,
+    chargeOffAmount: null
   });
   const v = checkChargeoffNoAmount(tl);
   assert.ok(v !== null);
@@ -600,7 +589,7 @@ test("checkChargeoffNoAmount: ChargeOff ratingType with null chargeOffAmount →
 test("checkChargeoffNoAmount: ChargeOff status with zero chargeOffAmount → CHARGEOFF_NO_AMOUNT", () => {
   const tl = makeTradeline({
     status: "chargeoff",
-    chargeOffAmount: 0,
+    chargeOffAmount: 0
   });
   const v = checkChargeoffNoAmount(tl);
   assert.ok(v !== null);
@@ -610,7 +599,7 @@ test("checkChargeoffNoAmount: ChargeOff status with zero chargeOffAmount → CHA
 test("checkChargeoffNoAmount: ChargeOff with valid chargeOffAmount → no violation", () => {
   const tl = makeTradeline({
     currentRatingType: "ChargeOff",
-    chargeOffAmount: 3500,
+    chargeOffAmount: 3500
   });
   assert.equal(checkChargeoffNoAmount(tl), null);
 });
@@ -693,7 +682,7 @@ test("checkCollectionMissingOriginal: collection with no original creditor comme
 test("checkCollectionMissingOriginal: collection with original creditor in comments → no violation", () => {
   const tl = makeTradeline({
     status: "collection",
-    comments: [{ text: "Original Creditor: Capital One" }],
+    comments: [{ text: "Original Creditor: Capital One" }]
   });
   assert.equal(checkCollectionMissingOriginal(tl), null);
 });
@@ -745,7 +734,7 @@ test("checkChargeoffWithPayments: AsAgreed with monthlyPayment → no violation"
 
 test("checkReagedDofd: mostRecent date >6 months AFTER highest → REAGED_DOFD", () => {
   const tl = makeTradeline({
-    adverseRatings: makeAdverseRatings("2020-01-01", "2021-01-01"),
+    adverseRatings: makeAdverseRatings("2020-01-01", "2021-01-01")
   });
   const v = checkReagedDofd(tl);
   assert.ok(v !== null);
@@ -755,14 +744,14 @@ test("checkReagedDofd: mostRecent date >6 months AFTER highest → REAGED_DOFD",
 
 test("checkReagedDofd: mostRecent ≤ highest (no re-aging pattern) → no violation", () => {
   const tl = makeTradeline({
-    adverseRatings: makeAdverseRatings("2021-01-01", "2020-06-01"),
+    adverseRatings: makeAdverseRatings("2021-01-01", "2020-06-01")
   });
   assert.equal(checkReagedDofd(tl), null);
 });
 
 test("checkReagedDofd: dates only 3 months apart → no violation", () => {
   const tl = makeTradeline({
-    adverseRatings: makeAdverseRatings("2021-01-01", "2021-04-01"),
+    adverseRatings: makeAdverseRatings("2021-01-01", "2021-04-01")
   });
   assert.equal(checkReagedDofd(tl), null);
 });
@@ -774,7 +763,7 @@ test("checkReagedDofd: null adverseRatings → no violation", () => {
 
 test("checkReagedDofd: null date entries → no violation", () => {
   const tl = makeTradeline({
-    adverseRatings: { highest: null, mostRecent: null, prior: [] },
+    adverseRatings: { highest: null, mostRecent: null, prior: [] }
   });
   assert.equal(checkReagedDofd(tl), null);
 });
@@ -787,7 +776,7 @@ test("checkBankruptcyWithBalance: BankruptcyOrWageEarnerPlan + balance + closedD
   const tl = makeTradeline({
     currentRatingType: "BankruptcyOrWageEarnerPlan",
     currentBalance: 5000,
-    closedDate: "2022-03-01",
+    closedDate: "2022-03-01"
   });
   const v = checkBankruptcyWithBalance(tl);
   assert.ok(v !== null);
@@ -799,7 +788,7 @@ test("checkBankruptcyWithBalance: bankruptcy comment + balance + closedDate → 
   const tl = makeTradeline({
     currentBalance: 2000,
     closedDate: "2022-01-01",
-    comments: [{ text: "INCLUDED IN BANKRUPTCY" }],
+    comments: [{ text: "INCLUDED IN BANKRUPTCY" }]
   });
   const v = checkBankruptcyWithBalance(tl);
   assert.ok(v !== null);
@@ -810,7 +799,7 @@ test("checkBankruptcyWithBalance: BK ratingType with zero balance → no violati
   const tl = makeTradeline({
     currentRatingType: "BankruptcyOrWageEarnerPlan",
     currentBalance: 0,
-    closedDate: "2022-01-01",
+    closedDate: "2022-01-01"
   });
   assert.equal(checkBankruptcyWithBalance(tl), null);
 });
@@ -819,7 +808,7 @@ test("checkBankruptcyWithBalance: BK ratingType + balance but no closedDate → 
   const tl = makeTradeline({
     currentRatingType: "BankruptcyOrWageEarnerPlan",
     currentBalance: 3000,
-    closedDate: null,
+    closedDate: null
   });
   assert.equal(checkBankruptcyWithBalance(tl), null);
 });
@@ -890,7 +879,10 @@ test("violation object has all required fields", () => {
   assert.ok(typeof v.actual === "string", "actual must be a string");
   assert.ok(["high", "medium", "low"].includes(v.severity), "severity must be high/medium/low");
   assert.ok(typeof v.statute === "string" && v.statute.length > 0, "statute must be non-empty");
-  assert.ok(typeof v.explanation === "string" && v.explanation.length > 0, "explanation must be non-empty");
+  assert.ok(
+    typeof v.explanation === "string" && v.explanation.length > 0,
+    "explanation must be non-empty"
+  );
 });
 
 test("high severity violations all have statute references", () => {
@@ -900,10 +892,10 @@ test("high severity violations all have statute references", () => {
     isDerogatory: true,
     status: "sold",
     currentBalance: 1000,
-    openedDate: "2030-01-01",
+    openedDate: "2030-01-01"
   });
   const { violations } = detectViolations(tl, REPORT_DATE);
-  const highSeverity = violations.filter((v) => v.severity === "high");
+  const highSeverity = violations.filter(v => v.severity === "high");
   for (const v of highSeverity) {
     assert.ok(v.statute && v.statute.includes("FCRA"), `${v.code} should cite FCRA`);
   }
@@ -916,18 +908,18 @@ test("high severity violations all have statute references", () => {
 test("maximum derogatory tradeline triggers many violations", () => {
   // A tradeline designed to fire as many checks as possible simultaneously
   const tl = makeTradeline({
-    creditorName: null,         // MISSING_CREDITOR
-    accountType: null,          // MISSING_ACCOUNT_TYPE
-    status: "collection",       // DOFD_MISSING (no adverseRatings), COLLECTION_MISSING_ORIGINAL
+    creditorName: null, // MISSING_CREDITOR
+    accountType: null, // MISSING_ACCOUNT_TYPE
+    status: "collection", // DOFD_MISSING (no adverseRatings), COLLECTION_MISSING_ORIGINAL
     loanType: "CollectionAccount",
-    currentBalance: -50,        // NEGATIVE_BALANCE
+    currentBalance: -50, // NEGATIVE_BALANCE
     currentRatingType: "AsAgreed",
-    isDerogatory: true,         // PAYMENT_RATING_STATUS_CONFLICT
-    pastDue: 200,               // PAST_DUE_ON_CURRENT
-    openedDate: "2029-01-01",   // OPENED_FUTURE
+    isDerogatory: true, // PAYMENT_RATING_STATUS_CONFLICT
+    pastDue: 200, // PAST_DUE_ON_CURRENT
+    openedDate: "2029-01-01", // OPENED_FUTURE
     reportedDate: "2023-01-01", // STALE_REPORTING
     adverseRatings: null,
-    comments: [],
+    comments: []
   });
   const { violations } = detectViolations(tl, REPORT_DATE);
   assert.ok(violations.length >= 5, `expected ≥5 violations, got ${violations.length}`);
@@ -952,7 +944,7 @@ test("clean current account produces zero violations", () => {
     openedDate: "2018-06-01",
     reportedDate: "2026-03-15",
     adverseRatings: null,
-    comments: [],
+    comments: []
   });
   const { violations } = detectViolations(tl, REPORT_DATE);
   assert.equal(violations.length, 0);
@@ -969,7 +961,7 @@ test("handles null amounts without throwing", () => {
     highBalance: null,
     pastDue: null,
     monthlyPayment: null,
-    chargeOffAmount: null,
+    chargeOffAmount: null
   });
   assert.doesNotThrow(() => detectViolations(tl, REPORT_DATE));
 });
@@ -979,7 +971,7 @@ test("handles null dates without throwing", () => {
     openedDate: null,
     closedDate: null,
     reportedDate: null,
-    lastActivityDate: null,
+    lastActivityDate: null
   });
   assert.doesNotThrow(() => detectViolations(tl, REPORT_DATE));
 });
@@ -989,7 +981,7 @@ test("handles null ratings without throwing", () => {
     currentRatingCode: null,
     currentRatingType: null,
     ratingSeverity: null,
-    isDerogatory: null,
+    isDerogatory: null
   });
   assert.doesNotThrow(() => detectViolations(tl, REPORT_DATE));
 });

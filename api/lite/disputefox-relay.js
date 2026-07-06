@@ -84,8 +84,18 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  // Optional auth
+  // Auth. Historically OPTIONAL — if DISPUTEFOX_API_KEY is set we enforce it,
+  // otherwise the endpoint served anyone (fail-open). The live DF-01..06 Zapier
+  // zaps currently POST without an auth header, so we can't hard fail-closed by
+  // default without breaking them. Hardening (#79):
+  //   - When a key IS set → enforce (unchanged).
+  //   - DISPUTEFOX_RELAY_REQUIRE_AUTH=true → refuse when no key is configured
+  //     (one-flip emergency close, e.g. once the zaps carry the header).
+  //   - Otherwise → serve, but log LOUDLY in production so the open state is
+  //     never silent.
   const foxApiKey = process.env.DISPUTEFOX_API_KEY;
+  const requireAuth =
+    String(process.env.DISPUTEFOX_RELAY_REQUIRE_AUTH || "").toLowerCase() === "true";
   if (foxApiKey) {
     const authHeader = req.headers["authorization"] || "";
     const provided = authHeader.startsWith("Bearer ")
@@ -95,6 +105,15 @@ module.exports = async function handler(req, res) {
       logWarn("DisputeFox relay: unauthorized request");
       return res.status(401).json({ ok: false, error: "Unauthorized" });
     }
+  } else if (requireAuth) {
+    logError(
+      "DisputeFox relay: DISPUTEFOX_RELAY_REQUIRE_AUTH set but no DISPUTEFOX_API_KEY — refusing"
+    );
+    return res.status(503).json({ ok: false, error: "Relay auth not configured" });
+  } else if (process.env.NODE_ENV === "production") {
+    logWarn(
+      "DisputeFox relay: serving UNAUTHENTICATED in production — no DISPUTEFOX_API_KEY set (#79)"
+    );
   }
 
   const body = req.body;

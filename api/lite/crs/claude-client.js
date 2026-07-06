@@ -61,7 +61,15 @@ function recordFailure() {
  * @param {number} [opts.temperature] - Temperature (0-1, default undefined — let Anthropic decide)
  * @returns {Promise<string>} Claude's text response
  */
-async function callClaude({ system, user, maxTokens, model, timeoutMs, useCache = true, temperature }) {
+async function callClaude({
+  system,
+  user,
+  maxTokens,
+  model,
+  timeoutMs,
+  useCache = true,
+  temperature
+}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
 
@@ -129,9 +137,7 @@ async function callClaude({ system, user, maxTokens, model, timeoutMs, useCache 
     usageStats.outputTokens += outputTokens;
 
     recordSuccess();
-    logInfo(
-      `[claude-client] model=${selectedModel} input=${inputTokens} output=${outputTokens}`
-    );
+    logInfo(`[claude-client] model=${selectedModel} input=${inputTokens} output=${outputTokens}`);
     return content;
   } catch (err) {
     if (err.name === "AbortError") {

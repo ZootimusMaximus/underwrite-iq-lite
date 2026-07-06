@@ -38,7 +38,7 @@ const GATE_NAMES = {
   5: "CRO Safe Harbor (Consumer Voice)",
   6: "Not Frivolous or Duplicative",
   7: "Round 2/3 Contains New Information",
-  8: "No Prohibited CROA Language",
+  8: "No Prohibited CROA Language"
 };
 
 // ---------------------------------------------------------------------------
@@ -48,11 +48,11 @@ const GATE_NAMES = {
 const GATE1_CATEGORIES = [
   {
     keywords: ["balance", "credit limit", "amount"],
-    label: "balance/credit limit",
+    label: "balance/credit limit"
   },
   {
     keywords: ["payment", "history", "late", "delinquent", "past due"],
-    label: "payment/account history",
+    label: "payment/account history"
   },
   {
     keywords: [
@@ -62,14 +62,14 @@ const GATE1_CATEGORIES = [
       "charge-off",
       "collection",
       "open",
-      "closed",
+      "closed"
     ],
-    label: "account status",
+    label: "account status"
   },
   {
     keywords: ["terms", "interest", "rate", "fees"],
-    label: "account terms",
-  },
+    label: "account terms"
+  }
 ];
 
 /**
@@ -90,7 +90,7 @@ function checkGate1(text, _ctx) {
     pass: false,
     reason:
       "Letter does not reference any of the 4 valid dispute categories under § 1022.43(a): " +
-      "balance/credit limit, payment history, account status, or account terms.",
+      "balance/credit limit, payment history, account status, or account terms."
   };
 }
 
@@ -113,10 +113,8 @@ function checkGate2(_text, ctx) {
     return { pass: true, reason: "" };
   }
 
-  const allExcepted = violations.every((v) =>
-    EXCEPTED_CODE_PREFIXES.some((prefix) =>
-      String(v.code || "").startsWith(prefix)
-    )
+  const allExcepted = violations.every(v =>
+    EXCEPTED_CODE_PREFIXES.some(prefix => String(v.code || "").startsWith(prefix))
   );
 
   if (allExcepted) {
@@ -124,7 +122,7 @@ function checkGate2(_text, ctx) {
       pass: false,
       reason:
         "All violations are about excepted categories (personal identifying information or inquiries) " +
-        "that furnishers may legally ignore under § 1022.43(b)(1). At least one violation must concern account data.",
+        "that furnishers may legally ignore under § 1022.43(b)(1). At least one violation must concern account data."
     };
   }
 
@@ -161,7 +159,7 @@ function checkGate3(text, ctx) {
     pass: false,
     reason:
       `Round ${ctx.round} letters are sent directly to the furnisher but no furnisher address was ` +
-      "provided and no address block was detected in the letter text.",
+      "provided and no address block was detected in the letter text."
   };
 }
 
@@ -177,8 +175,7 @@ const ACCOUNT_ID_RE =
 const DISPUTE_BASIS_RE = /\b(?:because|reason|inaccurate|incorrect|violation)\b/i;
 
 // Element 4: supporting documentation reference
-const DOCUMENTATION_RE =
-  /\b(?:enclosed|attached|evidence|documentation|records)\b/i;
+const DOCUMENTATION_RE = /\b(?:enclosed|attached|evidence|documentation|records)\b/i;
 
 /**
  * @param {string} text
@@ -199,14 +196,11 @@ function checkGate4(text, ctx) {
   }
 
   // Element 2 — specific information being disputed (not a blanket challenge)
-  const BLANKET_DISPUTE_RE =
-    /\b(?:dispute\s+(?:all|everything|all items|every item))\b/i;
+  const BLANKET_DISPUTE_RE = /\b(?:dispute\s+(?:all|everything|all items|every item))\b/i;
   const hasSpecificInfo =
     !BLANKET_DISPUTE_RE.test(text) &&
     Array.isArray(ctx.violations) &&
-    ctx.violations.some(
-      (v) => v.field && text.toLowerCase().includes(v.field.toLowerCase())
-    );
+    ctx.violations.some(v => v.field && text.toLowerCase().includes(v.field.toLowerCase()));
 
   if (!hasSpecificInfo) {
     missing.push(
@@ -232,9 +226,7 @@ function checkGate4(text, ctx) {
     return {
       pass: false,
       reason:
-        "Letter is missing required notice elements per § 1022.43(d): " +
-        missing.join("; ") +
-        ".",
+        "Letter is missing required notice elements per § 1022.43(d): " + missing.join("; ") + "."
     };
   }
 
@@ -253,18 +245,17 @@ const CRO_FINGERPRINTS = [
   /\bcredit repair\b/i,
   /\bcredit restoration\b/i,
   /\bwe request\b/i,
-  /\bwe demand\b/i,
+  /\bwe demand\b/i
 ];
 
 // Overly legalistic openers (only flag at start of letter)
-const LEGALISTIC_OPENER_RE =
-  /^\s*(?:pursuant to|in accordance with|under the provisions of)\b/i;
+const LEGALISTIC_OPENER_RE = /^\s*(?:pursuant to|in accordance with|under the provisions of)\b/i;
 
 const CONSUMER_VOICE_PATTERNS = [
   /\bi am writing\b/i,
   /\bmy account\b/i,
   /\bi dispute\b/i,
-  /\bmy credit report\b/i,
+  /\bmy credit report\b/i
 ];
 
 /**
@@ -275,13 +266,13 @@ const CONSUMER_VOICE_PATTERNS = [
  */
 function countStatuteCitations(text) {
   const patterns = [
-    /§/g,           // Section symbol
-    /\bUSC\b/gi,    // US Code (word boundary)
-    /U\.S\.C\./gi,  // US Code (with dots)
-    /\bFCRA\b/gi,   // Fair Credit Reporting Act
-    /\bFDCPA\b/gi,  // Fair Debt Collection Practices Act
-    /\bCROA\b/gi,   // Credit Repair Organizations Act
-    /\bCFR\b/gi,    // Code of Federal Regulations
+    /§/g, // Section symbol
+    /\bUSC\b/gi, // US Code (word boundary)
+    /U\.S\.C\./gi, // US Code (with dots)
+    /\bFCRA\b/gi, // Fair Credit Reporting Act
+    /\bFDCPA\b/gi, // Fair Debt Collection Practices Act
+    /\bCROA\b/gi, // Credit Repair Organizations Act
+    /\bCFR\b/gi // Code of Federal Regulations
   ];
 
   let totalCount = 0;
@@ -307,7 +298,7 @@ function checkGate5(text, _ctx) {
         pass: false,
         reason:
           `Letter contains CRO-organization fingerprint pattern ("${re.source.replace(/\\b/g, "")}") ` +
-          "that may make it appear to originate from a Credit Repair Organization rather than the consumer directly.",
+          "that may make it appear to originate from a Credit Repair Organization rather than the consumer directly."
       };
     }
   }
@@ -318,7 +309,7 @@ function checkGate5(text, _ctx) {
       pass: false,
       reason:
         "Letter opens with overly legalistic language ('Pursuant to', 'In accordance with', or 'Under the provisions of') " +
-        "that is a CRO fingerprint. Use first-person consumer voice instead.",
+        "that is a CRO fingerprint. Use first-person consumer voice instead."
     };
   }
 
@@ -329,18 +320,18 @@ function checkGate5(text, _ctx) {
       pass: false,
       reason:
         `Excessive legal citations (${citationCount} occurrences, threshold is 10) — may trigger CRO classification. ` +
-        "Cite only the most relevant statutes; avoid citing every applicable rule.",
+        "Cite only the most relevant statutes; avoid citing every applicable rule."
     };
   }
 
   // Must have at least one consumer voice indicator
-  const hasConsumerVoice = CONSUMER_VOICE_PATTERNS.some((re) => re.test(text));
+  const hasConsumerVoice = CONSUMER_VOICE_PATTERNS.some(re => re.test(text));
   if (!hasConsumerVoice) {
     return {
       pass: false,
       reason:
         "Letter lacks first-person consumer voice. Must include at least one of: " +
-        "'I am writing', 'my account', 'I dispute', 'my credit report'.",
+        "'I am writing', 'my account', 'I dispute', 'my credit report'."
     };
   }
 
@@ -356,7 +347,7 @@ const FRIVOLOUS_PATTERNS = [
   /\bdispute\s+everything\b/i,
   /\beverything\s+on\s+my\s+report\s+is\s+wrong\b/i,
   /\ball\s+items\s+(?:are|on my report are)\s+(?:inaccurate|incorrect|wrong)\b/i,
-  /\bi\s+dispute\s+all\b/i,
+  /\bi\s+dispute\s+all\b/i
 ];
 
 /**
@@ -373,7 +364,7 @@ function checkGate6(text, ctx) {
         reason:
           "Letter contains generic/blanket challenge language that qualifies as frivolous " +
           `("${re.source.replace(/\\b/g, "").replace(/\\s\+/g, " ")}"). ` +
-          "Must reference specific account data.",
+          "Must reference specific account data."
       };
     }
   }
@@ -385,7 +376,7 @@ function checkGate6(text, ctx) {
       pass: false,
       reason:
         `Letter does not reference the furnisher name ("${furnisher || "unknown"}"). ` +
-        "A dispute must be specific enough to identify the creditor being challenged.",
+        "A dispute must be specific enough to identify the creditor being challenged."
     };
   }
 
@@ -393,16 +384,14 @@ function checkGate6(text, ctx) {
   const violations = Array.isArray(ctx.violations) ? ctx.violations : [];
   const hasFieldRef =
     violations.length > 0 &&
-    violations.some(
-      (v) => v.field && text.toLowerCase().includes(v.field.toLowerCase())
-    );
+    violations.some(v => v.field && text.toLowerCase().includes(v.field.toLowerCase()));
 
   if (!hasFieldRef) {
     return {
       pass: false,
       reason:
         "Letter does not reference any specific violation field. " +
-        "Include the exact data field being disputed (e.g., 'payment status', 'date of first delinquency').",
+        "Include the exact data field being disputed (e.g., 'payment status', 'date of first delinquency')."
     };
   }
 
@@ -419,7 +408,7 @@ const ROUND2_NEW_INFO_PATTERNS = [
   /\bverify\b/i,
   /\binvestigation\b/i,
   /\bfailed to respond\b/i,
-  /\bno response\b/i,
+  /\bno response\b/i
 ];
 
 const ROUND3_NEW_INFO_PATTERNS = [
@@ -430,7 +419,7 @@ const ROUND3_NEW_INFO_PATTERNS = [
   /\$1,000\b/,
   /\bCFPB\b/i,
   /\bAttorney\s+General\b/i,
-  /\blegal\b/i,
+  /\blegal\b/i
 ];
 
 /**
@@ -441,13 +430,13 @@ const ROUND3_NEW_INFO_PATTERNS = [
  * @returns {number}
  */
 function wordOverlapSimilarity(a, b) {
-  const tokenize = (s) =>
+  const tokenize = s =>
     new Set(
       s
         .toLowerCase()
         .replace(/[^a-z0-9 ]/g, " ")
         .split(/\s+/)
-        .filter((w) => w.length > 2)
+        .filter(w => w.length > 2)
     );
 
   const setA = tokenize(a);
@@ -476,11 +465,10 @@ function checkGate7(text, ctx) {
     return { pass: true, reason: "" };
   }
 
-  const patterns =
-    ctx.round === 2 ? ROUND2_NEW_INFO_PATTERNS : ROUND3_NEW_INFO_PATTERNS;
+  const patterns = ctx.round === 2 ? ROUND2_NEW_INFO_PATTERNS : ROUND3_NEW_INFO_PATTERNS;
   const roundLabel = ctx.round === 2 ? "Round 2" : "Round 3";
 
-  const hasNewInfoKeyword = patterns.some((re) => re.test(text));
+  const hasNewInfoKeyword = patterns.some(re => re.test(text));
   if (!hasNewInfoKeyword) {
     const expected =
       ctx.round === 2
@@ -490,7 +478,7 @@ function checkGate7(text, ctx) {
       pass: false,
       reason:
         `${roundLabel} letter must include new information not present in the prior round. ` +
-        `Missing required keyword(s): ${expected}.`,
+        `Missing required keyword(s): ${expected}.`
     };
   }
 
@@ -502,7 +490,7 @@ function checkGate7(text, ctx) {
         pass: false,
         reason:
           `${roundLabel} letter is too similar to the prior round (${Math.round(similarity * 100)}% word overlap — threshold is 80%). ` +
-          "Add substantively new arguments, evidence, or escalation language.",
+          "Add substantively new arguments, evidence, or escalation language."
       };
     }
   }
@@ -517,28 +505,28 @@ function checkGate7(text, ctx) {
 const CROA_PROHIBITED = [
   {
     re: /guarantee[sd]?\b[^.!?\n]{0,60}\b(?:removal|deletion)\b/i,
-    label: "'guarantee' + 'removal/deletion' in same sentence",
+    label: "'guarantee' + 'removal/deletion' in same sentence"
   },
   {
     re: /\bwe will (?:remove|delete)\b/i,
-    label: "'we will remove' or 'we will delete'",
+    label: "'we will remove' or 'we will delete'"
   },
   {
     re: /\b100%\b[^.!?\n]{0,40}\b(?:success|removal|guaranteed)\b/i,
-    label: "'100%' + 'success/removal/guaranteed'",
+    label: "'100%' + 'success/removal/guaranteed'"
   },
   {
     re: /\bimprove your credit score\b/i,
-    label: "'improve your credit score' (outcome promise)",
+    label: "'improve your credit score' (outcome promise)"
   },
   {
     re: /\b(?:guarantee[sd]?|guaranteed)\s+(?:results?|outcome)\b/i,
-    label: "guaranteed results/outcome promise",
+    label: "guaranteed results/outcome promise"
   },
   {
     re: /\b(?:raise|boost|increase)\s+your\s+(?:credit\s+)?score\b/i,
-    label: "specific score improvement promise",
-  },
+    label: "specific score improvement promise"
+  }
 ];
 
 /**
@@ -553,7 +541,7 @@ function checkGate8(text, _ctx) {
         pass: false,
         reason:
           `Letter contains language prohibited by the Credit Repair Organizations Act: ${label}. ` +
-          "Remove all outcome guarantees and score improvement promises.",
+          "Remove all outcome guarantees and score improvement promises."
       };
     }
   }
@@ -572,7 +560,7 @@ const GATE_CHECKS = [
   checkGate5,
   checkGate6,
   checkGate7,
-  checkGate8,
+  checkGate8
 ];
 
 // ---------------------------------------------------------------------------
@@ -601,7 +589,7 @@ function validatePreSend(letterText, context) {
     const failures = GATE_CHECKS.map((_, i) => ({
       gate: i + 1,
       name: GATE_NAMES[i + 1],
-      reason: "Letter text is null or empty — cannot validate.",
+      reason: "Letter text is null or empty — cannot validate."
     }));
     return { valid: false, failures };
   }
@@ -619,7 +607,7 @@ function validatePreSend(letterText, context) {
     } catch (err) {
       result = {
         pass: false,
-        reason: `Gate ${gateNum} threw an unexpected error: ${err.message}`,
+        reason: `Gate ${gateNum} threw an unexpected error: ${err.message}`
       };
     }
 
@@ -627,14 +615,14 @@ function validatePreSend(letterText, context) {
       failures.push({
         gate: gateNum,
         name: GATE_NAMES[gateNum],
-        reason: result.reason,
+        reason: result.reason
       });
     }
   });
 
   return {
     valid: failures.length === 0,
-    failures,
+    failures
   };
 }
 
@@ -652,5 +640,5 @@ module.exports = {
   checkGate6,
   checkGate7,
   checkGate8,
-  GATE_NAMES,
+  GATE_NAMES
 };

@@ -62,3 +62,7 @@ SECURITY-FIXES-SUMMARY.md
 
 # Local E2E test identity (real PII — never commit)
 scripts/.e2e-identity.json
+scripts/colin-report.json
+scripts/.crs-debug-secret
+scripts/.colin-repull.js
+scripts/.colin-airtable.js

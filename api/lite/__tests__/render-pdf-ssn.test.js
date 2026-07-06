@@ -14,11 +14,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const zlib = require("zlib");
 
-const {
-  renderLetterPDF,
-  renderLetterBundlePDF,
-  formatSsn
-} = require("../crs/render-pdf");
+const { renderLetterPDF, renderLetterBundlePDF, formatSsn } = require("../crs/render-pdf");
 
 // ---------------------------------------------------------------------------
 // Helper: extract plain text from a pdf-lib generated PDF buffer
@@ -46,9 +42,13 @@ function extractPdfText(pdfBuf) {
       while ((m = hexRe.exec(decompressed)) !== null) {
         try {
           allText.push(Buffer.from(m[1], "hex").toString("latin1"));
-        } catch (_) { /* skip invalid hex */ }
+        } catch (_) {
+          /* skip invalid hex */
+        }
       }
-    } catch (_) { /* stream not zlib (e.g. image data) — skip */ }
+    } catch (_) {
+      /* stream not zlib (e.g. image data) — skip */
+    }
     pos = ei + 9;
   }
   return allText.join(" ");

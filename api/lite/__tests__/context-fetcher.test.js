@@ -442,7 +442,7 @@ describe("context-fetcher handler", () => {
     assert.ok("agent_context" in mockUpdateCustomFieldsCalls[0].customFields);
   });
 
-  it("treats string \"true\" (GHL custom data) as writeBack enabled", async () => {
+  it('treats string "true" (GHL custom data) as writeBack enabled', async () => {
     mockFindResults["CLIENTS"] = [makeClientRecord()];
     const handler = loadHandler();
     const res = makeRes();
@@ -659,10 +659,7 @@ describe("context-fetcher handler", () => {
       confidence: "high",
       scored: true
     };
-    await handler(
-      makeReq({ contactId: CONTACT_ID, behavioral: payloadBehavioral }),
-      res
-    );
+    await handler(makeReq({ contactId: CONTACT_ID, behavioral: payloadBehavioral }), res);
     assert.equal(res.statusCode, 200);
     assert.deepEqual(res.body.chart.behavioral, payloadBehavioral);
   });

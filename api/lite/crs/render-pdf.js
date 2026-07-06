@@ -1017,9 +1017,7 @@ async function renderLetterPDF(text, type, bureau, round, personal, options = {}
 
   // Format SSN with dashes for dispute letters only (never send to Claude API)
   const formattedSsn =
-    type === "dispute" && personal && personal.ssn
-      ? formatSsn(personal.ssn)
-      : null;
+    type === "dispute" && personal && personal.ssn ? formatSsn(personal.ssn) : null;
 
   drawLetterHeader(ctx, { personal, bureau: bureauInfo, subject, round, ssn: formattedSsn });
 
@@ -1089,14 +1087,18 @@ async function renderLetterBundlePDF(letters, bureau, round, personal) {
     font: bold
   });
   coverCtx.y -= 10;
-  drawTextLine(coverCtx, letters.length + " letter" + (letters.length !== 1 ? "s" : "") + " enclosed", {
-    size: 11
-  });
+  drawTextLine(
+    coverCtx,
+    letters.length + " letter" + (letters.length !== 1 ? "s" : "") + " enclosed",
+    {
+      size: 11
+    }
+  );
   coverCtx.y -= 20;
 
   for (let i = 0; i < letters.length; i++) {
     const furnisher = letters[i].furnisher || "Unknown Furnisher";
-    drawTextLine(coverCtx, (i + 1) + ". " + furnisher, { size: 11 });
+    drawTextLine(coverCtx, i + 1 + ". " + furnisher, { size: 11 });
   }
 
   // ── One section per furnisher ───────────────────────────────────────────────
@@ -1120,8 +1122,7 @@ async function renderLetterBundlePDF(letters, bureau, round, personal) {
     ctx.y -= 10;
 
     // Letter header (same layout as single-letter path)
-    const subject =
-      LETTER_SUBJECTS.dispute + " \u2014 " + furnisher;
+    const subject = LETTER_SUBJECTS.dispute + " \u2014 " + furnisher;
     // Format SSN with dashes — dispute letters always include SSN
     const bundleSsn = personal && personal.ssn ? formatSsn(personal.ssn) : null;
     drawLetterHeader(ctx, { personal, bureau: bureauInfo, subject, round, ssn: bundleSsn });
@@ -1153,7 +1154,12 @@ async function renderLetterBundlePDF(letters, bureau, round, personal) {
     }
 
     const titleStr =
-      bureauInfo.name + " " + LETTER_SUBJECTS.dispute + " \u2014 " + furnisher + (round ? " R" + round : "");
+      bureauInfo.name +
+      " " +
+      LETTER_SUBJECTS.dispute +
+      " \u2014 " +
+      furnisher +
+      (round ? " R" + round : "");
     drawFooters(ctx, titleStr);
   }
 

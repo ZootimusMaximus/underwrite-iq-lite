@@ -52,6 +52,8 @@ describe("DisputeFox Relay", () => {
     delete process.env.DISPUTEFOX_RELAY_MODE;
     delete process.env.ZAPIER_WEBHOOK_URL;
     delete process.env.DISPUTEFOX_API_KEY;
+    delete process.env.DISPUTEFOX_RELAY_REQUIRE_AUTH;
+    process.env.NODE_ENV = "test";
   });
 
   it("rejects non-POST", async () => {
@@ -119,6 +121,30 @@ describe("DisputeFox Relay", () => {
     const res = makeRes();
     await handler(makeReq({ df_event: "client_added" }, "POST", {}), res);
     assert.equal(res.statusCode, 401);
+  });
+
+  it("serves open (no key set) but still forwards — default fail-open", async () => {
+    const res = makeRes();
+    await handler(makeReq({ df_event: "client_added" }), res);
+    assert.equal(res.statusCode, 200);
+  });
+
+  it("refuses (503) when REQUIRE_AUTH set but no DISPUTEFOX_API_KEY", async () => {
+    process.env.DISPUTEFOX_RELAY_REQUIRE_AUTH = "true";
+    const res = makeRes();
+    await handler(makeReq({ df_event: "client_added" }), res);
+    assert.equal(res.statusCode, 503);
+  });
+
+  it("REQUIRE_AUTH is satisfied once a key is set + provided", async () => {
+    process.env.DISPUTEFOX_RELAY_REQUIRE_AUTH = "true";
+    process.env.DISPUTEFOX_API_KEY = "secret123";
+    const res = makeRes();
+    await handler(
+      makeReq({ df_event: "client_added" }, "POST", { authorization: "Bearer secret123" }),
+      res
+    );
+    assert.equal(res.statusCode, 200);
   });
 
   it("allows auth via Bearer token", async () => {

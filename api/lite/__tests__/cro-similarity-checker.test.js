@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const {
   computeJaccardSimilarity,
   checkCROSimilarity,
-  CRO_SIMILARITY_THRESHOLD,
+  CRO_SIMILARITY_THRESHOLD
 } = require("../crs/cro-similarity-checker");
 
 // ---------------------------------------------------------------------------
@@ -38,7 +38,6 @@ I demand immediate deletion and written confirmation within thirty days.
 // yielding Jaccard > 0.75 (measured: ~0.89).
 const LETTER_A_NEAR_COPY =
   LETTER_A.trim() + "\nThank you for your attention to this important matter.";
-
 
 // Very short texts — fewer than 3 words per sentence — produce no trigrams.
 const SHORT_TEXT_A = "Hello world.";
@@ -109,7 +108,10 @@ test("computeJaccardSimilarity: returns value in [0, 1]", () => {
 test("checkCROSimilarity: new letter similar to one in batch → similar: true, score > threshold, matchedIndex is a number", () => {
   const result = checkCROSimilarity(LETTER_A_NEAR_COPY, [LETTER_A]);
   assert.equal(result.similar, true, "expected similar: true");
-  assert.ok(result.score > CRO_SIMILARITY_THRESHOLD, `score ${result.score} should exceed threshold ${CRO_SIMILARITY_THRESHOLD}`);
+  assert.ok(
+    result.score > CRO_SIMILARITY_THRESHOLD,
+    `score ${result.score} should exceed threshold ${CRO_SIMILARITY_THRESHOLD}`
+  );
   assert.equal(typeof result.matchedIndex, "number");
   assert.equal(result.matchedIndex, 0);
 });

@@ -45,7 +45,11 @@ for (const line of envLines) {
     .trim()
     .replace(/^["']|["']$/g, ""); // strip surrounding quotes
   // Only set creds — DO NOT allow .env.local to override our sandbox URL
-  if (key === "STITCH_CREDIT_USERNAME" || key === "STITCH_CREDIT_EMAIL" || key === "STITCH_CREDIT_PASSWORD") {
+  if (
+    key === "STITCH_CREDIT_USERNAME" ||
+    key === "STITCH_CREDIT_EMAIL" ||
+    key === "STITCH_CREDIT_PASSWORD"
+  ) {
     process.env[key] = val;
   }
 }
@@ -153,7 +157,9 @@ function note(msg) {
 async function stage1_auth() {
   hr("STAGE 1 — Authentication");
   console.log(`  API Base: ${process.env.STITCH_CREDIT_API_BASE}`);
-  console.log(`  Username: ${process.env.STITCH_CREDIT_USERNAME || process.env.STITCH_CREDIT_EMAIL || "(not set)"}`);
+  console.log(
+    `  Username: ${process.env.STITCH_CREDIT_USERNAME || process.env.STITCH_CREDIT_EMAIL || "(not set)"}`
+  );
 
   invalidateToken(); // ensure fresh token fetch
   const t0 = Date.now();
@@ -205,7 +211,9 @@ async function stage2_perBureau() {
       results[bureau] = resp;
     } catch (err) {
       check(`${bureau}: pull succeeded`, false, err.message);
-      note(`Tried identity: ${applicant.firstName} ${applicant.lastName}, SSN ${applicant.ssn.substring(0, 3)}****`);
+      note(
+        `Tried identity: ${applicant.firstName} ${applicant.lastName}, SSN ${applicant.ssn.substring(0, 3)}****`
+      );
     }
   }
 
@@ -277,13 +285,32 @@ async function stage4_engine(rawResponses, submittedName) {
   // Shape checks
   check("result.ok === true", result.ok === true);
   check("Has outcome string", typeof result.outcome === "string" && result.outcome.length > 0);
-  check("Outcome is valid tier", ["FRAUD_HOLD","MANUAL_REVIEW","REPAIR_ONLY","FUNDING_PLUS_REPAIR","FULL_FUNDING","PREMIUM_STACK"].includes(result.outcome));
+  check(
+    "Outcome is valid tier",
+    [
+      "FRAUD_HOLD",
+      "MANUAL_REVIEW",
+      "REPAIR_ONLY",
+      "FUNDING_PLUS_REPAIR",
+      "FULL_FUNDING",
+      "PREMIUM_STACK"
+    ].includes(result.outcome)
+  );
   check("Has decision_label", typeof result.decision_label === "string");
   check("Has reason_codes[]", Array.isArray(result.reason_codes));
-  check("Has confidence", typeof result.confidence === "string" || typeof result.confidence === "number");
+  check(
+    "Has confidence",
+    typeof result.confidence === "string" || typeof result.confidence === "number"
+  );
   check("Has consumer_summary (string)", typeof result.consumer_summary === "string");
-  check("Has preapprovals object", typeof result.preapprovals === "object" && result.preapprovals !== null);
-  check("preapprovals.totalCombined is number", typeof result.preapprovals?.totalCombined === "number");
+  check(
+    "Has preapprovals object",
+    typeof result.preapprovals === "object" && result.preapprovals !== null
+  );
+  check(
+    "preapprovals.totalCombined is number",
+    typeof result.preapprovals?.totalCombined === "number"
+  );
   check("Has optimization_findings[]", Array.isArray(result.optimization_findings));
   check("Has suggestions", !!result.suggestions);
   check("Has cards", !!result.cards);
@@ -312,9 +339,15 @@ async function stage4_engine(rawResponses, submittedName) {
 
   if (result.preapprovals) {
     console.log(`\n  Pre-approvals:`);
-    console.log(`    Personal total:  $${(result.preapprovals.totalPersonal || 0).toLocaleString()}`);
-    console.log(`    Business total:  $${(result.preapprovals.totalBusiness || 0).toLocaleString()}`);
-    console.log(`    Combined total:  $${(result.preapprovals.totalCombined || 0).toLocaleString()}`);
+    console.log(
+      `    Personal total:  $${(result.preapprovals.totalPersonal || 0).toLocaleString()}`
+    );
+    console.log(
+      `    Business total:  $${(result.preapprovals.totalBusiness || 0).toLocaleString()}`
+    );
+    console.log(
+      `    Combined total:  $${(result.preapprovals.totalCombined || 0).toLocaleString()}`
+    );
   }
 
   console.log(`\n  Findings:          ${result.optimization_findings?.length || 0}`);
@@ -374,13 +407,14 @@ async function main() {
   // Stage 4: Engine — use best available input
   // Prefer per-bureau TU response (most data) or fall back to parallel results
   const tuResp = perBureauResults.transunion;
-  const engineInput = parallelResponses.length > 0
-    ? parallelResponses
-    : tuResp
-    ? [tuResp]
-    : Object.values(perBureauResults).filter(Boolean);
+  const engineInput =
+    parallelResponses.length > 0
+      ? parallelResponses
+      : tuResp
+        ? [tuResp]
+        : Object.values(perBureauResults).filter(Boolean);
 
-  const engineResult = await stage4_engine(engineInput, "BARBARA M DOTY");
+  const _engineResult = await stage4_engine(engineInput, "BARBARA M DOTY");
 
   // ---------------------------------------------------------------------------
   // Final summary
@@ -390,7 +424,9 @@ async function main() {
   console.log(`  Checks passed:  ${CHECKS.passed}`);
   console.log(`  Checks failed:  ${CHECKS.failed}`);
   console.log(`  Total checks:   ${CHECKS.passed + CHECKS.failed}`);
-  console.log(`  Result:         ${CHECKS.failed === 0 ? "ALL PASSED" : `${CHECKS.failed} FAILURES`}`);
+  console.log(
+    `  Result:         ${CHECKS.failed === 0 ? "ALL PASSED" : `${CHECKS.failed} FAILURES`}`
+  );
 
   if (CHECKS.failed > 0) {
     console.log("\n  Search output above for [FAIL] lines.");

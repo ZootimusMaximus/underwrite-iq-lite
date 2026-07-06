@@ -31,7 +31,7 @@ function normalize(text) {
  * @returns {string[]}
  */
 function splitSentences(text) {
-  return text.split(/\.\s+|\.\n|\?\s+|!\s+/).filter((s) => s.length > 0);
+  return text.split(/\.\s+|\.\n|\?\s+|!\s+/).filter(s => s.length > 0);
 }
 
 /**
@@ -41,7 +41,7 @@ function splitSentences(text) {
  * @returns {string[]}
  */
 function trigramsFromSentence(sentence) {
-  const words = sentence.split(" ").filter((w) => w.length > 0);
+  const words = sentence.split(" ").filter(w => w.length > 0);
   if (words.length < 3) return [];
   const trigrams = [];
   for (let i = 0; i <= words.length - 3; i++) {
@@ -143,11 +143,15 @@ function checkCROSimilarity(newLetter, recentLetters) {
   // matchedIndex is null when no comparisons ran (all candidates invalid);
   // otherwise keep the index of the closest letter even though it didn't
   // exceed the threshold — callers may want it for logging.
-  return { similar: false, score: highestScore, matchedIndex: highestScore > 0 ? matchedIndex : null };
+  return {
+    similar: false,
+    score: highestScore,
+    matchedIndex: highestScore > 0 ? matchedIndex : null
+  };
 }
 
 module.exports = {
   checkCROSimilarity,
   computeJaccardSimilarity,
-  CRO_SIMILARITY_THRESHOLD,
+  CRO_SIMILARITY_THRESHOLD
 };
