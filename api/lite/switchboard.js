@@ -571,7 +571,8 @@ module.exports = async function handler(req, res) {
 
     // ----- GHL Webhook: trigger U-02 (analyzer_complete) -----
     // Fires async — does not block response. U-02 handles: contact merge,
-    // tag assignment (analyzer:complete, path:funding/repair), delivery emails,
+    // tag assignment (analyzer:complete, route:funding/repair — C-06 convention,
+    // replaces retired S-03 path:funding/repair tags), delivery emails,
     // Primary Snapshot Source promotion.
     if (sanitized.email) {
       notifyAnalyzerComplete({

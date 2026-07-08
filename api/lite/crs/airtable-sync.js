@@ -228,8 +228,10 @@ function mapSnapshotFields(crsResult, clientRecordId, opts) {
     "EX inq": perBureau.ex.inqs,
     "EQ inq": perBureau.eq.inqs,
 
-    // Fraud & security flags
-    fraud_alert: crsResult.identityGate?.outcome === "FRAUD_HOLD",
+    // Fraud & security flags. A security freeze now also routes to FRAUD_HOLD
+    // (resolvable hold), so key fraud_alert on the actual fraud-alert signal —
+    // NOT the outcome — otherwise a pure freeze would mislabel as a fraud alert.
+    fraud_alert: !!crsResult.identityGate?.fraudAlertOnFile?.detected,
     security_freeze: !!crsResult.identityGate?.securityFreeze?.detected,
     fraud_alert_on_file: !!crsResult.identityGate?.fraudAlertOnFile?.detected,
 

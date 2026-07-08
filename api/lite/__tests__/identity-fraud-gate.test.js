@@ -429,6 +429,45 @@ test("runIdentityAndFraudGate: single fraud flag → pass with reduced confidenc
   assert.ok(result.reasons.includes("EMAIL_INVALID"));
 });
 
+test("runIdentityAndFraudGate: security freeze → resolvable FRAUD_HOLD (not MANUAL_REVIEW)", () => {
+  // Chris 2026-07-06: a freeze just holds the file until removed, then proceeds —
+  // same as the fraud-alert path. Must be a resolvable hold, not a dead-end review.
+  const normalized = makeNormalized({
+    identity: {
+      names: [{ first: "JOHN", last: "SMITH", source: "transunion" }],
+      ssns: [],
+      dobs: [],
+      addresses: [],
+      employers: []
+    },
+    securityFreezes: { detected: true, bureaus: ["transunion"] }
+  });
+  const result = runIdentityAndFraudGate(normalized, "John Smith");
+  assert.equal(result.passed, false);
+  assert.equal(result.outcome, "FRAUD_HOLD");
+  assert.equal(result.resolvable, true);
+  assert.notEqual(result.outcome, "MANUAL_REVIEW");
+  assert.deepEqual(result.securityFreeze.bureaus, ["transunion"]);
+});
+
+test("runIdentityAndFraudGate: freeze hold does NOT set a fraud-alert-on-file flag", () => {
+  // A freeze routes to FRAUD_HOLD but is NOT a fraud alert — the two must stay
+  // distinguishable downstream (Airtable fraud_alert keys off fraudAlertOnFile).
+  const normalized = makeNormalized({
+    identity: {
+      names: [{ first: "JOHN", last: "SMITH", source: "transunion" }],
+      ssns: [],
+      dobs: [],
+      addresses: [],
+      employers: []
+    },
+    securityFreezes: { detected: true, bureaus: ["experian"] }
+  });
+  const result = runIdentityAndFraudGate(normalized, "John Smith");
+  assert.equal(result.outcome, "FRAUD_HOLD");
+  assert.ok(!result.fraudAlertOnFile);
+});
+
 test("runIdentityAndFraudGate: stale reports → MANUAL_REVIEW", () => {
   const old = new Date();
   old.setDate(old.getDate() - 60);

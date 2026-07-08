@@ -76,7 +76,8 @@ async function notifyAnalyzerStart(params) {
 /**
  * Fire the analyzer_complete webhook to GHL.
  * Triggers U-02 which: merges contact, maps analyzer data, sets tags
- * (analyzer:complete, path:funding/repair), sends delivery emails,
+ * (analyzer:complete, route:funding/repair — C-06 convention; replaces the
+ * retired S-03 path:funding/repair tags), sends delivery emails,
  * sets Primary Snapshot Source.
  *
  * @param {Object} params

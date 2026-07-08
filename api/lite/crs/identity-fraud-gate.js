@@ -244,11 +244,18 @@ function runIdentityAndFraudGate(normalized, submittedName, _submittedAddress, r
 
   // ── Decision ────────────────────────────────────────────────────────
 
-  // Security freeze → MANUAL_REVIEW (cannot pull full report, hard blocker)
+  // Security freeze → resolvable hold (Chris 2026-07-06: a freeze or fraud alert
+  // just HOLDS the file until it's removed, then it proceeds to funding — same
+  // as the fraud-alert path, not a dead-end manual review). We route it to the
+  // FRAUD_HOLD bucket (the "hold-then-remove-then-proceed" lane) with
+  // resolvable:true and keep the securityFreeze detail so downstream knows it's
+  // a freeze to lift (audit names the bureau). The client's underlying credit is
+  // untouched — lift the freeze, re-pull, and they route normally.
   if (freezeResult.detected) {
     return {
       passed: false,
-      outcome: "MANUAL_REVIEW",
+      outcome: "FRAUD_HOLD",
+      resolvable: true,
       reasons,
       confidence: "high",
       securityFreeze: { detected: true, bureaus: freezeResult.bureaus }
