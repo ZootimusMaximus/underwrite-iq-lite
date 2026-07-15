@@ -68,3 +68,10 @@ scripts/.colin-repull.js
 scripts/.colin-airtable.js
 scripts/.two-contact-demo.js
 scripts/.ghl-workflows.json
+scripts/.fire-cli-batch.sh
+scripts/.wf-verdicts.py
+
+# pulled prod env snapshots — NEVER commit (contain live secrets)
+.env.pulled
+.env.prod-pulled
+.env*pulled
