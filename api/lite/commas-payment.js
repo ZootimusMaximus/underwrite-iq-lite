@@ -114,8 +114,9 @@ function extractEvent(body) {
   }
   amount = amount === undefined || amount === null || amount === "" ? null : Number(amount);
   if (Number.isNaN(amount)) amount = null;
-  // Heuristic: if the value looks like cents for our known prices, downscale.
-  if (amount !== null && amount >= 3100 && amount % 100 === 0) amount = amount / 100;
+  // NOTE (ADAPTER): amount unit (dollars vs cents) — confirm against a real Commas
+  // payload. Explicit `amount_cents` is downscaled above; the main `amount` field is
+  // trusted as-is. Do NOT add a >=N heuristic — deposits vary and would mis-downscale.
 
   // product name: try line items, product blocks, and flat fields.
   const li =
@@ -148,6 +149,19 @@ function nameMatches(name, needle) {
   return String(name || "")
     .toLowerCase()
     .includes(needle);
+}
+
+// Pure routing decision from a normalized event. Unit-tested; keep side-effect free.
+// Returns: "ignored" | "no_email" | "crs" | "deposit" | "success_fee" | "unmatched".
+function routeFor(evt) {
+  if (!evt || !evt.type || !evt.type.includes("succeeded")) return "ignored";
+  if (!evt.email) return "no_email";
+  if (nameMatches(evt.name, PRODUCT.CRS.nameIncludes) || evt.amount === PRODUCT.CRS.amount) {
+    return "crs";
+  }
+  if (nameMatches(evt.name, PRODUCT.DEPOSIT.nameIncludes)) return "deposit";
+  if (nameMatches(evt.name, PRODUCT.SUCCESS_FEE.nameIncludes)) return "success_fee";
+  return "unmatched";
 }
 
 // --- GHL contact lookup by email -------------------------------------------
@@ -233,12 +247,12 @@ module.exports = async function handler(req, res) {
     hasEmail: !!evt.email
   });
 
-  // Only act on successful payments; log everything else (incl. payment.failed).
-  if (!evt.type.includes("succeeded")) {
+  // Route the event (pure decision — see routeFor, unit-tested).
+  const route = routeFor(evt);
+  if (route === "ignored") {
     return res.status(200).json({ ok: true, ignored: evt.type || "unknown_event" });
   }
-
-  if (!evt.email) {
+  if (route === "no_email") {
     logWarn("commas-payment: no customer email on payment event — cannot route", {
       name: evt.name
     });
@@ -246,8 +260,8 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // 1) CRS soft-pull ($32 Business Financial Assessment) -> flip crs_paid in GHL
-    if (nameMatches(evt.name, PRODUCT.CRS.nameIncludes) || evt.amount === PRODUCT.CRS.amount) {
+    // CRS soft-pull ($32 Business Financial Assessment) -> flip crs_paid in GHL
+    if (route === "crs") {
       const contactId = await findGhlContactIdByEmail(evt.email);
       if (!contactId) {
         logWarn("commas-payment: CRS paid but no GHL contact found", { email: evt.email });
@@ -260,15 +274,15 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: !!(r && r.ok), routed: "crs", contactId });
     }
 
-    // 2) Consulting Services Deposit -> onboarding/funding (Item 7 bureau call)
-    if (nameMatches(evt.name, PRODUCT.DEPOSIT.nameIncludes)) {
+    // Consulting Services Deposit -> onboarding/funding (Item 7 bureau call)
+    if (route === "deposit") {
       const r = await setClientInquiryRemovalByEmail(evt.email);
       logInfo("commas-payment: deposit -> run_inquiry_removal", { email: evt.email, ok: r.ok });
       return res.status(200).json({ ok: r.ok, routed: "deposit", ...r });
     }
 
-    // 3) Consulting Success Fee -> logged; target flow TBD with Chris.
-    if (nameMatches(evt.name, PRODUCT.SUCCESS_FEE.nameIncludes)) {
+    // Consulting Success Fee -> logged; target flow TBD with Chris.
+    if (route === "success_fee") {
       logInfo("commas-payment: success fee received (no target wired yet)", {
         email: evt.email,
         amount: evt.amount
@@ -283,6 +297,11 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ ok: false, error: "Internal server error" });
   }
 };
+
+// Exported for unit tests (pure, side-effect free).
+module.exports.extractEvent = extractEvent;
+module.exports.routeFor = routeFor;
+module.exports.nameMatches = nameMatches;
 
 // Disable Vercel's body parser so readRawBody() can compute the HMAC over the
 // exact bytes Commas signed. MUST be after the handler assignment above.
