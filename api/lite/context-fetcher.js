@@ -154,12 +154,37 @@ const PULSE_FIELDS = {
   lastPulseAt: process.env.AT_FIELD_LAST_PULSE_AT || "Last Pulse At"
 };
 
-// Client sentiment for the dashboard. PLACEHOLDER: Chris to confirm the scale
-// (proposed Hot/Warm/Cold + one line). Until then return null so we never write
-// a guessed value — the summary + timestamp still land.
-// eslint-disable-next-line no-unused-vars
-function deriveSentiment(chart) {
-  return null;
+// Client sentiment for the Closer Dashboard (Chris 2026-07-17): exactly
+// "Hot | Warm | Cold — <one line why>". Reads the conversation and classifies it
+// with Claude. Returns null (no write) when there's no conversation or the model
+// output doesn't fit the format — we never write a guessed value.
+async function deriveSentiment(chart) {
+  const convo = Array.isArray(chart && chart.conversation) ? chart.conversation : [];
+  if (convo.length === 0) return null;
+  const transcript = convo
+    .slice(-40)
+    .map(
+      m =>
+        `${m.role === "contact" ? "Client" : "Us"}: ${(m.text || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 300)}`
+    )
+    .filter(l => l.length > 8)
+    .join("\n");
+  if (!transcript.trim()) return null;
+
+  const { callClaude } = require("./crs/claude-client");
+  const system =
+    "You are a sales assistant. Read the conversation between a prospective client " +
+    "and our team and rate the client's buying sentiment as exactly one of: Hot, " +
+    "Warm, or Cold. Hot = eager/ready to move forward. Warm = interested but not " +
+    "committed. Cold = disengaged, hesitant, or negative. Reply with ONE line in the " +
+    "exact format '<Hot|Warm|Cold> — <short reason>' and nothing else.";
+  const raw = await callClaude({ system, user: transcript, maxTokens: 60 });
+  if (!raw) return null;
+  const line = String(raw).trim().split("\n")[0].trim();
+  return /^(hot|warm|cold)\b/i.test(line) ? line.slice(0, 200) : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -654,7 +679,7 @@ module.exports = async function handler(req, res) {
           [PULSE_FIELDS.summary]: agent_context_text,
           [PULSE_FIELDS.lastPulseAt]: new Date().toISOString()
         };
-        const sentiment = deriveSentiment(chart);
+        const sentiment = await deriveSentiment(chart);
         if (sentiment) fields[PULSE_FIELDS.sentiment] = sentiment;
         await atUpdate(TABLE_CLIENTS, clientRecords[0].id, fields);
         airtablePulsed = true;
