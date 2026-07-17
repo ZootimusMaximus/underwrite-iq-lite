@@ -130,6 +130,38 @@ async function atFind(table, filterFormula, maxRecords = 100) {
   return data.records || [];
 }
 
+// PATCH a single record's fields (partial update). Used by the Closer-Dashboard
+// pulse writeback below. Env-overridable so the exact Airtable column names can
+// change without a code edit.
+async function atUpdate(table, recordId, fields) {
+  const resp = await fetchWithTimeout(apiUrl(table, recordId), {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ fields, typecast: true })
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`Airtable update [${table}] failed: ${resp.status} ${text.substring(0, 200)}`);
+  }
+  return resp.json();
+}
+
+// CLIENTS columns the Closer Dashboard reads (Chris spec 2026-07-17). Names are
+// env-overridable so they can be renamed in Airtable without a code change.
+const PULSE_FIELDS = {
+  summary: process.env.AT_FIELD_CONVO_SUMMARY || "Conversation Summary",
+  sentiment: process.env.AT_FIELD_CLIENT_SENTIMENT || "Client Sentiment",
+  lastPulseAt: process.env.AT_FIELD_LAST_PULSE_AT || "Last Pulse At"
+};
+
+// Client sentiment for the dashboard. PLACEHOLDER: Chris to confirm the scale
+// (proposed Hot/Warm/Cold + one line). Until then return null so we never write
+// a guessed value — the summary + timestamp still land.
+// eslint-disable-next-line no-unused-vars
+function deriveSentiment(chart) {
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // client_status derivation
 //
@@ -285,6 +317,13 @@ module.exports = async function handler(req, res) {
   const writeBackRaw = body.writeBack ?? (body.customData && body.customData.writeBack);
   const writeBack =
     writeBackRaw === true || writeBackRaw === "true" || writeBackRaw === 1 || writeBackRaw === "1";
+
+  // airtableWriteback: opt-in NEW write path (Chris 2026-07-17). When truthy, also
+  // persist a conversation pulse to the CLIENTS row (summary + sentiment + timestamp)
+  // so the Closer Dashboard shows it pre-call. Does NOT change what agents read.
+  const atWbRaw = body.airtableWriteback ?? (body.customData && body.customData.airtableWriteback);
+  const airtableWriteback =
+    atWbRaw === true || atWbRaw === "true" || atWbRaw === 1 || atWbRaw === "1";
 
   // Strict allowlist — GHL contact ids are alphanumeric. Rejecting anything else
   // prevents Airtable formula injection via the filterByFormula strings below.
@@ -606,7 +645,28 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({ ok: true, agent_context_text, chart, wroteBack });
+    // NEW write path (opt-in): persist a conversation pulse to CLIENTS for the
+    // Closer Dashboard. Non-fatal — a failure must not break the fetch response.
+    let airtablePulsed = false;
+    if (airtableWriteback) {
+      try {
+        const fields = {
+          [PULSE_FIELDS.summary]: agent_context_text,
+          [PULSE_FIELDS.lastPulseAt]: new Date().toISOString()
+        };
+        const sentiment = deriveSentiment(chart);
+        if (sentiment) fields[PULSE_FIELDS.sentiment] = sentiment;
+        await atUpdate(TABLE_CLIENTS, clientRecords[0].id, fields);
+        airtablePulsed = true;
+      } catch (pulseErr) {
+        logWarn("context-fetcher: airtable pulse write failed (non-fatal)", {
+          contactId,
+          error: pulseErr.message
+        });
+      }
+    }
+
+    return res.status(200).json({ ok: true, agent_context_text, chart, wroteBack, airtablePulsed });
   } catch (err) {
     logError("context-fetcher: unhandled error", { contactId, error: err.message });
     return res.status(500).json({ ok: false, error: "Internal server error" });
