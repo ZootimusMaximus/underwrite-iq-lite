@@ -78,6 +78,14 @@ test("routeFor: success fee matches by name", () => {
   assert.equal(routeFor({ ...base, name: "Consulting Success Fee", amount: 1200 }), "success_fee");
 });
 
+test("routeFor: DIY matches by product name", () => {
+  assert.equal(routeFor({ ...base, name: "DIY Letters", amount: 1000 }), "diy");
+});
+
+test("routeFor: DIY matches by amount 1000 even if name differs", () => {
+  assert.equal(routeFor({ ...base, name: "downsell", amount: 1000 }), "diy");
+});
+
 test("routeFor: unmatched product", () => {
   assert.equal(routeFor({ ...base, name: "Some Other Product", amount: 99 }), "unmatched");
 });
