@@ -915,6 +915,31 @@ async function initPdfDoc() {
  * @param {Object} [engineData]    - Full CRS engine result
  * @returns {Promise<Buffer>}
  */
+/**
+ * Make Claude output safe for the WinAnsi PDF font. Claude sometimes emits
+ * emoji (⚠, 🏦), smart quotes, em-dashes, arrows — pdf-lib's standard font
+ * throws on anything it can't encode, which crashed whole client documents.
+ * Map the common typographic characters to ASCII, then strip any remaining
+ * non-ASCII so a stray emoji can never break a deliverable.
+ */
+function pdfSafeText(s) {
+  if (typeof s !== "string") return s;
+  return (
+    s
+      .replace(/[‘’‚‛]/g, "'")
+      .replace(/[“”„]/g, '"')
+      .replace(/[–—]/g, "-")
+      .replace(/…/g, "...")
+      .replace(/[•▪●·⁃]/g, "-")
+      .replace(/[→⇒]/g, "->")
+      .replace(/[←⇐]/g, "<-")
+      .replace(/[✅✔✓]/g, "[x]")
+      // Keep tab/newline/CR; strip every other control char + non-ASCII (emoji, etc.)
+      // eslint-disable-next-line no-control-regex
+      .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "")
+  );
+}
+
 async function renderDocumentPDF(markdownContent, type, personal, engineData) {
   const { pdfDoc, font, bold, logoImage } = await initPdfDoc();
   const firstPage = pdfDoc.addPage([PAGE_W, PAGE_H]);
@@ -922,14 +947,14 @@ async function renderDocumentPDF(markdownContent, type, personal, engineData) {
   ctx._logoImage = logoImage;
 
   const titles = {
-    credit_analysis: "Credit Analysis Report",
-    roadmap: "Credit Optimization Roadmap",
-    funding_snapshot: "Funding Snapshot",
-    lender_match: "Lender Match List",
-    repair_plan_summary: "Repair Plan Summary",
-    funding_summary: "Funding Pre-Approval Summary",
-    business_prep_summary: "Business Credit Preparation",
-    issue_priority_sheet: "Credit Issue Priority Sheet",
+    credit_analysis: "Financial Profile Assessment",
+    roadmap: "Business Readiness Roadmap",
+    funding_snapshot: "Capital Readiness Snapshot",
+    lender_match: "Capital Partner Shortlist",
+    repair_plan_summary: "Optimization Plan Summary",
+    funding_summary: "Capital Readiness Summary",
+    business_prep_summary: "Business Readiness Guide",
+    issue_priority_sheet: "Priority Action Sheet",
     hold_notice: "Application Hold Notice",
     operator_checklist: "Operator Checklist"
   };
@@ -946,7 +971,7 @@ async function renderDocumentPDF(markdownContent, type, personal, engineData) {
   drawPageHeader(ctx, title, subtitle);
   drawMetadataStrip(ctx, personal, engineData);
 
-  const nodes = parseMarkdown(markdownContent || "");
+  const nodes = parseMarkdown(pdfSafeText(markdownContent || ""));
   for (const node of nodes) {
     renderNode(ctx, node);
   }

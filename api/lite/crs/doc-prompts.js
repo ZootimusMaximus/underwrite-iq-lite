@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 
 const SHARED_PREAMBLE = `
-You are a credit underwriter and funding advisor at FundHub.
+You are a business consulting advisor at FundHub.
 
 You write at a 5th grade reading level. Short sentences. No jargon.
 
@@ -32,13 +32,13 @@ RULES:
 `;
 
 // ---------------------------------------------------------------------------
-// 3.2 Credit Analysis Report
+// 3.2 Financial Profile Assessment
 // ---------------------------------------------------------------------------
 
 const CREDIT_ANALYSIS_PROMPT =
   SHARED_PREAMBLE +
   `
-Generate a Credit Analysis Report for this client.
+Generate a Financial Profile Assessment for this client.
 
 Structure:
 1. Opening paragraph - warm, personal, summarize their situation
@@ -61,13 +61,13 @@ Output as JSON with sections array. Each section has:
 `;
 
 // ---------------------------------------------------------------------------
-// 3.3 Credit Optimization Roadmap
+// 3.3 Business Readiness Roadmap
 // ---------------------------------------------------------------------------
 
 const ROADMAP_PROMPT =
   SHARED_PREAMBLE +
   `
-Generate a 6-month Credit Optimization Roadmap for this client.
+Generate a 6-month Business Readiness Roadmap for this client.
 
 This is the MOST important document. It should read like a
 personal game plan written by someone who believes in them.
@@ -224,13 +224,13 @@ Output a complete, mail-ready letter with:
 `;
 
 // ---------------------------------------------------------------------------
-// 3.5 Funding Snapshot
+// 3.5 Capital Readiness Snapshot
 // ---------------------------------------------------------------------------
 
 const FUNDING_SNAPSHOT_PROMPT =
   SHARED_PREAMBLE +
   `
-Generate a Funding Snapshot document for this client.
+Generate a Capital Readiness Snapshot document for this client.
 
 Structure:
 1. Current vs projected pre-approval (hero numbers)
@@ -245,13 +245,13 @@ Make the gap between current and projected feel tangible and real.
 `;
 
 // ---------------------------------------------------------------------------
-// 3.6 Lender Match List
+// 3.6 Capital Partner Shortlist
 // ---------------------------------------------------------------------------
 
 const LENDER_MATCH_PROMPT =
   SHARED_PREAMBLE +
   `
-Generate a Bank & Lender Match List for this client.
+Generate a Capital Partner Shortlist for this client.
 
 You will receive a list of matched lenders split into
 'available now' and 'after optimization.'

@@ -76,24 +76,24 @@ async function generateFundingSummary(crsResult, personal) {
 
   y = drawLine(page, font, y, today());
   y -= LINE_H;
-  y = drawTitle(page, bold, y, "Funding Pre-Approval Summary");
+  y = drawTitle(page, bold, y, "Capital Readiness Summary");
   y = drawSeparator(page, y);
 
   y = drawLine(page, font, y, `Applicant: ${personal?.name || "[Applicant Name]"}`);
   y = drawLine(page, font, y, `Decision: ${crsResult.decision_label || crsResult.outcome}`);
   y -= LINE_H;
 
-  y = drawSubtitle(page, bold, y, "Pre-Approval Estimates");
+  y = drawSubtitle(page, bold, y, "Capital Estimates");
   const pa = crsResult.preapprovals || {};
-  y = drawBullet(page, font, y, `Personal Funding: $${(pa.totalPersonal || 0).toLocaleString()}`);
-  y = drawBullet(page, font, y, `Business Funding: $${(pa.totalBusiness || 0).toLocaleString()}`);
+  y = drawBullet(page, font, y, `Personal Capital: $${(pa.totalPersonal || 0).toLocaleString()}`);
+  y = drawBullet(page, font, y, `Business Capital: $${(pa.totalBusiness || 0).toLocaleString()}`);
   y = drawBullet(page, font, y, `Total Combined: $${(pa.totalCombined || 0).toLocaleString()}`);
   if (pa.confidenceBand) {
     y = drawBullet(page, font, y, `Confidence: ${pa.confidenceBand}`);
   }
   y -= LINE_H;
 
-  y = drawSubtitle(page, bold, y, "Credit Snapshot");
+  y = drawSubtitle(page, bold, y, "Profile Snapshot");
   const cs = crsResult.consumerSignals || {};
   if (cs.scores?.median) y = drawBullet(page, font, y, `Median Score: ${cs.scores.median}`);
   if (cs.utilization?.overall != null)
@@ -110,7 +110,7 @@ async function generateFundingSummary(crsResult, personal) {
     page,
     font,
     y,
-    "This is a pre-qualification estimate, not a guarantee of funding.",
+    "This is a pre-qualification estimate, not a guarantee of capital or approval.",
     8
   );
   drawLine(page, font, y, `Generated: ${today()}`, 8);
@@ -128,13 +128,13 @@ async function generateRepairPlanSummary(crsResult, personal) {
 
   y = drawLine(page, font, y, today());
   y -= LINE_H;
-  y = drawTitle(page, bold, y, "Credit Repair Plan");
+  y = drawTitle(page, bold, y, "Optimization Plan Summary");
   y = drawSeparator(page, y);
 
   y = drawLine(page, font, y, `Applicant: ${personal?.name || "[Applicant Name]"}`);
   y -= LINE_H;
 
-  y = drawSubtitle(page, bold, y, "Current Credit Status");
+  y = drawSubtitle(page, bold, y, "Current Profile Status");
   const cs = crsResult.consumerSignals || {};
   if (cs.scores?.median) y = drawBullet(page, font, y, `Median Score: ${cs.scores.median}`);
   if (cs.utilization?.overall != null)
@@ -365,13 +365,13 @@ async function generateBusinessPrepSummary(crsResult) {
 
   y = drawLine(page, font, y, today());
   y -= LINE_H;
-  y = drawTitle(page, bold, y, "Business Credit Preparation Guide");
+  y = drawTitle(page, bold, y, "Business Readiness Guide");
   y = drawSeparator(page, y);
 
   const bs = crsResult.businessSignals || {};
 
   if (bs.available) {
-    y = drawSubtitle(page, bold, y, "Current Business Credit Status");
+    y = drawSubtitle(page, bold, y, "Current Business Profile Status");
     if (bs.scores?.intelliscore)
       y = drawBullet(page, font, y, `Intelliscore: ${bs.scores.intelliscore}`);
     if (bs.scores?.fsr)
