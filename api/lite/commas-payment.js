@@ -58,13 +58,16 @@ const AIRTABLE_BASE = () => process.env.AIRTABLE_BASE_ID || null;
 const AIRTABLE_CLIENTS = process.env.AIRTABLE_TABLE_CLIENTS || "CLIENTS";
 
 // Product routing — name match is primary, amount is a secondary signal.
+// Route STRICTLY on product name — never amount (Chris 2026-07-17: deposit and
+// the package price vary per client, so amount is unreliable). The amount paid is
+// still captured into cf_*_charge_amount + Airtable, just never used to route.
 const PRODUCT = {
-  CRS: { nameIncludes: "business financial assessment", amount: 32 },
+  CRS: { nameIncludes: "business financial assessment" },
   DEPOSIT: { nameIncludes: "consulting services deposit" },
   SUCCESS_FEE: { nameIncludes: "consulting success fee" },
-  // $1,000 DIY Letters downsell (DS-02). CONFIRM the exact Commas product name
-  // with Chris; amount 1000 is the fallback matcher (mirrors CRS $32).
-  DIY: { nameIncludes: "diy letters", amount: 1000 }
+  // $1,000 DIY Letters downsell (DS-02). Chris named the Commas product
+  // "Consulting Services Package" (no credit/funding words).
+  DIY: { nameIncludes: "consulting services package" }
 };
 
 const CRS_PAID_CHECKED = ["CRS Paid"]; // GHL checkbox option label, must be an array
@@ -160,15 +163,11 @@ function nameMatches(name, needle) {
 function routeFor(evt) {
   if (!evt || !evt.type || !evt.type.includes("succeeded")) return "ignored";
   if (!evt.email) return "no_email";
-  // Name matches take priority (most specific) so a variable-amount deposit that
-  // happens to be $1,000 can't be misrouted to DIY by an amount fallback.
+  // Name-only routing (never amount — prices vary per client).
   if (nameMatches(evt.name, PRODUCT.CRS.nameIncludes)) return "crs";
   if (nameMatches(evt.name, PRODUCT.DIY.nameIncludes)) return "diy";
   if (nameMatches(evt.name, PRODUCT.DEPOSIT.nameIncludes)) return "deposit";
   if (nameMatches(evt.name, PRODUCT.SUCCESS_FEE.nameIncludes)) return "success_fee";
-  // Amount fallbacks — only when the product name is missing/unrecognized.
-  if (evt.amount === PRODUCT.CRS.amount) return "crs";
-  if (evt.amount === PRODUCT.DIY.amount) return "diy";
   return "unmatched";
 }
 

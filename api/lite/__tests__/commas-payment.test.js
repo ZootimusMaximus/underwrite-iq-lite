@@ -66,8 +66,8 @@ test("routeFor: CRS matches by product name", () => {
   assert.equal(routeFor({ ...base, name: "Business Financial Assessment", amount: 32 }), "crs");
 });
 
-test("routeFor: CRS matches by amount 32 even if name differs", () => {
-  assert.equal(routeFor({ ...base, name: "diagnostic", amount: 32 }), "crs");
+test("routeFor: does NOT route on amount alone — name-only (Chris 2026-07-17)", () => {
+  assert.equal(routeFor({ ...base, name: "diagnostic", amount: 32 }), "unmatched");
 });
 
 test("routeFor: deposit matches by name (variable amount)", () => {
@@ -78,12 +78,12 @@ test("routeFor: success fee matches by name", () => {
   assert.equal(routeFor({ ...base, name: "Consulting Success Fee", amount: 1200 }), "success_fee");
 });
 
-test("routeFor: DIY matches by product name", () => {
-  assert.equal(routeFor({ ...base, name: "DIY Letters", amount: 1000 }), "diy");
+test("routeFor: DIY matches by product name (Consulting Services Package)", () => {
+  assert.equal(routeFor({ ...base, name: "Consulting Services Package", amount: 1000 }), "diy");
 });
 
-test("routeFor: DIY matches by amount 1000 even if name differs", () => {
-  assert.equal(routeFor({ ...base, name: "downsell", amount: 1000 }), "diy");
+test("routeFor: DIY does NOT match by amount alone — name-only", () => {
+  assert.equal(routeFor({ ...base, name: "downsell", amount: 1000 }), "unmatched");
 });
 
 test("routeFor: unmatched product", () => {
