@@ -31,6 +31,72 @@ const { normalizeEmail, normalizePhone } = require("../utils/normalize");
 const { fetchWithTimeout } = require("../../lite/fetch-utils");
 
 // ---------------------------------------------------------------------------
+// Survey + Behavior field map — GHL custom field key → Airtable CLIENTS column
+//
+// Each Airtable column name is overridable via the listed env var so the
+// mapping can be reconciled with the live schema without a code change.
+//
+// Default Airtable column names (create these if they don't exist in CLIENTS):
+//   Survey: Target Amount      AT_FIELD_SVY_TARGET_AMOUNT
+//   Survey: Planned Use        AT_FIELD_SVY_PLANNED_USE
+//   Survey: Your Why           AT_FIELD_SVY_YOUR_WHY
+//   Survey: Self-Reported FICO AT_FIELD_SVY_SELF_REPORTED_FICO
+//   Survey: Has Negatives      AT_FIELD_SVY_HAS_NEGATIVES
+//   Survey: Annual Income Range AT_FIELD_SVY_ANNUAL_INCOME_RANGE
+//   Survey: Income Verifiable  AT_FIELD_SVY_INCOME_VERIFIABLE
+//   Survey: Money Change Now   AT_FIELD_SVY_MONEY_CHANGE_NOW
+//   Survey: Clarity First      AT_FIELD_SVY_CLARITY_FIRST
+//   Survey: What Matters Most  AT_FIELD_SVY_WHAT_MATTERS_MOST
+//   Customer Responsiveness    AT_FIELD_CUSTOMER_RESPONSIVENESS
+//   Customer Friction Level    AT_FIELD_CUSTOMER_FRICTION_LEVEL
+//   Primary Motivation         AT_FIELD_PRIMARY_MOTIVATION
+// ---------------------------------------------------------------------------
+
+const SURVEY_BEHAVIOR_FIELDS = {
+  // Survey fields
+  cf_svy_funding_target_amount: process.env.AT_FIELD_SVY_TARGET_AMOUNT || "Survey: Target Amount",
+  cf_svy_planned_use: process.env.AT_FIELD_SVY_PLANNED_USE || "Survey: Planned Use",
+  cf_svy_your_why: process.env.AT_FIELD_SVY_YOUR_WHY || "Survey: Your Why",
+  cf_svy_self_reported_fico:
+    process.env.AT_FIELD_SVY_SELF_REPORTED_FICO || "Survey: Self-Reported FICO",
+  cf_svy_has_negatives: process.env.AT_FIELD_SVY_HAS_NEGATIVES || "Survey: Has Negatives",
+  cf_svy_annual_income_range:
+    process.env.AT_FIELD_SVY_ANNUAL_INCOME_RANGE || "Survey: Annual Income Range",
+  cf_svy_income_verifiable:
+    process.env.AT_FIELD_SVY_INCOME_VERIFIABLE || "Survey: Income Verifiable",
+  cf_svy_money_change_now: process.env.AT_FIELD_SVY_MONEY_CHANGE_NOW || "Survey: Money Change Now",
+  cf_svy_clarity_first: process.env.AT_FIELD_SVY_CLARITY_FIRST || "Survey: Clarity First",
+  cf_svy_what_matters_most:
+    process.env.AT_FIELD_SVY_WHAT_MATTERS_MOST || "Survey: What Matters Most",
+  // Behavior fields
+  customer_responsiveness:
+    process.env.AT_FIELD_CUSTOMER_RESPONSIVENESS || "Customer Responsiveness",
+  customer_friction_level:
+    process.env.AT_FIELD_CUSTOMER_FRICTION_LEVEL || "Customer Friction Level",
+  primary_motivation: process.env.AT_FIELD_PRIMARY_MOTIVATION || "Primary Motivation"
+};
+
+/**
+ * Read a GHL custom field value by key.
+ * Prefers ghlContact.customFields (live resolved contact), falls back to the
+ * raw contact object (event payload). Returns null if absent or empty.
+ *
+ * @param {object|null} ghlContact
+ * @param {object} contact
+ * @param {string} key
+ * @returns {string|null}
+ */
+function getCF(ghlContact, contact, key) {
+  const fromGhl = ghlContact?.customFields?.find?.(f => f.key === key)?.field_value;
+  if (fromGhl !== undefined && fromGhl !== null && fromGhl !== "") return String(fromGhl);
+  const fromContact = contact?.[key];
+  if (fromContact !== undefined && fromContact !== null && fromContact !== "") {
+    return String(fromContact);
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // GHL config (mirrors patterns in ghl-contact-service.js)
 // ---------------------------------------------------------------------------
 
@@ -651,6 +717,12 @@ async function handleClientUpsert(event) {
     if (lastName) atFields.last_name = lastName;
     if (displayName) atFields.name = displayName;
 
+    // Survey + behavior fields — only written when a non-empty source value exists
+    for (const [ghlKey, atCol] of Object.entries(SURVEY_BEHAVIOR_FIELDS)) {
+      const val = getCF(ghlContact, contact, ghlKey);
+      if (val !== null && val !== "") atFields[atCol] = val;
+    }
+
     // 5d — create or patch
     try {
       if (airtableClientRecordId) {
@@ -811,5 +883,7 @@ module.exports = {
   // Exposed for unit testing
   generateClientMasterKey,
   parseFullName,
-  buildAirtableClientUrl
+  buildAirtableClientUrl,
+  getCF,
+  SURVEY_BEHAVIOR_FIELDS
 };
