@@ -115,7 +115,16 @@ function extractEvent(body) {
   const type = String(b.type || b.event || b.event_type || d.type || "").toLowerCase();
 
   // amount: prefer major-unit fields; fall back to minor units (cents) / 100.
-  let amount = d.amount ?? d.amount_total ?? d.total ?? d.price ?? b.amount ?? b.amount_total;
+  // Commas/FanBasis confirmed (SDK @fanbasis/checkout-sdk): transaction carries
+  // data.product.price (major units). amount_cents is used on the create side.
+  let amount =
+    d.amount ??
+    d.amount_total ??
+    d.total ??
+    d.price ??
+    (d.product && d.product.price) ??
+    b.amount ??
+    b.amount_total;
   if ((amount === undefined || amount === null) && typeof d.amount_cents === "number") {
     amount = d.amount_cents / 100;
   }
@@ -141,6 +150,7 @@ function extractEvent(body) {
     "";
 
   const email =
+    (d.fan && (d.fan.email || d.fan.email_address)) || // Commas confirmed: data.fan.email
     d.customer_email ||
     (d.customer && (d.customer.email || d.customer.email_address)) ||
     d.email ||

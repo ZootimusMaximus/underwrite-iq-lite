@@ -50,6 +50,21 @@ test("extractEvent: variable dollar deposit is trusted as-is (not downscaled)", 
   assert.equal(evt.amount, 5000);
 });
 
+test("extractEvent: Commas/FanBasis confirmed shape (data.product.title/price + data.fan.email)", () => {
+  const evt = extractEvent({
+    type: "payment.succeeded",
+    data: {
+      product: { title: "Consulting Services Deposit", price: 3000 },
+      fan: { email: "Client@Example.com", name: "Jane" }
+    }
+  });
+  assert.equal(evt.name, "Consulting Services Deposit");
+  assert.equal(evt.amount, 3000);
+  assert.equal(evt.email, "client@example.com");
+  const route = routeFor(evt);
+  assert.equal(route, "deposit");
+});
+
 test("extractEvent: missing email yields empty string, missing amount yields null", () => {
   const evt = extractEvent({ type: "payment.failed", product_name: "Whatever" });
   assert.equal(evt.email, "");
